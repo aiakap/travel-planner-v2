@@ -52,6 +52,9 @@ interface TableViewProps {
 }
 
 export function TableView({ segments, onSelectReservation }: TableViewProps) {
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'table-view.tsx:54',message:'TableView rendering',data:{segmentsCount:segments?.length,hasSegments:!!segments,firstSegment:segments?.[0],firstSegmentDays:segments?.[0]?.days?.length,firstSegmentFirstDay:segments?.[0]?.days?.[0]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2,H5'})}).catch(()=>{});
+  // #endregion
   const getSegmentColor = (segment: { type: string }, index: number) => {
     if (segment.type === "travel") return "#94A3B8"
     const colors = ["#0EA5E9", "#F43F5E", "#10B981", "#A855F7", "#F97316"]
@@ -87,18 +90,14 @@ export function TableView({ segments, onSelectReservation }: TableViewProps) {
 
   const getSegmentCosts = (segment: (typeof segments)[0]) => {
     let total = 0
-    let estimatedTotal = 0
     segment.days.forEach((day) => {
       day.items.forEach((item) => {
         item.reservations.forEach((res) => {
           total += res.cost
-          if (res.status !== "confirmed") {
-            estimatedTotal += res.cost
-          }
         })
       })
     })
-    return { total, estimatedTotal }
+    return { total }
   }
 
   return (
@@ -122,9 +121,6 @@ export function TableView({ segments, onSelectReservation }: TableViewProps) {
               </div>
               <span className="text-xs font-medium">
                 ${segmentCosts.total.toLocaleString()}
-                {segmentCosts.estimatedTotal > 0 && (
-                  <span className="text-amber-600"> (~${segmentCosts.estimatedTotal.toLocaleString()})</span>
-                )}
               </span>
             </div>
 
@@ -179,9 +175,8 @@ export function TableView({ segments, onSelectReservation }: TableViewProps) {
                           )}
                         </td>
                         <td className="p-1.5">{getStatusBadge(res.status, res.confirmationNumber)}</td>
-                        <td className={`p-1.5 text-right ${res.status !== "confirmed" ? "text-amber-600" : ""}`}>
+                        <td className="p-1.5 text-right">
                           ${res.cost}
-                          {res.status !== "confirmed" && "~"}
                         </td>
                         <td className="p-1.5">
                           <div className="flex justify-center gap-0.5">

@@ -70,18 +70,14 @@ export function PhotosView({ segments, onSelectReservation }: PhotosViewProps) {
 
   const getSegmentCosts = (segment: (typeof segments)[0]) => {
     let total = 0
-    let estimatedTotal = 0
     segment.days.forEach((day) => {
       day.items.forEach((item) => {
         item.reservations.forEach((res) => {
           total += res.cost
-          if (res.status !== "confirmed") {
-            estimatedTotal += res.cost
-          }
         })
       })
     })
-    return { total, estimatedTotal }
+    return { total }
   }
 
   return (
@@ -124,9 +120,6 @@ export function PhotosView({ segments, onSelectReservation }: PhotosViewProps) {
               </div>
               <span className="text-xs">
                 ${segmentCosts.total.toLocaleString()}
-                {segmentCosts.estimatedTotal > 0 && (
-                  <span className="text-amber-600"> (~${segmentCosts.estimatedTotal.toLocaleString()})</span>
-                )}
               </span>
             </div>
 
@@ -180,11 +173,8 @@ export function PhotosView({ segments, onSelectReservation }: PhotosViewProps) {
                     </div>
                     <div>
                       <div className="text-white text-[10px] font-medium truncate">{res.vendor}</div>
-                      <div
-                        className={`text-[8px] ${res.status !== "confirmed" ? "text-amber-300" : "text-white/70"}`}
-                      >
+                      <div className="text-[8px] text-white/70">
                         ${res.cost}
-                        {res.status !== "confirmed" && "~"}
                       </div>
                     </div>
                   </div>

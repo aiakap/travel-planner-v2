@@ -63,6 +63,10 @@ export default async function ConversationPage({
           initialMessages={initialMessages}
           profileData={profileData}
           quickActions={quickActions}
+          tripId={conversation.tripId || undefined}
+          onReservationAdded={() => {
+            // Revalidate will happen in the action
+          }}
         />
       </div>
     </div>

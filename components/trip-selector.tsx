@@ -43,21 +43,14 @@ export function TripSelector({ trips, selectedTripId, onTripSelect, compact = fa
           }
         }}
       >
-        <SelectTrigger className="w-full h-10 bg-background border-2 hover:border-primary/50 transition-colors">
+        <SelectTrigger className={`h-auto border-0 p-0 hover:bg-slate-50 rounded px-2 py-1 gap-1 ${compact ? '' : 'w-full'}`}>
           <SelectValue>
             {selectedTripId && selectedTrip ? (
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary" />
-                <div className="flex flex-col items-start">
-                  <span className="font-medium truncate">{selectedTrip.title}</span>
-                  <span className="text-xs text-muted-foreground">{formatTripDates(selectedTrip.startDate, selectedTrip.endDate)}</span>
-                </div>
-              </div>
+              <span className="text-sm text-slate-600">
+                {selectedTrip.title}
+              </span>
             ) : (
-              <div className="flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 text-primary" />
-                <span className="font-medium">New Trip</span>
-              </div>
+              <span className="text-sm text-slate-600">New Trip</span>
             )}
           </SelectValue>
         </SelectTrigger>

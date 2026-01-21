@@ -7,6 +7,122 @@ import { prisma } from "@/lib/prisma";
 
 export const maxDuration = 60; // Increased for tool execution
 
+// Helper to get trip context for the conversation
+async function getTripContext(conversationId: string, userId: string): Promise<string | null> {
+  try {
+    // Get conversation with trip info
+    const conversation = await prisma.chatConversation.findFirst({
+      where: {
+        id: conversationId,
+        userId,
+      },
+      include: {
+        trip: {
+          include: {
+            segments: {
+              include: {
+                segmentType: true,
+                reservations: {
+                  include: {
+                    reservationType: {
+                      include: {
+                        category: true,
+                      },
+                    },
+                    reservationStatus: true,
+                  },
+                  orderBy: {
+                    startTime: 'asc',
+                  },
+                },
+              },
+              orderBy: {
+                order: 'asc',
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!conversation?.trip) {
+      return null;
+    }
+
+    const trip = conversation.trip;
+
+    // Format trip data as context
+    let context = `\n\n## CURRENT TRIP CONTEXT\n\n`;
+    context += `You are currently discussing the trip: "${trip.title}"\n`;
+    context += `Description: ${trip.description}\n`;
+    context += `Dates: ${new Date(trip.startDate).toLocaleDateString()} to ${new Date(trip.endDate).toLocaleDateString()}\n`;
+    context += `Trip ID: ${trip.id}\n\n`;
+
+    if (trip.segments.length > 0) {
+      context += `### Trip Segments (${trip.segments.length} total):\n\n`;
+
+      trip.segments.forEach((segment, idx) => {
+        context += `**Segment ${idx + 1}: ${segment.name}**\n`;
+        context += `- Type: ${segment.segmentType.name}\n`;
+        context += `- From: ${segment.startTitle}\n`;
+        context += `- To: ${segment.endTitle}\n`;
+        if (segment.startTime) {
+          context += `- Start: ${new Date(segment.startTime).toLocaleString()}\n`;
+        }
+        if (segment.endTime) {
+          context += `- End: ${new Date(segment.endTime).toLocaleString()}\n`;
+        }
+        if (segment.notes) {
+          context += `- Notes: ${segment.notes}\n`;
+        }
+        context += `- Segment ID: ${segment.id}\n`;
+
+        if (segment.reservations.length > 0) {
+          context += `\n  **Reservations in this segment (${segment.reservations.length}):**\n`;
+          segment.reservations.forEach((res, resIdx) => {
+            context += `  ${resIdx + 1}. ${res.name}\n`;
+            context += `     - Category: ${res.reservationType.category.name}\n`;
+            context += `     - Type: ${res.reservationType.name}\n`;
+            context += `     - Status: ${res.reservationStatus.name}\n`;
+            if (res.startTime) {
+              context += `     - Time: ${new Date(res.startTime).toLocaleString()}`;
+              if (res.endTime) {
+                context += ` to ${new Date(res.endTime).toLocaleTimeString()}`;
+              }
+              context += `\n`;
+            }
+            if (res.location) {
+              context += `     - Location: ${res.location}\n`;
+            }
+            if (res.cost) {
+              context += `     - Cost: ${res.currency || '$'}${res.cost}\n`;
+            }
+            if (res.confirmationNumber) {
+              context += `     - Confirmation: ${res.confirmationNumber}\n`;
+            }
+            if (res.notes) {
+              context += `     - Notes: ${res.notes}\n`;
+            }
+            context += `     - Reservation ID: ${res.id}\n`;
+          });
+        } else {
+          context += `\n  No reservations in this segment yet.\n`;
+        }
+        context += `\n`;
+      });
+    } else {
+      context += `No segments have been added to this trip yet.\n\n`;
+    }
+
+    context += `\n**IMPORTANT**: When answering questions about this trip, always reference the specific details above. You have complete knowledge of all segments, reservations, times, locations, and costs. Use this information to provide accurate, contextual responses.\n`;
+
+    return context;
+  } catch (error) {
+    console.error("[getTripContext] Error:", error);
+    return null;
+  }
+}
+
 // Helper to save message directly (not a server action, for use in API routes)
 async function saveMessageDirect({
   conversationId,
@@ -66,12 +182,20 @@ export async function POST(req: Request) {
     // Convert UI messages to model messages format
     const modelMessages = await convertToModelMessages(messages);
 
+    // Get trip context if this conversation is about a specific trip
+    const tripContext = await getTripContext(conversationId, userId);
+
     // Create tools with userId and conversationId already injected
     const tools = createTripPlanningTools(userId, conversationId);
 
+    // Build system prompt with trip context if available
+    const systemPrompt = tripContext 
+      ? TRIP_PLANNER_SYSTEM_PROMPT + tripContext
+      : TRIP_PLANNER_SYSTEM_PROMPT;
+
     const result = streamText({
       model: openai("gpt-4o"),
-      system: TRIP_PLANNER_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: modelMessages,
       tools: tools,
       stopWhen: stepCountIs(15), // Allow multiple tool calls for complete trip creation

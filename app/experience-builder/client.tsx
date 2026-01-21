@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Send, Plus, GripVertical, Table2, GitBranch, Grid3X3, MessageCircle, Calendar, Loader2, MapPin } from "lucide-react"
 import { ChatWelcomeMessage } from "@/components/chat-welcome-message"
 import { ChatQuickActions } from "@/components/chat-quick-actions"
+import { ChatContextWelcome } from "@/components/chat-context-welcome"
 import { TripSelector } from "@/components/trip-selector"
 import { ChatNameDropdown } from "@/components/chat-name-dropdown"
 import { EditChatModal } from "@/components/edit-chat-modal"
@@ -22,11 +23,38 @@ import type { V0Itinerary } from "@/lib/v0-types"
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization"
 import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts"
 import { renameTripConversation, createTripConversation } from "@/lib/actions/chat-actions"
+import { SuggestionDetailModal } from "@/components/suggestion-detail-modal"
+import { PlaceSuggestion, GooglePlaceData } from "@/lib/types/place-suggestion"
 
 // Helper to extract text content from message parts
 function getMessageText(message: UIMessage | undefined): string {
   if (!message) return ""
   return message.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("") || message.content || ""
+}
+
+// Helper to extract place suggestions from tool invocations
+function getPlaceSuggestions(message: UIMessage): PlaceSuggestion[] {
+  const suggestions: PlaceSuggestion[] = [];
+  
+  if (!message.parts) return suggestions;
+  
+  message.parts.forEach((part: any) => {
+    if (part.type === "tool-result" && part.toolName === "suggest_place") {
+      const result = part.result;
+      if (result?.success && result?.placeName) {
+        suggestions.push({
+          placeName: result.placeName,
+          category: result.category,
+          type: result.type,
+          context: result.context,
+          tripId: result.tripId,
+          segmentId: result.segmentId,
+        });
+      }
+    }
+  });
+  
+  return suggestions;
 }
 
 // Type for database trip with all relations
@@ -122,10 +150,15 @@ export function ExperienceBuilderClient({
   const [selectedReservation, setSelectedReservation] = useState<any>(null)
   const [isChatEditModalOpen, setIsChatEditModalOpen] = useState(false)
   const [isTripEditModalOpen, setIsTripEditModalOpen] = useState(false)
+  const [selectedSuggestion, setSelectedSuggestion] = useState<{
+    suggestion: PlaceSuggestion;
+    tripId: string;
+  } | null>(null)
 
   // Refs
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Chat integration
   const [input, setInput] = useState("")
@@ -140,6 +173,29 @@ export function ExperienceBuilderClient({
   } as any)
   
   const isLoading = status === ("in_progress" as any)
+
+  // Watch for trip creation in chat messages
+  useEffect(() => {
+    // Check if a trip was just created (look for create_trip tool call in recent messages)
+    if (messages.length > 0 && !selectedTripId) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === "assistant" && lastMessage.parts) {
+        // Find the create_trip tool result
+        const tripResult = lastMessage.parts.find((part: any) => 
+          part.type === "tool-result" && 
+          part.toolName === "create_trip" && 
+          part.result?.success === true
+        );
+
+        if (tripResult && tripResult.result?.tripId) {
+          // Trip was created, navigate to it with the trip ID
+          setTimeout(() => {
+            window.location.href = `/experience-builder?tripId=${tripResult.result.tripId}`;
+          }, 1500); // Small delay to ensure DB updates are complete
+        }
+      }
+    }
+  }, [messages, selectedTripId])
 
   // Resizable panel handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -332,6 +388,11 @@ export function ExperienceBuilderClient({
     autoCreateChat()
   }, [selectedTripId, conversations.length, currentConversationId, trips])
 
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages, isLoading])
+
   // Handle conversation selection
   const handleConversationSelect = (conversationId: string) => {
     const conversation = conversations.find(c => c.id === conversationId)
@@ -376,14 +437,122 @@ What would you like to change about this plan, or should I create it as is?`;
     setHasStartedPlanning(true);
   }
 
+  // Render text with clickable place suggestions
+  const renderTextWithPlaceLinks = (text: string, suggestions: PlaceSuggestion[]) => {
+    if (suggestions.length === 0) {
+      return text;
+    }
+
+    // Split text by place names and create clickable links
+    let lastIndex = 0;
+    const elements: React.ReactNode[] = [];
+
+    suggestions.forEach((suggestion, idx) => {
+      const placeIndex = text.indexOf(suggestion.placeName, lastIndex);
+      
+      if (placeIndex !== -1) {
+        // Add text before the place name
+        if (placeIndex > lastIndex) {
+          elements.push(
+            <span key={`text-${idx}`}>
+              {text.substring(lastIndex, placeIndex)}
+            </span>
+          );
+        }
+
+        // Add clickable place name
+        elements.push(
+          <button
+            key={`place-${idx}`}
+            onClick={() => {
+              if (selectedTripId || suggestion.tripId) {
+                setSelectedSuggestion({
+                  suggestion,
+                  tripId: selectedTripId || suggestion.tripId!,
+                });
+              }
+            }}
+            className="text-slate-500 hover:text-slate-700 underline decoration-slate-300 cursor-pointer transition-colors font-medium"
+          >
+            {suggestion.placeName}
+          </button>
+        );
+
+        lastIndex = placeIndex + suggestion.placeName.length;
+      }
+    });
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      elements.push(
+        <span key="text-end">{text.substring(lastIndex)}</span>
+      );
+    }
+
+    return <>{elements}</>;
+  };
+
+  // Handle adding suggestion to itinerary
+  const handleAddToItinerary = async (data: {
+    placeName: string;
+    placeData: GooglePlaceData | null;
+    day: number;
+    startTime: string;
+    endTime: string;
+    cost: number;
+    category: string;
+    type: string;
+  }) => {
+    try {
+      const { createReservationFromSuggestion } = await import(
+        "@/lib/actions/create-reservation"
+      );
+
+      await createReservationFromSuggestion({
+        tripId: selectedSuggestion!.tripId,
+        placeName: data.placeName,
+        placeData: data.placeData,
+        day: data.day,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        cost: data.cost,
+        category: data.category,
+        type: data.type,
+      });
+
+      // Refresh the page to show updated itinerary
+      window.location.reload();
+    } catch (error) {
+      console.error("Error adding to itinerary:", error);
+      throw error;
+    }
+  };
+
   // Trip selection handler
-  const handleTripSelect = (tripId: string | null) => {
+  const handleTripSelect = async (tripId: string | null) => {
     if (tripId) {
       // Navigate to trip with URL parameter
       window.location.href = `/experience-builder?tripId=${tripId}`
     } else {
-      // Navigate to new chat
-      window.location.href = `/experience-builder`
+      // Create a new conversation for a new trip
+      try {
+        const { createConversation } = await import("@/lib/actions/chat-actions")
+        const newConversation = await createConversation("New Conversation", false)
+        
+        // Update state
+        setConversations([newConversation, ...conversations])
+        setCurrentConversationId(newConversation.id)
+        setSelectedTripId(null)
+        setMessages([])
+        setHasStartedPlanning(false)
+        
+        // Navigate to new conversation
+        window.location.href = `/experience-builder`
+      } catch (error) {
+        console.error("Error creating new conversation:", error)
+        // Fallback to simple navigation
+        window.location.href = `/experience-builder`
+      }
     }
   }
   
@@ -414,31 +583,27 @@ What would you like to change about this plan, or should I create it as is?`;
 
   // Calculate trip totals
   const getTripTotals = () => {
-    if (!transformedTrip) return { total: 0, estimatedTotal: 0 }
+    if (!transformedTrip) return { total: 0 }
     
     let total = 0
-    let estimatedTotal = 0
     
     transformedTrip.segments.forEach((segment) => {
       segment.days.forEach((day) => {
         day.items.forEach((item) => {
           item.reservations.forEach((res) => {
             total += res.cost
-            if (res.status !== "confirmed") {
-              estimatedTotal += res.cost
-            }
           })
         })
       })
     })
     
-    return { total, estimatedTotal }
+    return { total }
   }
 
   const tripTotals = getTripTotals()
 
   return (
-    <div ref={containerRef} className="h-screen bg-slate-50 flex flex-col">
+    <div ref={containerRef} className="bg-slate-50 flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 80px)' }}>
       {/* Mobile Bottom Tabs */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 flex">
         <button
@@ -501,19 +666,29 @@ What would you like to change about this plan, or should I create it as is?`;
                 </div>
               ) : (
                 <>
-                  {messages.map((msg, i) => (
-                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
-                          msg.role === "user"
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-50 text-slate-900 border border-slate-100"
-                        }`}
-                      >
-                        <div className="whitespace-pre-wrap leading-relaxed text-sm">{getMessageText(msg)}</div>
+                  {messages.map((msg, i) => {
+                    const textContent = getMessageText(msg);
+                    const placeSuggestions = getPlaceSuggestions(msg);
+
+                    return (
+                      <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
+                            msg.role === "user"
+                              ? "bg-slate-900 text-white"
+                              : "bg-slate-50 text-slate-900 border border-slate-100"
+                          }`}
+                        >
+                          <div className="whitespace-pre-wrap leading-relaxed text-sm">
+                            {msg.role === "assistant" && placeSuggestions.length > 0
+                              ? renderTextWithPlaceLinks(textContent, placeSuggestions)
+                              : textContent
+                            }
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {isLoading && <AILoadingAnimation />}
                 </>
               )}
@@ -570,11 +745,6 @@ What would you like to change about this plan, or should I create it as is?`;
                         </div>
                         <div className="text-right">
                           <div className="text-xs font-semibold">${tripTotals.total.toLocaleString()}</div>
-                          {tripTotals.estimatedTotal > 0 && (
-                            <div className="text-[9px] text-muted-foreground">
-                              <span className="text-amber-600">~${tripTotals.estimatedTotal.toLocaleString()}</span> estimated
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -596,32 +766,25 @@ What would you like to change about this plan, or should I create it as is?`;
       {/* Desktop View */}
       <div className="hidden md:flex flex-1 overflow-hidden">
         {/* Left Panel - Chat */}
-        <div className="flex flex-col h-full border-r bg-white" style={{ width: `${leftPanelWidth}%` }}>
-          <div className="border-b border-slate-200 p-4 bg-white">
-            <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col h-full border-r bg-white overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
+          <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
+            <div className="flex items-center justify-between gap-3 w-full">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  {/* Static trip name (no dropdown) */}
-                  <span className="text-sm font-medium text-slate-700">
-                    {selectedTripId ? (trips.find(t => t.id === selectedTripId)?.title || "Trip") : "New Trip"}
-                  </span>
-                  
-                  <span className="text-slate-400">→</span>
-                  
-                  {/* Chat dropdown */}
-                  {!selectedTripId || conversations.length === 0 ? (
-                    <span className="text-sm text-slate-600">Initial Chat</span>
-                  ) : (
-                    <ChatNameDropdown
-                      conversations={conversations}
-                      currentConversationId={currentConversationId}
-                      onSelectConversation={handleConversationSelect}
-                      tripId={selectedTripId}
-                      onConversationsChange={setConversations}
-                    />
-                  )}
-                </div>
+                <span className="text-sm font-medium text-slate-700">Chat:</span>
+                
+                {/* Chat dropdown */}
+                {!selectedTripId || conversations.length === 0 ? (
+                  <span className="text-sm text-slate-600">Initial Chat</span>
+                ) : (
+                  <ChatNameDropdown
+                    conversations={conversations}
+                    currentConversationId={currentConversationId}
+                    onSelectConversation={handleConversationSelect}
+                    tripId={selectedTripId}
+                    onConversationsChange={setConversations}
+                  />
+                )}
               </div>
               
               {/* Edit button for chat (only when conversation exists) */}
@@ -638,51 +801,74 @@ What would you like to change about this plan, or should I create it as is?`;
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-6 overscroll-contain">
             {!hasStartedPlanning && messages.length === 0 ? (
-              <div className="space-y-6">
-                <ChatWelcomeMessage
-                  userName={profileData?.profile?.firstName || undefined}
-                  hobbies={profileData?.hobbies.map(h => h.hobby.name) || []}
-                  recentTrips={profileData?.recentTrips || []}
+              selectedTripId && transformedTrip ? (
+                // Show context-aware welcome for existing trips
+                <ChatContextWelcome
+                  tripData={transformedTrip}
+                  onSuggestionClick={(prompt) => {
+                    sendMessage({ text: prompt })
+                    setHasStartedPlanning(true)
+                  }}
                 />
-                
-                {quickActions.length > 0 && (
-                  <ChatQuickActions
-                    suggestions={quickActions}
-                    onSelect={handleQuickAction}
+              ) : (
+                // Show generic welcome for new trips
+                <div className="space-y-6">
+                  <ChatWelcomeMessage
+                    userName={profileData?.profile?.firstName || undefined}
+                    hobbies={profileData?.hobbies.map(h => h.hobby.name) || []}
+                    recentTrips={profileData?.recentTrips || []}
                   />
-                )}
-                
-                <div className="max-w-2xl mx-auto">
-                  <button
-                    onClick={handleGetLucky}
-                    disabled={isLoading}
-                    className="w-full px-4 py-3 bg-slate-900 hover:bg-slate-800 text-white text-sm rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Surprise me with a trip idea
-                  </button>
-                  <p className="text-xs text-slate-400 text-center mt-2">
-                    I'll show you a plan that you can adjust before creating
-                  </p>
+                  
+                  {quickActions.length > 0 && (
+                    <ChatQuickActions
+                      suggestions={quickActions}
+                      onSelect={handleQuickAction}
+                    />
+                  )}
+                  
+                  <div className="max-w-2xl mx-auto">
+                    <button
+                      onClick={handleGetLucky}
+                      disabled={isLoading}
+                      className="w-full px-4 py-3 bg-slate-900 hover:bg-slate-800 text-white text-sm rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Surprise me with a trip idea
+                    </button>
+                    <p className="text-xs text-slate-400 text-center mt-2">
+                      I'll show you a plan that you can adjust before creating
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               <>
-                {messages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[70%] rounded-lg px-5 py-3 ${
-                        msg.role === "user"
-                          ? "bg-slate-900 text-white"
-                          : "bg-slate-50 text-slate-900 border border-slate-100"
-                      }`}
-                    >
-                      <div className="whitespace-pre-wrap leading-relaxed">{getMessageText(msg)}</div>
+                {messages.map((msg, i) => {
+                  const textContent = getMessageText(msg);
+                  const placeSuggestions = getPlaceSuggestions(msg);
+
+                  return (
+                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`max-w-[70%] rounded-lg px-5 py-3 ${
+                          msg.role === "user"
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-50 text-slate-900 border border-slate-100"
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap leading-relaxed">
+                          {msg.role === "assistant" && placeSuggestions.length > 0
+                            ? renderTextWithPlaceLinks(textContent, placeSuggestions)
+                            : textContent
+                          }
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {isLoading && <AILoadingAnimation />}
+                <div ref={messagesEndRef} />
               </>
             )}
           </div>
@@ -728,15 +914,16 @@ What would you like to change about this plan, or should I create it as is?`;
         </div>
 
         {/* Right Panel - Itinerary */}
-        <div className="flex flex-col h-full bg-white" style={{ width: `${100 - leftPanelWidth}%` }}>
+        <div className="flex flex-col h-full bg-white overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
           {/* Trip Selector - Always visible at top */}
-          <div className="border-b border-slate-200 p-3 bg-white">
-            <div className="flex items-center gap-3">
-              <MapPin className="h-5 w-5 text-slate-700 flex-shrink-0" />
-              <label className="text-sm font-medium text-slate-700">Trip:</label>
-              <div className="flex-1">
+          <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
+            <div className="flex items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <MapPin className="h-5 w-5 text-slate-700 flex-shrink-0" />
+                <span className="text-sm font-medium text-slate-700">Trip:</span>
                 <TripSelector trips={trips} selectedTripId={selectedTripId} onTripSelect={handleTripSelect} compact={true} />
               </div>
+              
               {/* Edit button for trip (only when trip is selected) */}
               {selectedTripId && (
                 <Button
@@ -766,11 +953,6 @@ What would you like to change about this plan, or should I create it as is?`;
                       {transformedTrip && (
                         <div className="text-right">
                           <div className="text-xs font-semibold">${tripTotals.total.toLocaleString()}</div>
-                          {tripTotals.estimatedTotal > 0 && (
-                            <div className="text-[9px] text-muted-foreground">
-                              <span className="text-amber-600">~${tripTotals.estimatedTotal.toLocaleString()}</span> estimated
-                            </div>
-                          )}
                         </div>
                       )}
                       {transformedTrip && (
@@ -813,7 +995,7 @@ What would you like to change about this plan, or should I create it as is?`;
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto p-3 overscroll-contain">
                 {transformedTrip ? (
                   <>
                     {viewMode === "table" && (
@@ -875,6 +1057,16 @@ What would you like to change about this plan, or should I create it as is?`;
           onClose={() => setIsTripEditModalOpen(false)}
           trip={selectedTrip}
           onUpdate={handleTripUpdate}
+        />
+      )}
+
+      {/* Suggestion Detail Modal */}
+      {selectedSuggestion && (
+        <SuggestionDetailModal
+          suggestion={selectedSuggestion.suggestion}
+          tripId={selectedSuggestion.tripId}
+          onClose={() => setSelectedSuggestion(null)}
+          onAddToItinerary={handleAddToItinerary}
         />
       )}
     </div>

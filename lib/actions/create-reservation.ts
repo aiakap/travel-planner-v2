@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { queueReservationImageGeneration } from "./queue-image-generation";
+import { GooglePlaceData } from "@/lib/types/place-suggestion";
 
 export async function createReservation(formData: FormData) {
   const session = await auth();
@@ -97,4 +98,153 @@ export async function createReservation(formData: FormData) {
 
   revalidatePath(`/trips/${segment.trip.id}`);
   redirect(`/trips/${segment.trip.id}`);
+}
+
+/**
+ * Create a reservation from a place suggestion with Google Places data
+ */
+export async function createReservationFromSuggestion({
+  tripId,
+  placeName,
+  placeData,
+  day,
+  startTime,
+  endTime,
+  cost,
+  category,
+  type,
+}: {
+  tripId: string;
+  placeName: string;
+  placeData: GooglePlaceData | null;
+  day: number;
+  startTime: string;
+  endTime: string;
+  cost: number;
+  category: string;
+  type: string;
+}) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  // Verify trip belongs to user
+  const trip = await prisma.trip.findFirst({
+    where: {
+      id: tripId,
+      userId: session.user.id,
+    },
+    include: {
+      segments: {
+        orderBy: { order: "asc" },
+      },
+    },
+  });
+
+  if (!trip) {
+    throw new Error("Trip not found or unauthorized");
+  }
+
+  // Calculate the actual date for the day
+  const tripStartDate = new Date(trip.startDate);
+  const targetDate = new Date(tripStartDate);
+  targetDate.setDate(targetDate.getDate() + day - 1);
+
+  // Parse time and create full datetime
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const [endHour, endMinute] = endTime.split(":").map(Number);
+
+  const startDateTime = new Date(targetDate);
+  startDateTime.setHours(startHour, startMinute, 0, 0);
+
+  const endDateTime = new Date(targetDate);
+  endDateTime.setHours(endHour, endMinute, 0, 0);
+
+  // Find appropriate segment for this day
+  // Try to find a segment that overlaps with this day
+  let targetSegment = trip.segments.find((segment) => {
+    if (!segment.startTime) return false;
+    const segmentDate = new Date(segment.startTime);
+    return (
+      segmentDate.getFullYear() === targetDate.getFullYear() &&
+      segmentDate.getMonth() === targetDate.getMonth() &&
+      segmentDate.getDate() === targetDate.getDate()
+    );
+  });
+
+  // If no segment found for this day, use the first segment or create one
+  if (!targetSegment && trip.segments.length > 0) {
+    targetSegment = trip.segments[0];
+  }
+
+  if (!targetSegment) {
+    throw new Error("No segment found for this trip");
+  }
+
+  // Get reservation type
+  const reservationType = await prisma.reservationType.findFirst({
+    where: {
+      name: type,
+      category: {
+        name: category,
+      },
+    },
+  });
+
+  if (!reservationType) {
+    throw new Error(`Reservation type "${type}" in category "${category}" not found`);
+  }
+
+  // Get "Pending" status
+  const status = await prisma.reservationStatus.findFirst({
+    where: { name: "Pending" },
+  });
+
+  if (!status) {
+    throw new Error("Could not find Pending status");
+  }
+
+  // Extract contact info from Google Places data
+  const contactPhone = placeData?.phoneNumber || null;
+  const website = placeData?.website || null;
+  const address = placeData?.formattedAddress || null;
+  const imageUrl = placeData?.photos?.[0]?.url || null;
+
+  // Create reservation with Google Places data
+  const reservation = await prisma.reservation.create({
+    data: {
+      name: placeName,
+      segmentId: targetSegment.id,
+      reservationTypeId: reservationType.id,
+      reservationStatusId: status.id,
+      startTime: startDateTime,
+      endTime: endDateTime,
+      cost: cost > 0 ? cost : null,
+      currency: cost > 0 ? "USD" : null,
+      location: address,
+      url: website,
+      imageUrl: imageUrl,
+      imageIsCustom: !!imageUrl,
+      contactPhone: contactPhone,
+      notes: placeData?.openingHours?.weekdayText?.join("\n") || null,
+    },
+  });
+
+  // Queue image generation if no image from Google Places
+  if (!imageUrl) {
+    try {
+      const queueId = await queueReservationImageGeneration(reservation.id);
+      console.log(`✓ Queued reservation image generation: ${queueId}`);
+    } catch (error) {
+      console.error("❌ Failed to queue reservation image generation:", error);
+      // Don't fail the reservation creation if queue fails
+    }
+  }
+
+  revalidatePath(`/trips/${tripId}`);
+  revalidatePath("/experience-builder");
+
+  return reservation;
 }

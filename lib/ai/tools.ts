@@ -39,6 +39,75 @@ async function geocodeLocation(location: string): Promise<{
 
 export function createTripPlanningTools(userId: string, conversationId?: string) {
   return {
+    suggest_place: tool({
+      description:
+        "Suggest a place (restaurant, hotel, activity, etc.) to the user. This creates an interactive suggestion that the user can click to see details and add to their itinerary. Use this instead of suggest_reservation when making recommendations.",
+      inputSchema: z.object({
+        placeName: z
+          .string()
+          .describe("Name of the place (e.g., 'Osteria Francescana', 'Grand Hotel Rome')"),
+        category: z
+          .enum(["Travel", "Stay", "Activity", "Dining"])
+          .describe("Category of the place"),
+        type: z
+          .string()
+          .describe("Specific type (e.g., Restaurant, Hotel, Tour, Museum)"),
+        tripId: z
+          .string()
+          .optional()
+          .describe("ID of the trip this suggestion is for"),
+        segmentId: z
+          .string()
+          .optional()
+          .describe("ID of the segment this suggestion is for"),
+        dayNumber: z
+          .number()
+          .optional()
+          .describe("Which day of the trip (1 for first day, 2 for second, etc.)"),
+        timeOfDay: z
+          .enum(["morning", "afternoon", "evening", "night"])
+          .optional()
+          .describe("General time of day for this suggestion"),
+        specificTime: z
+          .string()
+          .optional()
+          .describe("Specific time if mentioned (e.g., '7:00 PM', '12:30 PM')"),
+        notes: z
+          .string()
+          .optional()
+          .describe("Additional context or recommendations about this place"),
+      }),
+      execute: async ({
+        placeName,
+        category,
+        type,
+        tripId,
+        segmentId,
+        dayNumber,
+        timeOfDay,
+        specificTime,
+        notes,
+      }) => {
+        // This tool doesn't create a reservation immediately
+        // It returns structured data that will be rendered as a clickable link in the chat
+        return {
+          success: true,
+          placeName,
+          category,
+          type,
+          context: {
+            dayNumber,
+            timeOfDay,
+            specificTime,
+            notes,
+          },
+          tripId,
+          segmentId,
+          message: `Suggested ${category.toLowerCase()}: ${placeName}`,
+        };
+      },
+    }),
+
     create_trip: tool({
       description:
         "Create a new trip with title, description, and date range. Returns the trip ID for adding segments.",
@@ -325,6 +394,86 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
             endDate: trip.endDate.toISOString(),
             segmentCount: trip.segments.length,
           })),
+        };
+      },
+    }),
+
+    get_current_trip_details: tool({
+      description: "Get complete details about the current trip being discussed, including all segments and reservations. Use this when you need fresh/updated trip information.",
+      inputSchema: z.object({
+        tripId: z.string().describe("ID of the trip to get details for"),
+      }),
+      execute: async ({ tripId }) => {
+        const trip = await prisma.trip.findFirst({
+          where: {
+            id: tripId,
+            userId,
+          },
+          include: {
+            segments: {
+              include: {
+                segmentType: true,
+                reservations: {
+                  include: {
+                    reservationType: {
+                      include: {
+                        category: true,
+                      },
+                    },
+                    reservationStatus: true,
+                  },
+                  orderBy: {
+                    startTime: "asc",
+                  },
+                },
+              },
+              orderBy: {
+                order: "asc",
+              },
+            },
+          },
+        });
+
+        if (!trip) {
+          return {
+            success: false,
+            message: "Trip not found",
+          };
+        }
+
+        return {
+          success: true,
+          trip: {
+            id: trip.id,
+            title: trip.title,
+            description: trip.description,
+            startDate: trip.startDate.toISOString(),
+            endDate: trip.endDate.toISOString(),
+            segments: trip.segments.map((segment) => ({
+              id: segment.id,
+              name: segment.name,
+              type: segment.segmentType.name,
+              startLocation: segment.startTitle,
+              endLocation: segment.endTitle,
+              startTime: segment.startTime?.toISOString(),
+              endTime: segment.endTime?.toISOString(),
+              notes: segment.notes,
+              reservations: segment.reservations.map((res) => ({
+                id: res.id,
+                name: res.name,
+                category: res.reservationType.category.name,
+                type: res.reservationType.name,
+                status: res.reservationStatus.name,
+                startTime: res.startTime?.toISOString(),
+                endTime: res.endTime?.toISOString(),
+                location: res.location,
+                cost: res.cost,
+                currency: res.currency,
+                confirmationNumber: res.confirmationNumber,
+                notes: res.notes,
+              })),
+            })),
+          },
         };
       },
     }),

@@ -9,12 +9,16 @@ import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts";
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization";
 import { ChatWelcomeMessage } from "@/components/chat-welcome-message";
 import { ChatQuickActions } from "@/components/chat-quick-actions";
+import { SuggestionDetailModal } from "@/components/suggestion-detail-modal";
+import { PlaceSuggestion, GooglePlaceData } from "@/lib/types/place-suggestion";
 
 interface ChatInterfaceProps {
   conversationId: string;
   initialMessages?: UIMessage[];
   profileData?: UserPersonalizationData | null;
   quickActions?: ChatQuickAction[];
+  tripId?: string;
+  onReservationAdded?: () => void;
 }
 
 // Helper to extract text content from message parts
@@ -33,13 +37,42 @@ function getToolInvocations(message: UIMessage) {
   );
 }
 
+// Helper to extract place suggestions from tool invocations
+function getPlaceSuggestions(message: UIMessage): PlaceSuggestion[] {
+  const suggestions: PlaceSuggestion[] = [];
+  
+  message.parts.forEach((part: any) => {
+    if (part.type === "tool-result" && part.toolName === "suggest_place") {
+      const result = part.result;
+      if (result?.success && result?.placeName) {
+        suggestions.push({
+          placeName: result.placeName,
+          category: result.category,
+          type: result.type,
+          context: result.context,
+          tripId: result.tripId,
+          segmentId: result.segmentId,
+        });
+      }
+    }
+  });
+  
+  return suggestions;
+}
+
 export default function ChatInterface({
   conversationId,
   initialMessages = [],
   profileData = null,
   quickActions = [],
+  tripId,
+  onReservationAdded,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState("");
+  const [selectedSuggestion, setSelectedSuggestion] = useState<{
+    suggestion: PlaceSuggestion;
+    tripId: string;
+  } | null>(null);
 
   const { messages, sendMessage, status, error } = useChat({
     api: "/api/chat" as any,
@@ -79,8 +112,112 @@ What would you like to change about this plan, or should I create it as is?`;
     sendMessage({ text: confirmationMessage });
   };
 
+  // Render text with clickable place suggestions
+  const renderTextWithPlaceLinks = (text: string, suggestions: PlaceSuggestion[]) => {
+    if (suggestions.length === 0) {
+      return <div className="whitespace-pre-wrap leading-relaxed">{text}</div>;
+    }
+
+    // Split text by place names and create clickable links
+    let lastIndex = 0;
+    const elements: React.ReactNode[] = [];
+
+    suggestions.forEach((suggestion, idx) => {
+      const placeIndex = text.indexOf(suggestion.placeName, lastIndex);
+      
+      if (placeIndex !== -1) {
+        // Add text before the place name
+        if (placeIndex > lastIndex) {
+          elements.push(
+            <span key={`text-${idx}`}>
+              {text.substring(lastIndex, placeIndex)}
+            </span>
+          );
+        }
+
+        // Add clickable place name
+        elements.push(
+          <button
+            key={`place-${idx}`}
+            onClick={() => {
+              if (tripId || suggestion.tripId) {
+                setSelectedSuggestion({
+                  suggestion,
+                  tripId: tripId || suggestion.tripId!,
+                });
+              }
+            }}
+            className="text-slate-500 hover:text-slate-700 underline decoration-slate-300 cursor-pointer transition-colors font-medium"
+          >
+            {suggestion.placeName}
+          </button>
+        );
+
+        lastIndex = placeIndex + suggestion.placeName.length;
+      }
+    });
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      elements.push(
+        <span key="text-end">{text.substring(lastIndex)}</span>
+      );
+    }
+
+    return <div className="whitespace-pre-wrap leading-relaxed">{elements}</div>;
+  };
+
+  // Handle adding suggestion to itinerary
+  const handleAddToItinerary = async (data: {
+    placeName: string;
+    placeData: GooglePlaceData | null;
+    day: number;
+    startTime: string;
+    endTime: string;
+    cost: number;
+    category: string;
+    type: string;
+  }) => {
+    try {
+      // Import the create reservation action
+      const { createReservationFromSuggestion } = await import(
+        "@/lib/actions/create-reservation"
+      );
+
+      await createReservationFromSuggestion({
+        tripId: selectedSuggestion!.tripId,
+        placeName: data.placeName,
+        placeData: data.placeData,
+        day: data.day,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        cost: data.cost,
+        category: data.category,
+        type: data.type,
+      });
+
+      // Notify parent component
+      if (onReservationAdded) {
+        onReservationAdded();
+      }
+    } catch (error) {
+      console.error("Error adding to itinerary:", error);
+      throw error;
+    }
+  };
+
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] bg-white">
+    <>
+      {selectedSuggestion && (
+        <SuggestionDetailModal
+          suggestion={selectedSuggestion.suggestion}
+          tripId={selectedSuggestion.tripId}
+          onClose={() => setSelectedSuggestion(null)}
+          onAddToItinerary={handleAddToItinerary}
+        />
+      )}
+      
+      <div className="flex flex-col h-[calc(100vh-12rem)] bg-white">
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {messages.length === 0 && (
@@ -121,6 +258,7 @@ What would you like to change about this plan, or should I create it as is?`;
         {messages.map((message) => {
           const textContent = getMessageText(message);
           const toolInvocations = getToolInvocations(message);
+          const placeSuggestions = getPlaceSuggestions(message);
 
           return (
             <div
@@ -136,7 +274,10 @@ What would you like to change about this plan, or should I create it as is?`;
                     : "bg-slate-50 text-slate-900 border border-slate-100"
                 }`}
               >
-                <div className="whitespace-pre-wrap leading-relaxed">{textContent}</div>
+                {message.role === "assistant" && placeSuggestions.length > 0
+                  ? renderTextWithPlaceLinks(textContent, placeSuggestions)
+                  : <div className="whitespace-pre-wrap leading-relaxed">{textContent}</div>
+                }
 
                 {/* Show tool calls if present */}
                 {toolInvocations.length > 0 && (
@@ -146,6 +287,7 @@ What would you like to change about this plan, or should I create it as is?`;
                         {(tool.toolName?.includes("create_trip") || tool.toolInvocation?.toolName === "create_trip") && "Created trip"}
                         {(tool.toolName?.includes("add_segment") || tool.toolInvocation?.toolName === "add_segment") && "Added segment"}
                         {(tool.toolName?.includes("suggest_reservation") || tool.toolInvocation?.toolName === "suggest_reservation") && "Added reservation"}
+                        {(tool.toolName?.includes("suggest_place") || tool.toolInvocation?.toolName === "suggest_place") && "Suggested place"}
                         {(tool.toolName?.includes("get_user_trips") || tool.toolInvocation?.toolName === "get_user_trips") && "Fetched trips"}
                       </div>
                     ))}
@@ -206,6 +348,7 @@ What would you like to change about this plan, or should I create it as is?`;
         )}
       </div>
     </div>
+    </>
   );
 }
 

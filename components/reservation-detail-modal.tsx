@@ -430,11 +430,8 @@ export function ReservationDetailModal({
 
               <div className="flex items-center gap-2 p-2 bg-muted rounded">
                 <CreditCard className="h-4 w-4 text-muted-foreground" />
-                <span
-                  className={`text-sm font-medium ${selectedReservation.reservation.status !== "confirmed" ? "text-amber-600" : ""}`}
-                >
+                <span className="text-sm font-medium">
                   ${selectedReservation.reservation.cost}
-                  {selectedReservation.reservation.status !== "confirmed" && " (estimated)"}
                 </span>
               </div>
 

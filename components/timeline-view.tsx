@@ -105,18 +105,14 @@ export function TimelineView({ segments, heroImage, onSelectReservation }: Timel
   // Calculate segment costs
   const getSegmentCosts = (segment: TimelineViewProps["segments"][0]) => {
     let total = 0
-    let estimatedTotal = 0
     segment.days.forEach((day) => {
       day.items.forEach((item) => {
         item.reservations.forEach((res) => {
           total += res.cost
-          if (res.status !== "confirmed") {
-            estimatedTotal += res.cost
-          }
         })
       })
     })
-    return { total, estimatedTotal }
+    return { total }
   }
 
   return (
@@ -164,9 +160,6 @@ export function TimelineView({ segments, heroImage, onSelectReservation }: Timel
                     </span>
                     <span className="text-xs font-medium">
                       ${segmentCosts.total.toLocaleString()}
-                      {segmentCosts.estimatedTotal > 0 && (
-                        <span className="text-amber-500 ml-1">(~${segmentCosts.estimatedTotal})</span>
-                      )}
                     </span>
                   </div>
                   {/* Day count indicator */}
@@ -298,11 +291,8 @@ export function TimelineView({ segments, heroImage, onSelectReservation }: Timel
                                 </div>
 
                                 {/* Cost */}
-                                <div
-                                  className={`text-[10px] shrink-0 ${res.status !== "confirmed" ? "text-amber-600" : "text-muted-foreground"}`}
-                                >
+                                <div className="text-[10px] shrink-0 text-muted-foreground">
                                   ${res.cost}
-                                  {res.status !== "confirmed" && "~"}
                                 </div>
                               </div>
                             )
