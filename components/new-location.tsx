@@ -6,6 +6,7 @@ import { addSegment } from "@/lib/actions/add-location";
 import { UploadButton } from "@/lib/upload-thing";
 import { formatForDateTimeLocal } from "@/lib/utils";
 import { SegmentType } from "@/app/generated/prisma";
+import { AddressInput } from "./address-input";
 
 export default function NewLocationClient({
   tripId,
@@ -23,7 +24,10 @@ export default function NewLocationClient({
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [startAddress, setStartAddress] = useState("");
+  const [endAddress, setEndAddress] = useState("");
   const [segmentTypeId, setSegmentTypeId] = useState("");
+  const [isStartAddressValid, setIsStartAddressValid] = useState(false);
+  const [isEndAddressValid, setIsEndAddressValid] = useState(false);
 
   useEffect(() => {
     if (!lastEndTime) {
@@ -101,26 +105,42 @@ export default function NewLocationClient({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Start Address
+                Start Address *
               </label>
-              <input
-                name="startAddress"
-                type="text"
-                required
+              <input type="hidden" name="startAddress" value={startAddress} />
+              <AddressInput
                 value={startAddress}
-                onChange={(event) => setStartAddress(event.target.value)}
-                className="w-full border border-gray-300 px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={setStartAddress}
+                onValidationComplete={(isValid, formattedAddress) => {
+                  setIsStartAddressValid(isValid);
+                  if (isValid && formattedAddress) {
+                    setStartAddress(formattedAddress);
+                  }
+                }}
+                placeholder="Enter start address"
+                validateOnBlur={true}
+                showValidationBadge={true}
+                required={true}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                End Address
+                End Address *
               </label>
-              <input
-                name="endAddress"
-                type="text"
-                required
-                className="w-full border border-gray-300 px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <input type="hidden" name="endAddress" value={endAddress} />
+              <AddressInput
+                value={endAddress}
+                onChange={setEndAddress}
+                onValidationComplete={(isValid, formattedAddress) => {
+                  setIsEndAddressValid(isValid);
+                  if (isValid && formattedAddress) {
+                    setEndAddress(formattedAddress);
+                  }
+                }}
+                placeholder="Enter end address"
+                validateOnBlur={true}
+                showValidationBadge={true}
+                required={true}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

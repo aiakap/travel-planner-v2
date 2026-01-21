@@ -113,6 +113,7 @@ export async function createReservationFromSuggestion({
   cost,
   category,
   type,
+  status: statusType = "suggested",
 }: {
   tripId: string;
   placeName: string;
@@ -123,6 +124,7 @@ export async function createReservationFromSuggestion({
   cost: number;
   category: string;
   type: string;
+  status?: "suggested" | "planned" | "confirmed";
 }) {
   const session = await auth();
 
@@ -174,13 +176,42 @@ export async function createReservationFromSuggestion({
     );
   });
 
-  // If no segment found for this day, use the first segment or create one
+  // If no segment found for this day, use the first segment
   if (!targetSegment && trip.segments.length > 0) {
     targetSegment = trip.segments[0];
   }
 
+  // If no segment exists at all, create a default one
   if (!targetSegment) {
-    throw new Error("No segment found for this trip");
+    console.log(`Creating default segment for trip ${tripId} (no segments exist)`);
+    
+    // Get or create default segment type
+    const segmentType = await prisma.segmentType.findFirst({
+      where: { name: "General" },
+    }) || await prisma.segmentType.create({
+      data: { name: "General" },
+    });
+    
+    // Use place location if available, otherwise use a default location
+    const lat = placeData?.geometry?.location?.lat || 0;
+    const lng = placeData?.geometry?.location?.lng || 0;
+    const locationName = placeData?.formattedAddress?.split(",")[0] || "Location";
+    
+    targetSegment = await prisma.segment.create({
+      data: {
+        tripId: tripId,
+        name: "Main Itinerary",
+        startTitle: locationName,
+        startLat: lat,
+        startLng: lng,
+        endTitle: locationName,
+        endLat: lat,
+        endLng: lng,
+        startTime: tripStartDate,
+        endTime: new Date(trip.endDate),
+        segmentTypeId: segmentType.id,
+      },
+    });
   }
 
   // Get reservation type
@@ -197,13 +228,22 @@ export async function createReservationFromSuggestion({
     throw new Error(`Reservation type "${type}" in category "${category}" not found`);
   }
 
-  // Get "Pending" status
+  // Map status type to database status name
+  const statusNameMap = {
+    suggested: "Pending",
+    planned: "Pending", 
+    confirmed: "Confirmed",
+  };
+
+  const statusName = statusNameMap[statusType];
+
+  // Get reservation status
   const status = await prisma.reservationStatus.findFirst({
-    where: { name: "Pending" },
+    where: { name: statusName },
   });
 
   if (!status) {
-    throw new Error("Could not find Pending status");
+    throw new Error(`Could not find ${statusName} status`);
   }
 
   // Extract contact info from Google Places data

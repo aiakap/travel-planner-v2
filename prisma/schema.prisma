@@ -104,9 +104,13 @@ model Segment {
   startTitle String
   startLat Float
   startLng Float
+  startTimeZoneId String?
+  startTimeZoneName String?
   endTitle String
   endLat Float
   endLng Float
+  endTimeZoneId String?
+  endTimeZoneName String?
   notes String?
   startTime DateTime?
   endTime DateTime?
@@ -154,6 +158,7 @@ model ReservationStatus {
 model Reservation {
   id String @id @default(cuid())
   name String
+  vendor String? // Name of the business/vendor (restaurant, hotel, etc.)
   confirmationNumber String?
   notes String?
   reservationTypeId String
@@ -167,6 +172,10 @@ model Reservation {
   cost Float?
   currency String?
   location String?
+  latitude Float? // Latitude for location-based features
+  longitude Float? // Longitude for location-based features
+  timeZoneId String? // IANA timezone ID
+  timeZoneName String? // Human-readable timezone name
   url String?
   imageUrl String?
   imageIsCustom Boolean @default(false)

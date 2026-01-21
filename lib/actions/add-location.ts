@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { queueSegmentImageGeneration } from "./queue-image-generation";
+import { getSegmentTimeZones } from "./timezone";
 
 async function geocodeAddress(address: string) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY!;
@@ -53,6 +54,19 @@ export async function addSegment(formData: FormData, tripId: string) {
     geocodeAddress(endAddress),
   ]);
 
+  // Fetch timezone information for start and end locations
+  const startTime = startTimeStr ? new Date(startTimeStr) : undefined;
+  const endTime = endTimeStr ? new Date(endTimeStr) : undefined;
+  
+  const timezones = await getSegmentTimeZones(
+    startGeo.lat,
+    startGeo.lng,
+    endGeo.lat,
+    endGeo.lng,
+    startTime,
+    endTime
+  );
+
   const count = await prisma.segment.count({
     where: { tripId },
   });
@@ -64,15 +78,19 @@ export async function addSegment(formData: FormData, tripId: string) {
       startTitle: startGeo.formatted,
       startLat: startGeo.lat,
       startLng: startGeo.lng,
+      startTimeZoneId: timezones.start?.timeZoneId,
+      startTimeZoneName: timezones.start?.timeZoneName,
       endTitle: endGeo.formatted,
       endLat: endGeo.lat,
       endLng: endGeo.lng,
+      endTimeZoneId: timezones.end?.timeZoneId,
+      endTimeZoneName: timezones.end?.timeZoneName,
       name,
       imageUrl: imageUrl || null,
       imageIsCustom,
       notes: notes || null,
-      startTime: startTimeStr ? new Date(startTimeStr) : null,
-      endTime: endTimeStr ? new Date(endTimeStr) : null,
+      startTime: startTime || null,
+      endTime: endTime || null,
       segmentTypeId,
       tripId,
       order: count,

@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getTravelTime, TransportMode } from "./route-optimization";
 
 interface TimeConflict {
   hasConflict: boolean;
@@ -11,16 +12,28 @@ interface TimeConflict {
     endTime: Date | null;
     category: string;
   }>;
+  travelTimeIssues?: Array<{
+    from: string;
+    to: string;
+    requiredTime: number;
+    availableTime: number;
+    shortfall: number;
+    travelTimeText: string;
+  }>;
 }
 
 /**
  * Check if a proposed time slot conflicts with existing reservations
+ * Now includes travel time validation between locations
  */
 export async function checkTimeConflict(
   tripId: string,
   day: number,
   startTime: string,
-  endTime: string
+  endTime: string,
+  proposedLat?: number,
+  proposedLng?: number,
+  transportMode: TransportMode = "WALK"
 ): Promise<TimeConflict> {
   try {
     // Get trip to calculate the actual date for this day
@@ -90,8 +103,96 @@ export async function checkTimeConflict(
       return proposedStart < resEnd && proposedEnd > resStart;
     });
 
+    // Check for travel time issues if location is provided
+    const travelTimeIssues: TimeConflict["travelTimeIssues"] = [];
+    
+    if (proposedLat && proposedLng) {
+      // Find the reservation immediately before this proposed time
+      const reservationsBefore = dayReservations
+        .filter((res) => {
+          const resEnd = res.endTime ? new Date(res.endTime) : new Date(new Date(res.startTime!).getTime() + 60 * 60 * 1000);
+          return resEnd <= proposedStart;
+        })
+        .sort((a, b) => {
+          const aEnd = a.endTime ? new Date(a.endTime).getTime() : new Date(a.startTime!).getTime() + 60 * 60 * 1000;
+          const bEnd = b.endTime ? new Date(b.endTime).getTime() : new Date(b.startTime!).getTime() + 60 * 60 * 1000;
+          return bEnd - aEnd;
+        });
+
+      const previousReservation = reservationsBefore[0];
+
+      if (previousReservation && previousReservation.latitude && previousReservation.longitude) {
+        // Calculate travel time from previous reservation
+        const travelInfo = await getTravelTime(
+          previousReservation.latitude,
+          previousReservation.longitude,
+          proposedLat,
+          proposedLng,
+          transportMode
+        );
+
+        if (travelInfo) {
+          const prevEnd = previousReservation.endTime 
+            ? new Date(previousReservation.endTime) 
+            : new Date(new Date(previousReservation.startTime!).getTime() + 60 * 60 * 1000);
+          
+          const availableMinutes = (proposedStart.getTime() - prevEnd.getTime()) / (1000 * 60);
+          const requiredMinutes = travelInfo.duration / 60;
+
+          if (requiredMinutes > availableMinutes) {
+            travelTimeIssues.push({
+              from: previousReservation.vendor,
+              to: "Proposed location",
+              requiredTime: requiredMinutes,
+              availableTime: availableMinutes,
+              shortfall: requiredMinutes - availableMinutes,
+              travelTimeText: travelInfo.durationText,
+            });
+          }
+        }
+      }
+
+      // Find the reservation immediately after this proposed time
+      const reservationsAfter = dayReservations
+        .filter((res) => {
+          const resStart = new Date(res.startTime!);
+          return resStart >= proposedEnd;
+        })
+        .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime());
+
+      const nextReservation = reservationsAfter[0];
+
+      if (nextReservation && nextReservation.latitude && nextReservation.longitude) {
+        // Calculate travel time to next reservation
+        const travelInfo = await getTravelTime(
+          proposedLat,
+          proposedLng,
+          nextReservation.latitude,
+          nextReservation.longitude,
+          transportMode
+        );
+
+        if (travelInfo) {
+          const nextStart = new Date(nextReservation.startTime!);
+          const availableMinutes = (nextStart.getTime() - proposedEnd.getTime()) / (1000 * 60);
+          const requiredMinutes = travelInfo.duration / 60;
+
+          if (requiredMinutes > availableMinutes) {
+            travelTimeIssues.push({
+              from: "Proposed location",
+              to: nextReservation.vendor,
+              requiredTime: requiredMinutes,
+              availableTime: availableMinutes,
+              shortfall: requiredMinutes - availableMinutes,
+              travelTimeText: travelInfo.durationText,
+            });
+          }
+        }
+      }
+    }
+
     return {
-      hasConflict: conflictingReservations.length > 0,
+      hasConflict: conflictingReservations.length > 0 || travelTimeIssues.length > 0,
       conflictingReservations: conflictingReservations.map((res) => ({
         id: res.id,
         name: res.name,
@@ -99,6 +200,7 @@ export async function checkTimeConflict(
         endTime: res.endTime,
         category: res.reservationType.category.name,
       })),
+      travelTimeIssues: travelTimeIssues.length > 0 ? travelTimeIssues : undefined,
     };
   } catch (error) {
     console.error("Error checking time conflicts:", error);

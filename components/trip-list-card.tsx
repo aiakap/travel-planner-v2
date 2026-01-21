@@ -1,10 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Route } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar, MapPin, Route, Plus } from "lucide-react";
 import type { GlobeTripData } from "@/lib/globe-types";
+import { generateTripMapUrl } from "@/lib/static-map-utils";
+import { AddToTripModal } from "./add-to-trip-modal";
 
 interface TripListCardProps {
   trips: GlobeTripData[];
@@ -84,6 +88,12 @@ function TripList({
   selectedTripId,
   onTripClick,
 }: TripListProps) {
+  const [hoveredTripId, setHoveredTripId] = useState<string | null>(null);
+  const [addToTripModalData, setAddToTripModalData] = useState<{
+    tripId: string;
+    tripTitle: string;
+  } | null>(null);
+
   if (trips.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground text-sm">
@@ -92,15 +102,44 @@ function TripList({
     );
   }
 
-  return (
-    <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-      {trips.map((trip) => {
-        const isSelected = selectedTripId === trip.id;
+  const handleAddToTrip = async (data: {
+    tripId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    status: "suggested" | "planned" | "confirmed";
+  }) => {
+    // TODO: Implement the actual add to trip logic
+    console.log("Adding to trip:", data);
+    // This would call an API endpoint to create a reservation
+  };
 
-        return (
+  return (
+    <>
+      {addToTripModalData && (
+        <AddToTripModal
+          tripId={addToTripModalData.tripId}
+          tripTitle={addToTripModalData.tripTitle}
+          itemName="New Activity"
+          onClose={() => setAddToTripModalData(null)}
+          onAdd={handleAddToTrip}
+        />
+      )}
+
+      <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+        {trips.map((trip) => {
+          const isSelected = selectedTripId === trip.id;
+          const isHovered = hoveredTripId === trip.id;
+
+          // Generate static map preview URL
+          const mapUrl = trip.segments && trip.segments.length > 0
+            ? generateTripMapUrl(trip.segments, 400, 150)
+            : null;
+
+          return (
           <div
             key={trip.id}
-            className={`border rounded-lg overflow-hidden transition-all cursor-pointer ${
+            className={`border rounded-lg overflow-hidden transition-all cursor-pointer group ${
               isSelected
                 ? "border-primary shadow-md"
                 : "border-border hover:border-primary/50 hover:shadow-sm"
@@ -109,8 +148,45 @@ function TripList({
               borderLeftWidth: "4px",
               borderLeftColor: isSelected ? (trip.color || "#3b82f6") : "transparent",
             }}
+            onMouseEnter={() => setHoveredTripId(trip.id)}
+            onMouseLeave={() => setHoveredTripId(null)}
             onClick={() => onTripClick(trip.id)}
           >
+            {/* Map Preview */}
+            {mapUrl && (
+              <div className="relative h-24 bg-slate-100 overflow-hidden">
+                <img
+                  src={mapUrl}
+                  alt={`${trip.title} route`}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                
+                {/* Hover Overlay with Add to Trip Button */}
+                <div
+                  className={`absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center transition-opacity duration-200 ${
+                    isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAddToTripModalData({
+                        tripId: trip.id,
+                        tripTitle: trip.title,
+                      });
+                    }}
+                    className="bg-white hover:bg-white/90 text-slate-900 font-medium shadow-lg"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add to Trip
+                  </Button>
+                </div>
+              </div>
+            )}
+            
             <div className="p-4 hover:bg-secondary/50 transition-colors">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -181,8 +257,9 @@ function TripList({
               </div>
             </div>
           </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

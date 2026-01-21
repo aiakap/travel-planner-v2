@@ -18,7 +18,16 @@ import {
   Plus,
   DollarSign,
   Sparkles,
+  Lightbulb,
+  CheckCircle,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PlaceSuggestion, GooglePlaceData } from "@/lib/types/place-suggestion";
 import { suggestScheduling, getTripDays } from "@/lib/smart-scheduling";
 import { checkTimeConflict, getAlternativeTimeSlots } from "@/lib/actions/check-conflicts";
@@ -38,6 +47,7 @@ interface SuggestionDetailModalProps {
     cost: number;
     category: string;
     type: string;
+    status?: "suggested" | "planned" | "confirmed";
   }) => Promise<void>;
 }
 
@@ -57,6 +67,7 @@ export function SuggestionDetailModal({
   const [endTime, setEndTime] = useState<string>("12:00");
   const [cost, setCost] = useState<number>(0);
   const [schedulingReason, setSchedulingReason] = useState<string>("");
+  const [status, setStatus] = useState<"suggested" | "planned" | "confirmed">("suggested");
 
   // Trip days for selection
   const [tripDays, setTripDays] = useState<
@@ -71,6 +82,14 @@ export function SuggestionDetailModal({
     startTime: Date;
     endTime: Date | null;
     category: string;
+  }>>([]);
+  const [travelTimeIssues, setTravelTimeIssues] = useState<Array<{
+    from: string;
+    to: string;
+    requiredTime: number;
+    availableTime: number;
+    shortfall: number;
+    travelTimeText: string;
   }>>([]);
   const [alternativeSlots, setAlternativeSlots] = useState<Array<{
     startTime: string;
@@ -160,9 +179,19 @@ export function SuggestionDetailModal({
       if (!selectedDay || !startTime || !endTime) return;
 
       try {
-        const conflict = await checkTimeConflict(tripId, selectedDay, startTime, endTime);
+        // Pass location data if available for travel time checking
+        const conflict = await checkTimeConflict(
+          tripId, 
+          selectedDay, 
+          startTime, 
+          endTime,
+          placeData?.geometry?.location.lat,
+          placeData?.geometry?.location.lng,
+          "WALK" // Default to walking for activity-to-activity travel
+        );
         setHasConflict(conflict.hasConflict);
         setConflictingReservations(conflict.conflictingReservations);
+        setTravelTimeIssues(conflict.travelTimeIssues || []);
 
         // If there's a conflict, get alternative time slots
         if (conflict.hasConflict) {
@@ -183,7 +212,7 @@ export function SuggestionDetailModal({
     }
 
     checkConflicts();
-  }, [selectedDay, startTime, endTime, tripId]);
+  }, [selectedDay, startTime, endTime, tripId, placeData]);
 
   // Calculate duration in hours
   const calculateDuration = (start: string, end: string): number => {
@@ -212,6 +241,7 @@ export function SuggestionDetailModal({
         cost,
         category: suggestion.category,
         type: suggestion.type,
+        status, // Include status in the data sent
       });
       onClose();
     } catch (error) {
@@ -256,7 +286,26 @@ export function SuggestionDetailModal({
     if (placeData?.photos && placeData.photos.length > 0) {
       return placeData.photos[0].url;
     }
+    // Fallback to Street View if no photos available
+    if (placeData?.geometry?.location) {
+      const { lat, lng } = placeData.geometry.location;
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      if (apiKey) {
+        return `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&key=${apiKey}`;
+      }
+    }
     return "/placeholder.svg";
+  };
+
+  const getStreetViewUrl = () => {
+    if (placeData?.geometry?.location) {
+      const { lat, lng } = placeData.geometry.location;
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      if (apiKey) {
+        return `https://maps.googleapis.com/maps/api/streetview?size=400x250&location=${lat},${lng}&fov=90&heading=0&pitch=0&key=${apiKey}`;
+      }
+    }
+    return null;
   };
 
   return (
@@ -265,7 +314,7 @@ export function SuggestionDetailModal({
       onClick={onClose}
     >
       <div
-        className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] flex flex-col"
+        className="bg-background rounded-lg max-w-lg w-full max-h-[90vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Fixed Header with Image */}
@@ -296,7 +345,7 @@ export function SuggestionDetailModal({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           {/* Header Info */}
           <div>
             <div className="flex items-start justify-between">
@@ -340,6 +389,28 @@ export function SuggestionDetailModal({
                     {day}
                   </p>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Street View Preview */}
+          {getStreetViewUrl() && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase">
+                Street View
+              </h3>
+              <div className="relative rounded-md overflow-hidden border border-border">
+                <img
+                  src={getStreetViewUrl()!}
+                  alt="Street View"
+                  className="w-full h-32 object-cover"
+                />
+                <div className="absolute bottom-2 right-2">
+                  <Badge className="bg-white/90 text-xs text-slate-700 backdrop-blur-sm">
+                    <MapPin className="h-3 w-3 mr-1" />
+                    Location Preview
+                  </Badge>
+                </div>
               </div>
             </div>
           )}
@@ -406,6 +477,53 @@ export function SuggestionDetailModal({
                 </div>
               </div>
             )}
+
+            {/* Status Selection */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-2">
+                Reservation Status
+              </label>
+              <Select value={status} onValueChange={(v: any) => setStatus(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="suggested">
+                    <div className="flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-amber-600" />
+                      <div>
+                        <div className="font-medium">Suggestion</div>
+                        <div className="text-xs text-muted-foreground">
+                          Considering this option
+                        </div>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="planned">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-sky-600" />
+                      <div>
+                        <div className="font-medium">Planned</div>
+                        <div className="text-xs text-muted-foreground">
+                          Decided but not booked
+                        </div>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="confirmed">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                      <div>
+                        <div className="font-medium">Confirmed</div>
+                        <div className="text-xs text-muted-foreground">
+                          Reservation confirmed
+                        </div>
+                      </div>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Day Selection */}
             <div>
@@ -474,6 +592,7 @@ export function SuggestionDetailModal({
             <ConflictIndicator
               hasConflict={hasConflict}
               conflictingReservations={conflictingReservations}
+              travelTimeIssues={travelTimeIssues}
             />
 
             {/* Alternative Time Slots */}
@@ -488,24 +607,28 @@ export function SuggestionDetailModal({
         </div>
 
         {/* Fixed Footer Actions */}
-        <div className="border-t p-3 flex justify-between shrink-0">
-          <Button variant="outline" size="sm" onClick={onClose}>
+        <div className="border-t bg-background p-4 flex justify-between items-center shrink-0 rounded-b-lg">
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            className="min-w-[100px]"
+          >
             Cancel
           </Button>
           <Button
-            size="sm"
             onClick={handleAddToItinerary}
             disabled={isAdding}
-            className="bg-primary"
+            className="bg-primary hover:bg-primary/90 min-w-[160px]"
+            size="default"
           >
             {isAdding ? (
               <>
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Adding...
               </>
             ) : (
               <>
-                <Plus className="h-3 w-3 mr-1" />
+                <Plus className="h-4 w-4 mr-2" />
                 Add to Itinerary
               </>
             )}
