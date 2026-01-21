@@ -1,0 +1,378 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String?
+  email         String          @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  trips         Trip[]
+  conversations ChatConversation[]
+  profile       UserProfile?
+  contacts      UserContact[]
+  hobbies       UserHobby[]
+  relationships UserRelationship[] @relation("UserRelationships")
+  relatedTo     UserRelationship[] @relation("RelatedToUser")
+  travelPreferences UserTravelPreference[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                Int      @id @default(autoincrement())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Trip {
+  id String @id @default(cuid())
+  title String
+  description String
+  imageUrl String?
+  imageIsCustom Boolean @default(false)
+  imagePromptId String?
+  imagePrompt ImagePrompt? @relation(fields: [imagePromptId], references: [id])
+  startDate DateTime
+  endDate DateTime
+  user User @relation(fields: [userId], references: [id] )
+  userId String
+
+  segments Segment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Segment {
+  id String @id @default(cuid())
+  name String
+  imageUrl String?
+  imageIsCustom Boolean @default(false)
+  startTitle String
+  startLat Float
+  startLng Float
+  endTitle String
+  endLat Float
+  endLng Float
+  notes String?
+  startTime DateTime?
+  endTime DateTime?
+  segmentTypeId String
+  segmentType SegmentType @relation(fields: [segmentTypeId], references: [id])
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripId String
+  order Int @default(0)
+  reservations Reservation[]
+  createdAt DateTime @default(now())
+}
+
+model SegmentType {
+  id String @id @default(cuid())
+  name String @unique
+  segments Segment[]
+  createdAt DateTime @default(now())
+}
+
+model ReservationCategory {
+  id String @id @default(cuid())
+  name String @unique
+  types ReservationType[]
+  createdAt DateTime @default(now())
+}
+
+model ReservationType {
+  id String @id @default(cuid())
+  name String
+  categoryId String
+  category ReservationCategory @relation(fields: [categoryId], references: [id])
+  reservations Reservation[]
+  createdAt DateTime @default(now())
+
+  @@unique([categoryId, name])
+}
+
+model ReservationStatus {
+  id String @id @default(cuid())
+  name String @unique
+  reservations Reservation[]
+  createdAt DateTime @default(now())
+}
+
+model Reservation {
+  id String @id @default(cuid())
+  name String
+  confirmationNumber String?
+  notes String?
+  reservationTypeId String
+  reservationType ReservationType @relation(fields: [reservationTypeId], references: [id])
+  reservationStatusId String
+  reservationStatus ReservationStatus @relation(fields: [reservationStatusId], references: [id])
+  segmentId String
+  segment Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  startTime DateTime?
+  endTime DateTime?
+  cost Float?
+  currency String?
+  location String?
+  url String?
+  imageUrl String?
+  imageIsCustom Boolean @default(false)
+  // Flight-specific fields (nullable for non-flight reservations)
+  departureLocation String?
+  departureTimezone String?  // IANA timezone, e.g., "America/New_York"
+  arrivalLocation String?
+  arrivalTimezone String?    // IANA timezone, e.g., "Europe/Amsterdam"
+  // Vendor contact information (hotel phone, restaurant email, etc.)
+  contactPhone String?
+  contactEmail String?
+  cancellationPolicy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChatConversation {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title String
+  messages ChatMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChatMessage {
+  id String @id @default(cuid())
+  conversationId String
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role String
+  content String @db.Text
+  toolCalls Json?
+  createdAt DateTime @default(now())
+}
+
+model ImagePrompt {
+  id String @id @default(cuid())
+  name String @unique
+  prompt String @db.Text
+  category String // "trip", "segment", "reservation"
+  style String?
+  lightness String?
+  trips Trip[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ImageQueue {
+  id         String   @id @default(cuid())
+  entityType String   // "trip", "segment", "reservation"
+  entityId   String   // ID of the trip/segment/reservation
+  prompt     String   @db.Text // Full assembled prompt for DALL-E
+  status     String   @default("waiting") // "waiting", "in_progress", "failed", "completed"
+  notes      String?  @db.Text // Log of processing steps, timestamps, errors
+  imageUrl   String?  // Final image URL when completed
+  attempts   Int      @default(0) // Number of processing attempts
+  promptId   String?  // Optional reference to ImagePrompt used
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status, createdAt]) // For efficient queue processing
+  @@index([entityType, entityId]) // For looking up by entity
+}
+
+// User Profile Models
+
+model UserProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Personal Info
+  firstName       String?
+  lastName        String?
+  dateOfBirth     DateTime?
+  address         String?
+  city            String?
+  country         String?
+  
+  // Loyalty Programs (stored as JSON for flexibility)
+  loyaltyPrograms Json?   // Array of { program, memberNumber, tier }
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ContactType {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  label       String
+  icon        String?
+  isActive    Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  contacts    UserContact[]
+}
+
+model UserContact {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  contactTypeId String
+  contactType   ContactType @relation(fields: [contactTypeId], references: [id])
+  
+  value         String
+  label         String?     // "Work", "Personal", "Home"
+  isPrimary     Boolean     @default(false)
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@index([userId, contactTypeId])
+}
+
+model Hobby {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  category  String?     // "outdoor", "culinary", "arts", "sports", "relaxation"
+  icon      String?
+  isActive  Boolean     @default(true)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+  users     UserHobby[]
+}
+
+model UserHobby {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  hobbyId   String
+  hobby     Hobby    @relation(fields: [hobbyId], references: [id], onDelete: Cascade)
+  
+  level     String?  // "beginner", "intermediate", "advanced", "expert"
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, hobbyId])
+}
+
+model TravelPreferenceType {
+  id                     String                   @id @default(cuid())
+  name                   String                   @unique
+  label                  String
+  description            String?
+  icon                   String?
+  sortOrder              Int                      @default(0)
+  isActive               Boolean                  @default(true)
+  isRequired             Boolean                  @default(false)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  options                TravelPreferenceOption[]
+  userPreferences        UserTravelPreference[]
+}
+
+model TravelPreferenceOption {
+  id                   String                 @id @default(cuid())
+  preferenceTypeId     String
+  preferenceType       TravelPreferenceType   @relation(fields: [preferenceTypeId], references: [id], onDelete: Cascade)
+  
+  value                String
+  label                String
+  description          String?
+  icon                 String?
+  sortOrder            Int                    @default(0)
+  isActive             Boolean                @default(true)
+  
+  createdAt            DateTime               @default(now())
+  userPreferences      UserTravelPreference[]
+  
+  @@unique([preferenceTypeId, value])
+}
+
+model UserTravelPreference {
+  id                     String                 @id @default(cuid())
+  userId                 String
+  user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  preferenceTypeId       String
+  preferenceType         TravelPreferenceType   @relation(fields: [preferenceTypeId], references: [id])
+  
+  optionId               String
+  option                 TravelPreferenceOption @relation(fields: [optionId], references: [id])
+  
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  
+  @@unique([userId, preferenceTypeId])
+}
+
+model UserRelationship {
+  id              String   @id @default(cuid())
+  
+  userId          String
+  user            User     @relation("UserRelationships", fields: [userId], references: [id], onDelete: Cascade)
+  
+  relatedUserId   String
+  relatedUser     User     @relation("RelatedToUser", fields: [relatedUserId], references: [id], onDelete: Cascade)
+  
+  relationshipType String  // "spouse", "partner", "child", "parent", "sibling", "friend", "travel_companion"
+  nickname        String?
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([userId, relatedUserId])
+}
