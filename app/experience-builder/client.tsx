@@ -4,11 +4,14 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { useChat } from "@ai-sdk/react"
 import { UIMessage } from "ai"
 import { Button } from "@/components/ui/button"
-import { Send, Plus, GripVertical, Table2, GitBranch, Grid3X3, MessageCircle, Calendar, Loader2 } from "lucide-react"
+import { Send, Plus, GripVertical, Table2, GitBranch, Grid3X3, MessageCircle, Calendar, Loader2, MapPin } from "lucide-react"
 import { ChatWelcomeMessage } from "@/components/chat-welcome-message"
 import { ChatQuickActions } from "@/components/chat-quick-actions"
 import { TripSelector } from "@/components/trip-selector"
-import { ChatSelector } from "@/components/chat-selector"
+import { ChatNameDropdown } from "@/components/chat-name-dropdown"
+import { EditChatModal } from "@/components/edit-chat-modal"
+import { EditTripModal } from "@/components/edit-trip-modal"
+import { AILoadingAnimation } from "@/components/ai-loading-animation"
 import { ItineraryEmptyState } from "@/components/itinerary-empty-state"
 import { TimelineView } from "@/components/timeline-view"
 import { TableView } from "@/components/table-view"
@@ -18,9 +21,11 @@ import { transformTripToV0Format } from "@/lib/v0-data-transform"
 import type { V0Itinerary } from "@/lib/v0-types"
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization"
 import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts"
+import { renameTripConversation, createTripConversation } from "@/lib/actions/chat-actions"
 
 // Helper to extract text content from message parts
-function getMessageText(message: UIMessage): string {
+function getMessageText(message: UIMessage | undefined): string {
+  if (!message) return ""
   return message.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("") || message.content || ""
 }
 
@@ -115,6 +120,8 @@ export function ExperienceBuilderClient({
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat")
   const [leftPanelWidth, setLeftPanelWidth] = useState(40)
   const [selectedReservation, setSelectedReservation] = useState<any>(null)
+  const [isChatEditModalOpen, setIsChatEditModalOpen] = useState(false)
+  const [isTripEditModalOpen, setIsTripEditModalOpen] = useState(false)
 
   // Refs
   const isDragging = useRef(false)
@@ -238,7 +245,25 @@ export function ExperienceBuilderClient({
           
           // Fetch conversations for the new trip
           console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)
-          const convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:246',message:'Before fetch conversations',data:{tripId:newestTrip.id,url:`/api/conversations?tripId=${newestTrip.id}`},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+          // #endregion
+          
+          let convResponse
+          try {
+            convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)
+            
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:252',message:'Fetch completed',data:{status:convResponse.status,ok:convResponse.ok,statusText:convResponse.statusText},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
+            // #endregion
+          } catch (fetchError: any) {
+            // #region agent log
+            fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:258',message:'Fetch error caught',data:{errorMessage:fetchError.message,errorName:fetchError.name,errorStack:fetchError.stack},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
+            // #endregion
+            throw fetchError
+          }
+          
           console.log("🔄 [Refetch] Conversations API response:", convResponse.status, convResponse.ok)
           
           if (convResponse.ok) {
@@ -272,16 +297,51 @@ export function ExperienceBuilderClient({
     }
   }
 
+  // Auto-create conversation if trip has none
+  useEffect(() => {
+    const autoCreateChat = async () => {
+      // Only auto-create if:
+      // 1. A trip is selected
+      // 2. No conversations exist for this trip
+      // 3. Not currently creating one
+      if (selectedTripId && conversations.length === 0 && !currentConversationId) {
+        try {
+          const selectedTrip = trips.find(t => t.id === selectedTripId)
+          const tripName = selectedTrip?.title || "your trip"
+          
+          const newConversation = await createTripConversation(
+            selectedTripId, 
+            `Chat about ${tripName}`
+          )
+          
+          setConversations([newConversation])
+          setCurrentConversationId(newConversation.id)
+          
+          // Add a greeting message from the assistant
+          setMessages([{
+            id: 'greeting',
+            role: 'assistant',
+            content: `What can I help with regarding ${tripName}?`,
+          } as any])
+        } catch (error) {
+          console.error("Error auto-creating conversation:", error)
+        }
+      }
+    }
+    
+    autoCreateChat()
+  }, [selectedTripId, conversations.length, currentConversationId, trips])
+
   // Handle conversation selection
   const handleConversationSelect = (conversationId: string) => {
     const conversation = conversations.find(c => c.id === conversationId)
     if (conversation) {
       setCurrentConversationId(conversationId)
-      setMessages(conversation.messages.map(m => ({
+      setMessages(conversation.messages?.map(m => ({
         id: m.id,
         role: m.role as any,
         content: m.content,
-      })))
+      })) || [])
     }
   }
 
@@ -324,6 +384,22 @@ What would you like to change about this plan, or should I create it as is?`;
     } else {
       // Navigate to new chat
       window.location.href = `/experience-builder`
+    }
+  }
+  
+  // Modal handlers
+  const handleChatUpdate = (updated: Conversation) => {
+    setConversations(conversations.map(c => 
+      c.id === updated.id ? updated : c
+    ))
+  }
+
+  const handleTripUpdate = async () => {
+    // Refetch trips to get updated data
+    const response = await fetch(`/api/trips?userId=${userId}`)
+    if (response.ok) {
+      const updatedTrips = await response.json()
+      setTrips(updatedTrips)
     }
   }
   
@@ -438,14 +514,7 @@ What would you like to change about this plan, or should I create it as is?`;
                       </div>
                     </div>
                   ))}
-                  {isLoading && (
-                    <div className="flex justify-start">
-                      <div className="bg-slate-50 rounded-lg px-4 py-2.5 flex items-center gap-2 border border-slate-100">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
-                        <span className="text-sm text-slate-500">Thinking...</span>
-                      </div>
-                    </div>
-                  )}
+                  {isLoading && <AILoadingAnimation />}
                 </>
               )}
             </div>
@@ -487,7 +556,7 @@ What would you like to change about this plan, or should I create it as is?`;
               <TripSelector trips={trips} selectedTripId={selectedTripId} onTripSelect={handleTripSelect} />
             </div>
             
-            {!hasStartedPlanning && !selectedTripId ? (
+            {!selectedTripId || !transformedTrip ? (
               <ItineraryEmptyState />
             ) : (
               <>
@@ -529,25 +598,45 @@ What would you like to change about this plan, or should I create it as is?`;
         {/* Left Panel - Chat */}
         <div className="flex flex-col h-full border-r bg-white" style={{ width: `${leftPanelWidth}%` }}>
           <div className="border-b border-slate-200 p-4 bg-white">
-            <div className="flex items-center gap-3">
-              <MessageCircle className="h-5 w-5 text-slate-700" />
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">{currentChatName}</h2>
-                <p className="text-xs text-slate-500">AI Travel Assistant</p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {/* Static trip name (no dropdown) */}
+                  <span className="text-sm font-medium text-slate-700">
+                    {selectedTripId ? (trips.find(t => t.id === selectedTripId)?.title || "Trip") : "New Trip"}
+                  </span>
+                  
+                  <span className="text-slate-400">→</span>
+                  
+                  {/* Chat dropdown */}
+                  {!selectedTripId || conversations.length === 0 ? (
+                    <span className="text-sm text-slate-600">Initial Chat</span>
+                  ) : (
+                    <ChatNameDropdown
+                      conversations={conversations}
+                      currentConversationId={currentConversationId}
+                      onSelectConversation={handleConversationSelect}
+                      tripId={selectedTripId}
+                      onConversationsChange={setConversations}
+                    />
+                  )}
+                </div>
               </div>
+              
+              {/* Edit button for chat (only when conversation exists) */}
+              {currentConversationId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-3 text-slate-600 hover:text-slate-900"
+                  onClick={() => setIsChatEditModalOpen(true)}
+                >
+                  Edit
+                </Button>
+              )}
             </div>
           </div>
-
-          {/* Chat Selector - only show if trip is selected */}
-          {selectedTripId && conversations.length > 0 && (
-            <ChatSelector
-              tripId={selectedTripId}
-              conversations={conversations}
-              currentConversationId={currentConversationId}
-              onSelectConversation={handleConversationSelect}
-              onConversationsChange={setConversations}
-            />
-          )}
 
           <div className="flex-1 overflow-y-auto p-6">
             {!hasStartedPlanning && messages.length === 0 ? (
@@ -593,14 +682,7 @@ What would you like to change about this plan, or should I create it as is?`;
                     </div>
                   </div>
                 ))}
-                {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-slate-50 rounded-lg px-5 py-3 flex items-center gap-2 border border-slate-100">
-                      <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                      <span className="text-sm text-slate-500">Thinking...</span>
-                    </div>
-                  </div>
-                )}
+                {isLoading && <AILoadingAnimation />}
               </>
             )}
           </div>
@@ -649,10 +731,27 @@ What would you like to change about this plan, or should I create it as is?`;
         <div className="flex flex-col h-full bg-white" style={{ width: `${100 - leftPanelWidth}%` }}>
           {/* Trip Selector - Always visible at top */}
           <div className="border-b border-slate-200 p-3 bg-white">
-            <TripSelector trips={trips} selectedTripId={selectedTripId} onTripSelect={handleTripSelect} />
+            <div className="flex items-center gap-3">
+              <MapPin className="h-5 w-5 text-slate-700 flex-shrink-0" />
+              <label className="text-sm font-medium text-slate-700">Trip:</label>
+              <div className="flex-1">
+                <TripSelector trips={trips} selectedTripId={selectedTripId} onTripSelect={handleTripSelect} compact={true} />
+              </div>
+              {/* Edit button for trip (only when trip is selected) */}
+              {selectedTripId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-3 text-slate-600 hover:text-slate-900"
+                  onClick={() => setIsTripEditModalOpen(true)}
+                >
+                  Edit
+                </Button>
+              )}
+            </div>
           </div>
           
-          {!hasStartedPlanning && !selectedTripId ? (
+          {!selectedTripId || !transformedTrip ? (
             <ItineraryEmptyState />
           ) : (
             <>
@@ -759,6 +858,25 @@ What would you like to change about this plan, or should I create it as is?`;
           console.log("Save reservation:", reservation)
         }}
       />
+
+      {/* Edit Modals */}
+      {currentConversationId && (
+        <EditChatModal
+          isOpen={isChatEditModalOpen}
+          onClose={() => setIsChatEditModalOpen(false)}
+          conversation={conversations.find(c => c.id === currentConversationId)!}
+          onUpdate={handleChatUpdate}
+        />
+      )}
+
+      {selectedTripId && selectedTrip && (
+        <EditTripModal
+          isOpen={isTripEditModalOpen}
+          onClose={() => setIsTripEditModalOpen(false)}
+          trip={selectedTrip}
+          onUpdate={handleTripUpdate}
+        />
+      )}
     </div>
   )
 }

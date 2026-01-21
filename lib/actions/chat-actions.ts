@@ -187,6 +187,9 @@ export async function createTripConversation(tripId: string, title?: string) {
       tripId,
       title: title || `Chat about ${trip.title}`,
     },
+    include: {
+      messages: true,
+    },
   });
 
   revalidatePath("/experience-builder");
@@ -217,5 +220,33 @@ export async function getTripConversations(tripId: string) {
       },
     },
   });
+}
+
+export async function renameTripConversation(conversationId: string, newTitle: string) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const conversation = await prisma.chatConversation.findFirst({
+    where: {
+      id: conversationId,
+      userId: session.user.id,
+    },
+  });
+
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
+
+  const updated = await prisma.chatConversation.update({
+    where: { id: conversationId },
+    data: { title: newTitle },
+    include: { messages: true },
+  });
+
+  revalidatePath("/experience-builder");
+  return updated;
 }
 

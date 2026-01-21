@@ -80,4 +80,28 @@ export async function updateTrip(tripId: string, formData: FormData) {
 
 }
 
+export async function renameTrip(tripId: string, newTitle: string) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const trip = await prisma.trip.findFirst({
+    where: {
+      id: tripId,
+      userId: session.user.id,
+    },
+  });
+
+  if (!trip) {
+    throw new Error("Trip not found");
+  }
+
+  const updated = await prisma.trip.update({
+    where: { id: tripId },
+    data: { title: newTitle },
+  });
+
+  return updated;
+}
 

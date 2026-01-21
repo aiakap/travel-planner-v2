@@ -1,0 +1,40 @@
+"use client"
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { EditTripForm } from "@/components/edit-trip-form"
+
+interface Trip {
+  id: string
+  title: string
+  description: string
+  startDate: Date
+  endDate: Date
+  imageUrl: string | null
+}
+
+interface EditTripModalProps {
+  isOpen: boolean
+  onClose: () => void
+  trip: Trip
+  onUpdate: () => void
+}
+
+export function EditTripModal({ isOpen, onClose, trip, onUpdate }: EditTripModalProps) {
+  const handleSuccess = () => {
+    onUpdate()
+    onClose()
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Trip</DialogTitle>
+        </DialogHeader>
+        <div className="py-4">
+          <EditTripForm trip={trip} onSuccess={handleSuccess} />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

@@ -14,9 +14,10 @@ interface TripSelectorProps {
   trips: Trip[]
   selectedTripId: string | null
   onTripSelect: (tripId: string | null) => void
+  compact?: boolean
 }
 
-export function TripSelector({ trips, selectedTripId, onTripSelect }: TripSelectorProps) {
+export function TripSelector({ trips, selectedTripId, onTripSelect, compact = false }: TripSelectorProps) {
   const formatTripDates = (startDate: Date, endDate: Date) => {
     const start = new Date(startDate)
     const end = new Date(endDate)
@@ -27,9 +28,11 @@ export function TripSelector({ trips, selectedTripId, onTripSelect }: TripSelect
 
   return (
     <div className="w-full">
-      <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-        Select Trip to Manage
-      </label>
+      {!compact && (
+        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+          Trip
+        </label>
+      )}
       <Select
         value={selectedTripId || "new"}
         onValueChange={(value) => {
@@ -53,7 +56,7 @@ export function TripSelector({ trips, selectedTripId, onTripSelect }: TripSelect
             ) : (
               <div className="flex items-center gap-2">
                 <MessageCircle className="h-4 w-4 text-primary" />
-                <span className="font-medium">New Chat</span>
+                <span className="font-medium">New Trip</span>
               </div>
             )}
           </SelectValue>
@@ -63,8 +66,8 @@ export function TripSelector({ trips, selectedTripId, onTripSelect }: TripSelect
             <div className="flex items-center gap-3 py-1">
               <MessageCircle className="h-4 w-4 text-primary" />
               <div className="flex flex-col">
-                <span className="font-medium">New Chat</span>
-                <span className="text-xs text-muted-foreground">Plan a new trip</span>
+                <span className="font-medium">New Trip</span>
+                <span className="text-xs text-muted-foreground">Start planning</span>
               </div>
             </div>
           </SelectItem>

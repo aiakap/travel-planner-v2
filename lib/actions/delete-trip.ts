@@ -22,7 +22,9 @@ export async function deleteTrip(tripId: string) {
     throw new Error("Trip not found or unauthorized");
   }
 
-  // Cascade delete will automatically delete segments and their reservations
+  // Cascade delete will automatically delete:
+  // - All segments and their reservations
+  // - All chat conversations and their messages
   await prisma.trip.delete({
     where: { id: tripId },
   });
