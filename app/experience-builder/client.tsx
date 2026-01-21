@@ -171,53 +171,104 @@ export function ExperienceBuilderClient({
   // Monitor chat messages for trip creation/updates
   useEffect(() => {
     const lastMessage = messages[messages.length - 1]
+    console.log("🔍 [Trip Detection] Last message:", lastMessage)
+    console.log("🔍 [Trip Detection] Message role:", lastMessage?.role)
+    console.log("🔍 [Trip Detection] Message content:", getMessageText(lastMessage))
+    console.log("🔍 [Trip Detection] Tool invocations:", (lastMessage as any)?.toolInvocations)
+    
     if (lastMessage?.role === "assistant") {
       const content = getMessageText(lastMessage).toLowerCase()
+      console.log("🔍 [Trip Detection] Checking for trip creation, content:", content)
       
-      if (content.includes("created trip")) {
-        // Refetch trips and auto-select new trip
-        refetchTripsAndSelect()
+      // Check for tool invocations first (more reliable)
+      const toolInvocations = (lastMessage as any)?.toolInvocations
+      if (toolInvocations?.some((call: any) => call.toolName === "create_trip" && call.state === "result")) {
+        console.log("✅ [Trip Detection] Trip creation detected via tool invocation!")
+        setTimeout(() => refetchTripsAndSelect(), 500) // Small delay for DB sync
+        return
+      }
+      
+      // Fallback to text detection with multiple phrases
+      const tripCreationPhrases = [
+        "created trip",
+        "created your trip", 
+        "i've created",
+        "trip has been created",
+        "successfully created"
+      ]
+      
+      if (tripCreationPhrases.some(phrase => content.includes(phrase))) {
+        console.log("✅ [Trip Detection] Trip creation detected via text content!")
+        setTimeout(() => refetchTripsAndSelect(), 500)
+      } else {
+        console.log("❌ [Trip Detection] No trip creation detected")
       }
     }
   }, [messages])
 
   const refetchTripsAndSelect = async () => {
+    console.log("🔄 [Refetch] Starting trip refetch...")
+    console.log("🔄 [Refetch] Current trips count:", trips.length)
+    
     try {
       const response = await fetch(`/api/trips?userId=${userId}`)
+      console.log("🔄 [Refetch] API response status:", response.status, response.ok)
+      
       if (response.ok) {
         const updatedTrips = await response.json()
+        console.log("🔄 [Refetch] Updated trips count:", updatedTrips.length)
+        console.log("🔄 [Refetch] Updated trips:", updatedTrips.map((t: any) => ({ id: t.id, title: t.title })))
         
         // Find the new trip (should be first in the list since ordered by createdAt desc)
         if (updatedTrips.length > trips.length) {
           const newestTrip = updatedTrips[0]
+          console.log("✅ [Refetch] New trip found:", newestTrip.id, newestTrip.title)
           
           // Update trips list
           setTrips(updatedTrips)
+          console.log("✅ [Refetch] Trips state updated")
           
           // Select the new trip
           setSelectedTripId(newestTrip.id)
+          console.log("✅ [Refetch] Selected trip ID set to:", newestTrip.id)
           
           // Update URL without reload
           window.history.pushState({}, '', `/experience-builder?tripId=${newestTrip.id}`)
+          console.log("✅ [Refetch] URL updated to:", `/experience-builder?tripId=${newestTrip.id}`)
           
           // Fetch conversations for the new trip
+          console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)
           const convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)
+          console.log("🔄 [Refetch] Conversations API response:", convResponse.status, convResponse.ok)
+          
           if (convResponse.ok) {
             const tripConversations = await convResponse.json()
+            console.log("✅ [Refetch] Conversations fetched:", tripConversations.length)
+            console.log("✅ [Refetch] Conversations:", tripConversations.map((c: any) => ({ id: c.id, title: c.title })))
             setConversations(tripConversations)
             
             // Select the current conversation (it should now be linked to the trip)
             if (currentConversationId) {
+              console.log("🔄 [Refetch] Looking for current conversation:", currentConversationId)
               const currentConv = tripConversations.find((c: any) => c.id === currentConversationId)
               if (currentConv) {
+                console.log("✅ [Refetch] Current conversation found and linked to trip")
                 setCurrentConversationId(currentConv.id)
+              } else {
+                console.log("⚠️ [Refetch] Current conversation not found in trip conversations")
               }
             }
+          } else {
+            console.error("❌ [Refetch] Failed to fetch conversations:", convResponse.status)
           }
+        } else {
+          console.log("⚠️ [Refetch] No new trip detected (same count)")
         }
+      } else {
+        console.error("❌ [Refetch] Failed to fetch trips:", response.status)
       }
     } catch (error) {
-      console.error("Failed to refetch trips:", error)
+      console.error("❌ [Refetch] Error refetching trips:", error)
     }
   }
 
