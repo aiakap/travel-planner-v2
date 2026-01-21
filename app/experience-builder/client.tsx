@@ -8,6 +8,7 @@ import { Send, Plus, GripVertical, Table2, GitBranch, Grid3X3, MessageCircle, Ca
 import { ChatWelcomeMessage } from "@/components/chat-welcome-message"
 import { ChatQuickActions } from "@/components/chat-quick-actions"
 import { TripSelector } from "@/components/trip-selector"
+import { ChatSelector } from "@/components/chat-selector"
 import { ItineraryEmptyState } from "@/components/itinerary-empty-state"
 import { TimelineView } from "@/components/timeline-view"
 import { TableView } from "@/components/table-view"
@@ -66,10 +67,26 @@ interface DBTrip {
   }>
 }
 
+interface Conversation {
+  id: string
+  title: string
+  tripId: string | null
+  createdAt: Date
+  updatedAt: Date
+  messages: Array<{
+    id: string
+    role: string
+    content: string
+    createdAt: Date
+  }>
+}
+
 interface ExperienceBuilderClientProps {
   initialTrips: DBTrip[]
+  selectedTrip: DBTrip | null
+  selectedConversation: Conversation | null
+  initialConversations: Conversation[]
   userId: string
-  conversationId: string
   profileData?: UserPersonalizationData | null
   quickActions?: ChatQuickAction[]
 }
@@ -79,24 +96,25 @@ type MobileTab = "chat" | "itinerary"
 
 export function ExperienceBuilderClient({
   initialTrips,
+  selectedTrip: initialSelectedTrip,
+  selectedConversation: initialSelectedConversation,
+  initialConversations,
   userId,
-  conversationId,
   profileData = null,
   quickActions = [],
 }: ExperienceBuilderClientProps) {
   // State
   const [trips, setTrips] = useState<DBTrip[]>(initialTrips)
-  const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(initialSelectedTrip?.id || null)
+  const [conversations, setConversations] = useState<Conversation[]>(initialConversations)
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
+    initialSelectedConversation?.id || null
+  )
   const [hasStartedPlanning, setHasStartedPlanning] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>("table")
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat")
   const [leftPanelWidth, setLeftPanelWidth] = useState(40)
   const [selectedReservation, setSelectedReservation] = useState<any>(null)
-  
-  // Store messages per trip/chat
-  const [messagesByTrip, setMessagesByTrip] = useState<Record<string, any[]>>({
-    'new': [] // 'new' is the key for New Chat
-  })
 
   // Refs
   const isDragging = useRef(false)
@@ -104,15 +122,17 @@ export function ExperienceBuilderClient({
 
   // Chat integration
   const [input, setInput] = useState("")
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, setMessages } = useChat({
     api: "/api/chat" as any,
-    body: { conversationId } as any,
+    body: { conversationId: currentConversationId } as any,
+    initialMessages: initialSelectedConversation?.messages.map(m => ({
+      id: m.id,
+      role: m.role as any,
+      content: m.content,
+    })) || [],
   } as any)
   
   const isLoading = status === ("in_progress" as any)
-  
-  // Get the current chat key (tripId or 'new')
-  const currentChatKey = selectedTripId || 'new'
 
   // Resizable panel handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -148,26 +168,14 @@ export function ExperienceBuilderClient({
     }
   }, [handleMouseMove, handleMouseUp])
 
-  // Sync messages to the current trip's message history
-  useEffect(() => {
-    if (messages.length > 0) {
-      setMessagesByTrip(prev => ({
-        ...prev,
-        [currentChatKey]: messages
-      }))
-    }
-  }, [messages, currentChatKey])
-
   // Monitor chat messages for trip creation/updates
   useEffect(() => {
     const lastMessage = messages[messages.length - 1]
     if (lastMessage?.role === "assistant") {
-      // Check for tool invocations in the message
-      // This is a simplified check - you may need to parse the actual message structure
       const content = getMessageText(lastMessage).toLowerCase()
       
-      if (content.includes("created") || content.includes("added")) {
-        // Refetch trips from the server
+      if (content.includes("created trip")) {
+        // Refetch trips and update URL
         refetchTrips()
       }
     }
@@ -184,10 +192,27 @@ export function ExperienceBuilderClient({
         if (updatedTrips.length > trips.length) {
           const newestTrip = updatedTrips[0]
           setSelectedTripId(newestTrip.id)
+          // Update URL to include tripId
+          window.history.pushState({}, '', `/experience-builder?tripId=${newestTrip.id}`)
+          // Reload conversations for new trip
+          window.location.href = `/experience-builder?tripId=${newestTrip.id}`
         }
       }
     } catch (error) {
       console.error("Failed to refetch trips:", error)
+    }
+  }
+
+  // Handle conversation selection
+  const handleConversationSelect = (conversationId: string) => {
+    const conversation = conversations.find(c => c.id === conversationId)
+    if (conversation) {
+      setCurrentConversationId(conversationId)
+      setMessages(conversation.messages.map(m => ({
+        id: m.id,
+        role: m.role as any,
+        content: m.content,
+      })))
     }
   }
 
@@ -224,23 +249,14 @@ What would you like to change about this plan, or should I create it as is?`;
 
   // Trip selection handler
   const handleTripSelect = (tripId: string | null) => {
-    // Save current messages before switching
-    if (messages.length > 0) {
-      setMessagesByTrip(prev => ({
-        ...prev,
-        [currentChatKey]: messages
-      }))
+    if (tripId) {
+      // Navigate to trip with URL parameter
+      window.location.href = `/experience-builder?tripId=${tripId}`
+    } else {
+      // Navigate to new chat
+      window.location.href = `/experience-builder`
     }
-    
-    // Switch to the new trip
-    setSelectedTripId(tripId)
-    
-    // Note: We don't automatically send a message anymore
-    // The user can ask what they want to change about the trip
   }
-  
-  // Get messages for the current chat (either the selected trip or new chat)
-  const currentMessages = messagesByTrip[currentChatKey] || []
   
   // Get the selected trip details
   const selectedTrip = trips.find((t) => t.id === selectedTripId)
@@ -310,7 +326,7 @@ What would you like to change about this plan, or should I create it as is?`;
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              {!hasStartedPlanning && currentMessages.length === 0 ? (
+              {!hasStartedPlanning && messages.length === 0 ? (
                 <div className="space-y-4">
                   <ChatWelcomeMessage
                     userName={profileData?.profile?.firstName || undefined}
@@ -340,7 +356,7 @@ What would you like to change about this plan, or should I create it as is?`;
                 </div>
               ) : (
                 <>
-                  {currentMessages.map((msg, i) => (
+                  {messages.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                       <div
                         className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
@@ -453,8 +469,19 @@ What would you like to change about this plan, or should I create it as is?`;
             </div>
           </div>
 
+          {/* Chat Selector - only show if trip is selected */}
+          {selectedTripId && conversations.length > 0 && (
+            <ChatSelector
+              tripId={selectedTripId}
+              conversations={conversations}
+              currentConversationId={currentConversationId}
+              onSelectConversation={handleConversationSelect}
+              onConversationsChange={setConversations}
+            />
+          )}
+
           <div className="flex-1 overflow-y-auto p-6">
-            {!hasStartedPlanning && currentMessages.length === 0 ? (
+            {!hasStartedPlanning && messages.length === 0 ? (
               <div className="space-y-6">
                 <ChatWelcomeMessage
                   userName={profileData?.profile?.firstName || undefined}
@@ -484,7 +511,7 @@ What would you like to change about this plan, or should I create it as is?`;
               </div>
             ) : (
               <>
-                {currentMessages.map((msg, i) => (
+                {messages.map((msg, i) => (
                   <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[70%] rounded-lg px-5 py-3 ${

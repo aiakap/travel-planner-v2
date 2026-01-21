@@ -66,8 +66,8 @@ export async function POST(req: Request) {
     // Convert UI messages to model messages format
     const modelMessages = await convertToModelMessages(messages);
 
-    // Create tools with userId already injected
-    const tools = createTripPlanningTools(userId);
+    // Create tools with userId and conversationId already injected
+    const tools = createTripPlanningTools(userId, conversationId);
 
     const result = streamText({
       model: openai("gpt-4o"),

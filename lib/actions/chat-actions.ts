@@ -162,3 +162,60 @@ export async function deleteConversation(conversationId: string) {
   revalidatePath("/chat");
 }
 
+export async function createTripConversation(tripId: string, title?: string) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  // Verify trip belongs to user
+  const trip = await prisma.trip.findFirst({
+    where: {
+      id: tripId,
+      userId: session.user.id,
+    },
+  });
+
+  if (!trip) {
+    throw new Error("Trip not found");
+  }
+
+  const conversation = await prisma.chatConversation.create({
+    data: {
+      userId: session.user.id,
+      tripId,
+      title: title || `Chat about ${trip.title}`,
+    },
+  });
+
+  revalidatePath("/experience-builder");
+  return conversation;
+}
+
+export async function getTripConversations(tripId: string) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  return await prisma.chatConversation.findMany({
+    where: {
+      tripId,
+      userId: session.user.id,
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+    include: {
+      messages: {
+        orderBy: {
+          createdAt: "asc",
+        },
+        take: 1, // Just first message for preview
+      },
+    },
+  });
+}
+

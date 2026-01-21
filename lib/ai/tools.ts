@@ -37,7 +37,7 @@ async function geocodeLocation(location: string): Promise<{
   return null;
 }
 
-export function createTripPlanningTools(userId: string) {
+export function createTripPlanningTools(userId: string, conversationId?: string) {
   return {
     create_trip: tool({
       description:
@@ -67,6 +67,17 @@ export function createTripPlanningTools(userId: string) {
             userId,
           },
         });
+
+        // Link conversation to trip if conversationId provided
+        if (conversationId) {
+          await prisma.chatConversation.update({
+            where: { id: conversationId },
+            data: { 
+              tripId: trip.id,
+              title: `Planning ${title}`
+            }
+          });
+        }
 
         return {
           success: true,
