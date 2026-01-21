@@ -175,27 +175,45 @@ export function ExperienceBuilderClient({
       const content = getMessageText(lastMessage).toLowerCase()
       
       if (content.includes("created trip")) {
-        // Refetch trips and update URL
-        refetchTrips()
+        // Refetch trips and auto-select new trip
+        refetchTripsAndSelect()
       }
     }
   }, [messages])
 
-  const refetchTrips = async () => {
+  const refetchTripsAndSelect = async () => {
     try {
       const response = await fetch(`/api/trips?userId=${userId}`)
       if (response.ok) {
         const updatedTrips = await response.json()
-        setTrips(updatedTrips)
         
-        // Auto-select the newest trip if we just created one
+        // Find the new trip (should be first in the list since ordered by createdAt desc)
         if (updatedTrips.length > trips.length) {
           const newestTrip = updatedTrips[0]
+          
+          // Update trips list
+          setTrips(updatedTrips)
+          
+          // Select the new trip
           setSelectedTripId(newestTrip.id)
-          // Update URL to include tripId
+          
+          // Update URL without reload
           window.history.pushState({}, '', `/experience-builder?tripId=${newestTrip.id}`)
-          // Reload conversations for new trip
-          window.location.href = `/experience-builder?tripId=${newestTrip.id}`
+          
+          // Fetch conversations for the new trip
+          const convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)
+          if (convResponse.ok) {
+            const tripConversations = await convResponse.json()
+            setConversations(tripConversations)
+            
+            // Select the current conversation (it should now be linked to the trip)
+            if (currentConversationId) {
+              const currentConv = tripConversations.find((c: any) => c.id === currentConversationId)
+              if (currentConv) {
+                setCurrentConversationId(currentConv.id)
+              }
+            }
+          }
         }
       }
     } catch (error) {
