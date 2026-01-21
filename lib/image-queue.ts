@@ -178,7 +178,7 @@ export async function processQueueEntry(queueId: string) {
     await updateQueueStatus(queueId, "in_progress", `Uploaded to storage: ${permanentUrl}`);
 
     // Update the entity with the new image URL
-    await updateEntityImage(entry.entityType, entry.entityId, permanentUrl);
+    await updateEntityImage(entry.entityType as "trip" | "segment" | "reservation", entry.entityId, permanentUrl);
     await updateQueueStatus(
       queueId,
       "completed",
@@ -235,7 +235,7 @@ export async function processImageQueue(maxJobs: number = 5) {
 
     try {
       const result = await processQueueEntry(job.id);
-      results.push({ id: job.id, success: true, ...result });
+      results.push({ id: job.id, ...result });
     } catch (error: any) {
       results.push({ id: job.id, success: false, error: error.message });
     }

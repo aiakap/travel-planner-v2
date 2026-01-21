@@ -17,9 +17,13 @@ import {
   Loader2,
   Plus,
   DollarSign,
+  Sparkles,
 } from "lucide-react";
 import { PlaceSuggestion, GooglePlaceData } from "@/lib/types/place-suggestion";
 import { suggestScheduling, getTripDays } from "@/lib/smart-scheduling";
+import { checkTimeConflict, getAlternativeTimeSlots } from "@/lib/actions/check-conflicts";
+import { ConflictIndicator } from "@/components/conflict-indicator";
+import { AlternativeTimeSlots } from "@/components/alternative-time-slots";
 
 interface SuggestionDetailModalProps {
   suggestion: PlaceSuggestion;
@@ -59,9 +63,29 @@ export function SuggestionDetailModal({
     Array<{ day: number; date: string; dayOfWeek: string }>
   >([]);
 
+  // Conflict detection state
+  const [hasConflict, setHasConflict] = useState<boolean>(false);
+  const [conflictingReservations, setConflictingReservations] = useState<Array<{
+    id: string;
+    name: string;
+    startTime: Date;
+    endTime: Date | null;
+    category: string;
+  }>>([]);
+  const [alternativeSlots, setAlternativeSlots] = useState<Array<{
+    startTime: string;
+    endTime: string;
+    reason: string;
+  }>>([]);
+
   // Fetch place data from Google Places API
   useEffect(() => {
     async function fetchPlaceData() {
+      console.log("🌍 [SuggestionDetailModal] Starting Google Places fetch:", {
+        placeName: suggestion.placeName,
+        tripId,
+      });
+      
       setIsLoadingPlace(true);
       try {
         const response = await fetch("/api/places", {
@@ -73,8 +97,21 @@ export function SuggestionDetailModal({
           }),
         });
 
+        console.log("🌍 [SuggestionDetailModal] Google Places API response:", {
+          status: response.status,
+          ok: response.ok,
+        });
+
         if (response.ok) {
           const data = await response.json();
+          console.log("✅ [SuggestionDetailModal] Google Places data received:", {
+            hasData: !!data.placeData,
+            placeId: data.placeData?.placeId,
+            name: data.placeData?.name,
+            rating: data.placeData?.rating,
+            photosCount: data.placeData?.photos?.length || 0,
+          });
+          
           setPlaceData(data.placeData);
 
           // Estimate cost based on price level
@@ -82,11 +119,15 @@ export function SuggestionDetailModal({
             const estimatedCosts = [0, 15, 35, 75, 150];
             setCost(estimatedCosts[data.placeData.priceLevel] || 0);
           }
+        } else {
+          const errorData = await response.json();
+          console.error("❌ [SuggestionDetailModal] Failed to fetch place data:", errorData);
         }
       } catch (error) {
-        console.error("Error fetching place data:", error);
+        console.error("❌ [SuggestionDetailModal] Error fetching place data:", error);
       } finally {
         setIsLoadingPlace(false);
+        console.log("🌍 [SuggestionDetailModal] Fetch complete");
       }
     }
 
@@ -112,6 +153,52 @@ export function SuggestionDetailModal({
 
     getScheduling();
   }, [suggestion, tripId]);
+
+  // Check for conflicts whenever time changes
+  useEffect(() => {
+    async function checkConflicts() {
+      if (!selectedDay || !startTime || !endTime) return;
+
+      try {
+        const conflict = await checkTimeConflict(tripId, selectedDay, startTime, endTime);
+        setHasConflict(conflict.hasConflict);
+        setConflictingReservations(conflict.conflictingReservations);
+
+        // If there's a conflict, get alternative time slots
+        if (conflict.hasConflict) {
+          const duration = calculateDuration(startTime, endTime);
+          const alternatives = await getAlternativeTimeSlots(
+            tripId,
+            selectedDay,
+            duration,
+            startTime
+          );
+          setAlternativeSlots(alternatives);
+        } else {
+          setAlternativeSlots([]);
+        }
+      } catch (error) {
+        console.error("Error checking conflicts:", error);
+      }
+    }
+
+    checkConflicts();
+  }, [selectedDay, startTime, endTime, tripId]);
+
+  // Calculate duration in hours
+  const calculateDuration = (start: string, end: string): number => {
+    const [startHour, startMinute] = start.split(":").map(Number);
+    const [endHour, endMinute] = end.split(":").map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+    return (endMinutes - startMinutes) / 60;
+  };
+
+  // Handle selecting an alternative time slot
+  const handleSelectAlternative = (newStartTime: string, newEndTime: string) => {
+    setStartTime(newStartTime);
+    setEndTime(newEndTime);
+  };
 
   const handleAddToItinerary = async () => {
     setIsAdding(true);
@@ -304,14 +391,21 @@ export function SuggestionDetailModal({
 
           {/* Scheduling Section */}
           <div className="border-t pt-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-blue-500" />
               <h3 className="text-sm font-semibold">Add to Itinerary</h3>
-              {schedulingReason && (
-                <span className="text-xs text-muted-foreground italic">
-                  {schedulingReason}
-                </span>
-              )}
             </div>
+
+            {/* Scheduling Reason - Prominent */}
+            {schedulingReason && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 flex items-start gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600 mt-0.5" />
+                <div>
+                  <div className="text-xs font-medium text-blue-900">Smart Scheduling</div>
+                  <div className="text-xs text-blue-700">{schedulingReason}</div>
+                </div>
+              </div>
+            )}
 
             {/* Day Selection */}
             <div>
@@ -375,6 +469,21 @@ export function SuggestionDetailModal({
                 className="text-sm"
               />
             </div>
+
+            {/* Conflict Detection */}
+            <ConflictIndicator
+              hasConflict={hasConflict}
+              conflictingReservations={conflictingReservations}
+            />
+
+            {/* Alternative Time Slots */}
+            {hasConflict && alternativeSlots.length > 0 && (
+              <AlternativeTimeSlots
+                alternatives={alternativeSlots}
+                onSelect={handleSelectAlternative}
+                selectedStartTime={startTime}
+              />
+            )}
           </div>
         </div>
 

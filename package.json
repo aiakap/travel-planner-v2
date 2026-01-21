@@ -10,7 +10,8 @@
     "seed": "prisma db seed",
     "check-orphaned": "ts-node --project tsconfig.json scripts/check-orphaned-records.ts",
     "cleanup-orphaned": "ts-node --project tsconfig.json scripts/cleanup-orphaned-records.ts",
-    "process-queue": "node scripts/process-queue-loop.ts"
+    "process-queue": "node scripts/process-queue-loop.ts",
+    "test-places": "ts-node --project tsconfig.json scripts/test-places-integration.ts"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

@@ -181,14 +181,16 @@ async function fetchUserProfileData(userId: string): Promise<UserPersonalization
 }
 
 // Cached version (exported)
-export const getUserPersonalizationData = unstable_cache(
-  fetchUserProfileData,
-  ['user-personalization'],
-  {
-    tags: (userId: string) => [`user-profile-${userId}`],
-    revalidate: 300 // 5 minutes
-  }
-);
+export async function getUserPersonalizationData(userId: string): Promise<UserPersonalizationData> {
+  return unstable_cache(
+    async (id: string) => fetchUserProfileData(id),
+    [`user-personalization-${userId}`],
+    {
+      tags: [`user-profile-${userId}`],
+      revalidate: 300 // 5 minutes
+    }
+  )(userId);
+}
 
 // Generate trip suggestions based on profile
 export function generateTripSuggestions(profileData: UserPersonalizationData): TripSuggestion[] {

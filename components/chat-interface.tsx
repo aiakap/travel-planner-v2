@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { UIMessage } from "ai";
 import { Button } from "@/components/ui/button";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts";
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization";
@@ -41,21 +41,98 @@ function getToolInvocations(message: UIMessage) {
 function getPlaceSuggestions(message: UIMessage): PlaceSuggestion[] {
   const suggestions: PlaceSuggestion[] = [];
   
-  message.parts.forEach((part: any) => {
-    if (part.type === "tool-result" && part.toolName === "suggest_place") {
-      const result = part.result;
-      if (result?.success && result?.placeName) {
-        suggestions.push({
+  if (!message.parts) {
+    console.log("🔍 [getPlaceSuggestions] No parts in message");
+    return suggestions;
+  }
+  
+  console.log("🔍 [getPlaceSuggestions] Analyzing message parts:", {
+    totalParts: message.parts.length,
+    partTypes: message.parts.map((p: any) => p.type),
+  });
+  
+  message.parts.forEach((part: any, idx: number) => {
+    console.log(`🔍 [getPlaceSuggestions] Part ${idx}:`, {
+      type: part.type,
+      toolName: part.toolName,
+      hasResult: !!part.result,
+      hasArgs: !!part.args,
+      allKeys: Object.keys(part),
+      FULL_PART: part, // Log the complete object
+    });
+    
+    // AI SDK can return tool results in different formats:
+    // 1. type: "tool-result" with toolName and result fields
+    // 2. type: "tool-{toolName}" with args field
+    // 3. Nested result structure
+    
+    const isSuggestPlaceTool = 
+      (part.type === "tool-result" && part.toolName === "suggest_place") ||
+      part.type === "tool-suggest_place" ||
+      part.toolName === "suggest_place";
+    
+    if (isSuggestPlaceTool) {
+      // Try to find the result in various locations
+      let result = null;
+      
+      // Option 1: part.output (tool-result format from server)
+      if (part.output) {
+        result = part.output;
+      }
+      // Option 2: part.result (alternative tool-result format)
+      else if (part.result) {
+        result = part.result;
+      }
+      // Option 3: part.args (tool invocation format with arguments)
+      else if (part.args) {
+        // The args contain what was passed to the tool, so we need to construct the result
+        result = {
+          success: true,
+          placeName: part.args.placeName,
+          category: part.args.category,
+          type: part.args.type,
+          context: {
+            dayNumber: part.args.dayNumber,
+            timeOfDay: part.args.timeOfDay,
+            specificTime: part.args.specificTime,
+            notes: part.args.notes,
+          },
+          tripId: part.args.tripId,
+          segmentId: part.args.segmentId,
+        };
+      }
+      
+      console.log("✨ [getPlaceSuggestions] Found suggest_place result:", {
+        hasResult: !!result,
+        placeName: result?.placeName,
+        category: result?.category,
+      });
+      
+      if (result?.placeName) {
+        const suggestion: PlaceSuggestion = {
           placeName: result.placeName,
           category: result.category,
           type: result.type,
           context: result.context,
           tripId: result.tripId,
           segmentId: result.segmentId,
+        };
+        suggestions.push(suggestion);
+        console.log("✅ [getPlaceSuggestions] Added suggestion:", suggestion.placeName);
+      } else {
+        console.error("❌ [getPlaceSuggestions] Invalid suggest_place result:", {
+          hasResult: !!result,
+          placeName: result?.placeName,
+          partKeys: Object.keys(part),
         });
       }
     }
   });
+  
+  console.log(`🔍 [getPlaceSuggestions] Total suggestions extracted: ${suggestions.length}`);
+  if (suggestions.length > 0) {
+    console.log("📍 [getPlaceSuggestions] Place names:", suggestions.map(s => s.placeName));
+  }
   
   return suggestions;
 }
@@ -112,18 +189,70 @@ What would you like to change about this plan, or should I create it as is?`;
     sendMessage({ text: confirmationMessage });
   };
 
+  // Helper function to find place name in text with flexible matching
+  const findPlaceInText = (text: string, placeName: string, startFrom: number): number => {
+    // Try exact match first
+    let index = text.indexOf(placeName, startFrom);
+    if (index !== -1) return index;
+    
+    // Try with "the " prefix (e.g., "the Grand Hotel" when placeName is "Grand Hotel")
+    index = text.indexOf(`the ${placeName}`, startFrom);
+    if (index !== -1) return index + 4; // Skip "the "
+    
+    // Try with "The " prefix
+    index = text.indexOf(`The ${placeName}`, startFrom);
+    if (index !== -1) return index + 4; // Skip "The "
+    
+    // Try case-insensitive search
+    const lowerText = text.toLowerCase();
+    const lowerPlace = placeName.toLowerCase();
+    index = lowerText.indexOf(lowerPlace, startFrom);
+    if (index !== -1) return index;
+    
+    // Try matching without common prefixes like "Hotel", "The", etc.
+    const placeWithoutPrefix = placeName.replace(/^(Hotel|The|Le|La|L'|Restaurant)\s+/i, '');
+    if (placeWithoutPrefix !== placeName) {
+      index = lowerText.indexOf(placeWithoutPrefix.toLowerCase(), startFrom);
+      if (index !== -1) {
+        // Find the actual start in the original text (accounting for case)
+        const actualText = text.substring(index);
+        const match = actualText.match(new RegExp(`\\b${placeWithoutPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'));
+        if (match) {
+          return index + match.index!;
+        }
+      }
+    }
+    
+    return -1;
+  };
+
   // Render text with clickable place suggestions
   const renderTextWithPlaceLinks = (text: string, suggestions: PlaceSuggestion[]) => {
+    console.log("🎨 [renderTextWithPlaceLinks] Called with:", {
+      textLength: text.length,
+      textPreview: text.substring(0, 100) + "...",
+      suggestionsCount: suggestions.length,
+      placeNames: suggestions.map(s => s.placeName),
+    });
+    
     if (suggestions.length === 0) {
+      console.log("⚠️  [renderTextWithPlaceLinks] No suggestions, rendering plain text");
       return <div className="whitespace-pre-wrap leading-relaxed">{text}</div>;
     }
 
     // Split text by place names and create clickable links
     let lastIndex = 0;
     const elements: React.ReactNode[] = [];
+    let linkedCount = 0;
 
     suggestions.forEach((suggestion, idx) => {
-      const placeIndex = text.indexOf(suggestion.placeName, lastIndex);
+      const placeIndex = findPlaceInText(text, suggestion.placeName, lastIndex);
+      
+      console.log(`🔍 [renderTextWithPlaceLinks] Looking for "${suggestion.placeName}":`, {
+        found: placeIndex !== -1,
+        position: placeIndex,
+        searchStartedAt: lastIndex,
+      });
       
       if (placeIndex !== -1) {
         // Add text before the place name
@@ -135,25 +264,37 @@ What would you like to change about this plan, or should I create it as is?`;
           );
         }
 
-        // Add clickable place name
+        // Determine the actual text to highlight (might include "the " prefix)
+        const actualTextMatch = text.substring(placeIndex, placeIndex + suggestion.placeName.length);
+
+        // Add clickable place name with visual indicator
         elements.push(
           <button
             key={`place-${idx}`}
             onClick={() => {
+              console.log("🖱️  [renderTextWithPlaceLinks] Place clicked:", suggestion.placeName);
               if (tripId || suggestion.tripId) {
                 setSelectedSuggestion({
                   suggestion,
                   tripId: tripId || suggestion.tripId!,
                 });
+              } else {
+                console.warn("⚠️  [renderTextWithPlaceLinks] No tripId available for suggestion");
               }
             }}
-            className="text-slate-500 hover:text-slate-700 underline decoration-slate-300 cursor-pointer transition-colors font-medium"
+            className="text-blue-600 hover:text-blue-800 underline decoration-blue-300 hover:decoration-blue-500 cursor-pointer transition-colors font-medium inline-flex items-center gap-0.5"
+            title="Click to see details and add to itinerary"
           >
-            {suggestion.placeName}
+            {actualTextMatch}
+            <MapPin className="h-3 w-3 inline" />
           </button>
         );
 
+        linkedCount++;
         lastIndex = placeIndex + suggestion.placeName.length;
+      } else {
+        console.warn(`❌ [renderTextWithPlaceLinks] Place name "${suggestion.placeName}" NOT FOUND in text`);
+        console.warn(`   Text around this area: "${text.substring(Math.max(0, lastIndex - 50), lastIndex + 100)}"`);
       }
     });
 
@@ -163,6 +304,8 @@ What would you like to change about this plan, or should I create it as is?`;
         <span key="text-end">{text.substring(lastIndex)}</span>
       );
     }
+
+    console.log(`✅ [renderTextWithPlaceLinks] Rendered ${linkedCount}/${suggestions.length} clickable links`);
 
     return <div className="whitespace-pre-wrap leading-relaxed">{elements}</div>;
   };

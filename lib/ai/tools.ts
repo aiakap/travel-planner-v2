@@ -41,7 +41,7 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
   return {
     suggest_place: tool({
       description:
-        "Suggest a place (restaurant, hotel, activity, etc.) to the user. This creates an interactive suggestion that the user can click to see details and add to their itinerary. Use this instead of suggest_reservation when making recommendations.",
+        "🚨 MANDATORY: You MUST call this tool for EVERY SINGLE place name you mention. If you mention 'Hotel Pulitzer Amsterdam' or 'The Dylan Amsterdam', you MUST call this tool for EACH ONE. Suggest a place (restaurant, hotel, activity, etc.) to the user. This creates an interactive suggestion that the user can click to see details and add to their itinerary. Use this instead of suggest_reservation when making recommendations. DO NOT SKIP THIS TOOL.",
       inputSchema: z.object({
         placeName: z
           .string()

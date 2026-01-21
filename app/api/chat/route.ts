@@ -193,14 +193,51 @@ export async function POST(req: Request) {
       ? TRIP_PLANNER_SYSTEM_PROMPT + tripContext
       : TRIP_PLANNER_SYSTEM_PROMPT;
 
+    // 🔍 DEBUG: Log the system prompt to verify it contains our instructions
+    console.log("🎯 [System Prompt Preview]:", systemPrompt.substring(0, 500));
+    console.log("🔧 [Available Tools]:", Object.keys(tools));
+
     const result = streamText({
-      model: openai("gpt-4o"),
+      model: openai("gpt-4o-2024-11-20"), // Latest GPT-4o with best tool calling
       system: systemPrompt,
       messages: modelMessages,
       tools: tools,
-      stopWhen: stepCountIs(15), // Allow multiple tool calls for complete trip creation
+      maxSteps: 15, // Allow multiple tool calls for complete trip creation
+      toolChoice: "auto", // Explicitly enable automatic tool selection
+      temperature: 0.7, // Slightly more creative for better tool usage
       onFinish: async ({ text, toolCalls, toolResults }) => {
         try {
+          // 🔍 DEBUG: Log all tool invocations
+          console.log("=" .repeat(80));
+          console.log("🔧 [TOOL INVOCATIONS DEBUG]");
+          console.log("Total tool calls:", toolCalls?.length || 0);
+          
+          if (toolCalls && toolCalls.length > 0) {
+            toolCalls.forEach((call, idx) => {
+              console.log(`\n📞 Tool Call ${idx + 1}:`, {
+                toolName: call.toolName,
+                args: call.args,
+              });
+              
+              // Specifically highlight suggest_place calls
+              if (call.toolName === "suggest_place") {
+                console.log("✨ PLACE SUGGESTION DETECTED:", call.args);
+              }
+            });
+          } else {
+            console.log("⚠️  No tool calls made in this response");
+          }
+          
+          if (toolResults && toolResults.length > 0) {
+            console.log("\n📊 Tool Results:");
+            toolResults.forEach((result, idx) => {
+              console.log(`Result ${idx + 1}:`, result);
+            });
+          }
+          
+          console.log("\n📝 Assistant response text:", text.substring(0, 200) + "...");
+          console.log("=" .repeat(80));
+
           // Save user message
           if (messages.length > 0) {
             const lastMessage = messages[messages.length - 1];

@@ -8,9 +8,15 @@ import { createTripConversation } from "@/lib/actions/chat-actions"
 interface Conversation {
   id: string
   title: string
+  tripId: string | null
   createdAt: Date
   updatedAt: Date
-  messages?: any[]
+  messages: Array<{
+    id: string
+    role: string
+    content: string
+    createdAt: Date
+  }>
 }
 
 interface ChatNameDropdownProps {

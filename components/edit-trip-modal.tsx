@@ -1,7 +1,7 @@
 "use client"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { EditTripForm } from "@/components/edit-trip-form"
+import EditTripForm from "@/components/edit-trip-form"
 
 interface Trip {
   id: string
@@ -10,6 +10,11 @@ interface Trip {
   startDate: Date
   endDate: Date
   imageUrl: string | null
+  createdAt?: Date
+  updatedAt?: Date
+  userId?: string
+  imageIsCustom?: boolean
+  imagePromptId?: string | null
 }
 
 interface EditTripModalProps {
@@ -32,7 +37,7 @@ export function EditTripModal({ isOpen, onClose, trip, onUpdate }: EditTripModal
           <DialogTitle>Edit Trip</DialogTitle>
         </DialogHeader>
         <div className="py-4">
-          <EditTripForm trip={trip} onSuccess={handleSuccess} />
+          <EditTripForm trip={trip as any} />
         </div>
       </DialogContent>
     </Dialog>

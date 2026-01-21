@@ -2,8 +2,12 @@
 
 import { GooglePlaceData, GooglePlacePhoto } from "@/lib/types/place-suggestion";
 
-const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 const PLACES_API_BASE = "https://maps.googleapis.com/maps/api/place";
+
+// Get API key dynamically (supports both GOOGLE_PLACES_API_KEY and GOOGLE_MAPS_API_KEY)
+function getApiKey(): string | undefined {
+  return process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+}
 
 interface PlacesTextSearchResponse {
   results: Array<{
@@ -62,6 +66,7 @@ export async function searchPlace(
   placeName: string,
   locationContext?: string
 ): Promise<GooglePlaceData | null> {
+  const GOOGLE_PLACES_API_KEY = getApiKey();
   if (!GOOGLE_PLACES_API_KEY) {
     console.error("Google Places API key not configured");
     return null;
@@ -119,12 +124,16 @@ export async function searchPlace(
     const details = detailsData.result;
 
     // Format photos with URLs
-    const photos: GooglePlacePhoto[] | undefined = details.photos?.map((photo) => ({
-      photoReference: photo.photo_reference,
-      width: photo.width,
-      height: photo.height,
-      url: getPhotoUrl(photo.photo_reference, 800), // Get 800px wide photos
-    }));
+    const photos: GooglePlacePhoto[] | undefined = details.photos
+      ? await Promise.all(
+          details.photos.map(async (photo) => ({
+            photoReference: photo.photo_reference,
+            width: photo.width,
+            height: photo.height,
+            url: await getPhotoUrl(photo.photo_reference, 800), // Get 800px wide photos
+          }))
+        )
+      : undefined;
 
     return {
       placeId: details.place_id,
@@ -136,7 +145,10 @@ export async function searchPlace(
       userRatingsTotal: details.user_ratings_total,
       priceLevel: details.price_level,
       photos,
-      openingHours: details.opening_hours,
+      openingHours: details.opening_hours ? {
+        openNow: details.opening_hours.open_now,
+        weekdayText: details.opening_hours.weekday_text,
+      } : undefined,
       geometry: details.geometry,
       types: details.types,
     };
@@ -148,8 +160,10 @@ export async function searchPlace(
 
 /**
  * Get a photo URL from Google Places
+ * Note: This is a pure function but in a "use server" file, so it must be async
  */
-export function getPhotoUrl(photoReference: string, maxWidth: number = 400): string {
+export async function getPhotoUrl(photoReference: string, maxWidth: number = 400): Promise<string> {
+  const GOOGLE_PLACES_API_KEY = getApiKey();
   if (!GOOGLE_PLACES_API_KEY) {
     return "/placeholder.svg";
   }

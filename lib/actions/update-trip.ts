@@ -72,12 +72,6 @@ export async function updateTrip(tripId: string, formData: FormData) {
   }
 
   redirect("/trips");
-
-  await prisma.trip.update({
-    where: { id: tripId, userId: session.user.id },
-    data: updateData,
-  });
-
 }
 
 export async function renameTrip(tripId: string, newTitle: string) {
@@ -89,7 +83,7 @@ export async function renameTrip(tripId: string, newTitle: string) {
   const trip = await prisma.trip.findFirst({
     where: {
       id: tripId,
-      userId: session.user.id,
+      userId: session?.user?.id || "",
     },
   });
 

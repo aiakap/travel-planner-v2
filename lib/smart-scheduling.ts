@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { PlaceSuggestion } from "@/lib/types/place-suggestion";
+import { timeToMinutes, minutesToTime, addDuration } from "@/lib/time-utils";
 
 interface TimeSlot {
   day: number;
@@ -98,31 +99,7 @@ function getDefaultTimeForType(
   }
 }
 
-/**
- * Convert time string (HH:MM) to minutes since midnight
- */
-function timeToMinutes(time: string): number {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-/**
- * Convert minutes since midnight to time string (HH:MM)
- */
-function minutesToTime(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
-}
-
-/**
- * Add duration (in hours) to a time string
- */
-function addDuration(time: string, durationHours: number): string {
-  const minutes = timeToMinutes(time);
-  const newMinutes = minutes + durationHours * 60;
-  return minutesToTime(newMinutes);
-}
+// Time utility functions moved to @/lib/time-utils
 
 /**
  * Find available time slots in a day, considering existing reservations
@@ -373,7 +350,7 @@ export async function getTripDays(tripId: string): Promise<
   const startDate = new Date(trip.startDate);
   const endDate = new Date(trip.endDate);
 
-  let currentDate = new Date(startDate);
+  const currentDate = new Date(startDate);
   let dayNumber = 1;
 
   while (currentDate <= endDate) {

@@ -19,26 +19,26 @@ function generateTripSuggestions(trip: V0Itinerary): Suggestion[] {
   const suggestions: Suggestion[] = []
   
   // Check what's missing or could be added
-  const hasFlights = trip.segments.some(s => 
-    s.reservations?.some(r => r.type.toLowerCase().includes('flight'))
-  )
-  const hasHotels = trip.segments.some(s => 
-    s.reservations?.some(r => r.type.toLowerCase().includes('hotel') || r.type.toLowerCase().includes('accommodation'))
-  )
-  const hasRestaurants = trip.segments.some(s => 
-    s.reservations?.some(r => r.type.toLowerCase().includes('restaurant') || r.type.toLowerCase().includes('dining'))
-  )
-  const hasActivities = trip.segments.some(s => 
-    s.reservations?.some(r => r.type.toLowerCase().includes('activity') || r.type.toLowerCase().includes('tour'))
+  const allReservations = trip.segments.flatMap(s => 
+    s.days?.flatMap(d => d.items?.flatMap(i => i.reservations || []) || []) || []
   )
   
-  // Get trip locations
-  const locations = trip.segments
-    .map(s => s.location)
-    .filter((loc, idx, arr) => loc && arr.indexOf(loc) === idx)
+  const hasFlights = allReservations.some(r => 
+    r.type?.toLowerCase().includes('flight')
+  )
+  const hasHotels = allReservations.some(r => 
+    r.type?.toLowerCase().includes('hotel') || r.type?.toLowerCase().includes('lodging')
+  )
+  const hasRestaurants = allReservations.some(r => 
+    r.type?.toLowerCase().includes('restaurant') || r.type?.toLowerCase().includes('dining')
+  )
+  const hasActivities = allReservations.some(r => 
+    r.type?.toLowerCase().includes('activity') || r.type?.toLowerCase().includes('tour')
+  )
   
+  // Get trip name from segments
   const tripName = trip.title
-  const mainLocation = locations[0] || "your destination"
+  const mainLocation = trip.segments[0]?.name || "your destination"
   
   // Suggest missing essentials
   if (!hasFlights) {

@@ -119,9 +119,6 @@ export function TripSegmentsDetail({
       {trip.segments.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
           No segments found for this trip
-          {/* #region agent log */}
-          {fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'trip-segments-detail.tsx:117',message:'Showing empty state',data:{segmentsLength:trip?.segments?.length,segments:trip?.segments},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{}),null}
-          {/* #endregion */}
         </div>
       )}
     </div>

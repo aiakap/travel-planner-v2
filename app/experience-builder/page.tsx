@@ -7,7 +7,7 @@ import { getUserPersonalizationData, generateChatQuickActions } from "@/lib/pers
 export default async function ExperienceBuilderPage({
   searchParams,
 }: {
-  searchParams: { tripId?: string }
+  searchParams: Promise<{ tripId?: string }>
 }) {
   const session = await auth()
 
@@ -15,7 +15,8 @@ export default async function ExperienceBuilderPage({
     redirect("/")
   }
 
-  const tripId = searchParams.tripId
+  const params = await searchParams
+  const tripId = params.tripId
   let selectedTrip = null
   let selectedConversation = null
   let conversations: any[] = []

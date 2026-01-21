@@ -2,8 +2,9 @@
 
 import type React from "react"
 import { Badge } from "@/components/ui/badge"
-import { Plane, Hotel, Utensils, Train, Camera, ChevronDown, ChevronRight, Moon, Clock } from "lucide-react"
-import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Plane, Hotel, Utensils, Train, Camera, ChevronDown, ChevronRight, Moon, Clock, MessageCircle, Edit, Phone, Mail, Globe, ChevronDown as ChevronDownIcon } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
 
 interface Reservation {
   id: number
@@ -20,6 +21,9 @@ interface Reservation {
   checkOutDate?: string
   checkInTime?: string
   checkOutTime?: string
+  contactPhone?: string
+  contactEmail?: string
+  website?: string
 }
 
 interface TimelineViewProps {
@@ -52,10 +56,25 @@ interface TimelineViewProps {
     itemType: string
     dayDate: string
   }) => void
+  onChatAboutItem?: (reservation: Reservation, itemTitle: string) => void
+  onEditItem?: (reservation: Reservation) => void
 }
 
-export function TimelineView({ segments, heroImage, onSelectReservation }: TimelineViewProps) {
+export function TimelineView({ segments, heroImage, onSelectReservation, onChatAboutItem, onEditItem }: TimelineViewProps) {
   const [collapsedSegments, setCollapsedSegments] = useState<Set<number>>(new Set())
+  const [openContactMenu, setOpenContactMenu] = useState<number | null>(null)
+  const contactMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close contact menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contactMenuRef.current && !contactMenuRef.current.contains(event.target as Node)) {
+        setOpenContactMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const toggleSegment = (segmentId: number) => {
     const newCollapsed = new Set(collapsedSegments)
@@ -221,31 +240,20 @@ export function TimelineView({ segments, heroImage, onSelectReservation }: Timel
                               shownMultiDayReservations.add(res.id)
                             }
 
+                            const hasContactInfo = res.contactPhone || res.contactEmail || res.website
+                            const isContactMenuOpen = openContactMenu === res.id
+
                             return (
                               <div
                                 key={`${item.id}-${resIndex}`}
-                                className={`flex items-center gap-2 p-2 rounded-lg backdrop-blur-sm border cursor-pointer hover:scale-[1.01] transition-all group ${
+                                className={`flex items-center gap-2 p-2 rounded-lg backdrop-blur-sm border hover:scale-[1.01] transition-all group ${
                                   isMultiDay
                                     ? "bg-gradient-to-r from-background/80 to-background/40 border-l-2"
                                     : "bg-background/60 border-border/50 hover:bg-background/80"
                                 }`}
                                 style={isMultiDay ? { borderLeftColor: segmentColor } : undefined}
-                                onClick={() =>
-                                  onSelectReservation({
-                                    reservation: res,
-                                    itemTitle: item.title,
-                                    itemTime: item.time,
-                                    itemType: item.type,
-                                    dayDate: day.date,
-                                  })
-                                }
+                                onDoubleClick={() => onChatAboutItem?.(res, item.title)}
                               >
-                                {/* Time column */}
-                                <div className="w-14 shrink-0 text-[10px] text-muted-foreground flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  <span>{res.startTime?.replace(":00", "") || "TBD"}</span>
-                                </div>
-
                                 {/* Icon */}
                                 <div
                                   className="p-1.5 rounded-md shrink-0"
@@ -291,8 +299,90 @@ export function TimelineView({ segments, heroImage, onSelectReservation }: Timel
                                 </div>
 
                                 {/* Cost */}
-                                <div className="text-[10px] shrink-0 text-muted-foreground">
+                                <div className="text-[10px] shrink-0 text-muted-foreground mr-2">
                                   ${res.cost}
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {/* Contact Button with Dropdown */}
+                                  {hasContactInfo && (
+                                    <div className="relative" ref={isContactMenuOpen ? contactMenuRef : null}>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setOpenContactMenu(isContactMenuOpen ? null : res.id)
+                                        }}
+                                      >
+                                        <Phone className="h-3 w-3" />
+                                      </Button>
+                                      {isContactMenuOpen && (
+                                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-slate-200 z-50 py-1">
+                                          {res.contactPhone && (
+                                            <a
+                                              href={`tel:${res.contactPhone}`}
+                                              className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 transition-colors"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <Phone className="h-3 w-3" />
+                                              <span className="truncate">{res.contactPhone}</span>
+                                            </a>
+                                          )}
+                                          {res.contactEmail && (
+                                            <a
+                                              href={`mailto:${res.contactEmail}`}
+                                              className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 transition-colors"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <Mail className="h-3 w-3" />
+                                              <span className="truncate">{res.contactEmail}</span>
+                                            </a>
+                                          )}
+                                          {res.website && (
+                                            <a
+                                              href={res.website}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 transition-colors"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <Globe className="h-3 w-3" />
+                                              <span className="truncate">Website</span>
+                                            </a>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Edit Button */}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      onEditItem?.(res)
+                                    }}
+                                  >
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                  
+                                  {/* Chat Button */}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      onChatAboutItem?.(res, item.title)
+                                    }}
+                                  >
+                                    <MessageCircle className="h-3 w-3" />
+                                  </Button>
                                 </div>
                               </div>
                             )

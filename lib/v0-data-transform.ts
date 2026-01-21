@@ -52,9 +52,6 @@ type DBReservation = {
  * Transform a database Trip with relations to V0 itinerary format
  */
 export function transformTripToV0Format(trip: DBTrip): V0Itinerary {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'v0-data-transform.ts:55',message:'transformTripToV0Format called',data:{tripId:trip.id,tripTitle:trip.title,segmentsCount:trip.segments?.length,hasSegments:!!trip.segments,firstSegment:trip.segments?.[0],firstSegmentReservations:trip.segments?.[0]?.reservations?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H3'})}).catch(()=>{});
-  // #endregion
   const sortedSegments = [...trip.segments].sort((a, b) => a.order - b.order)
   
   const result = {
@@ -63,10 +60,6 @@ export function transformTripToV0Format(trip: DBTrip): V0Itinerary {
     heroImage: trip.imageUrl || undefined,
     segments: sortedSegments.map((segment, index) => transformSegment(segment, index, trip.startDate))
   }
-  
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'v0-data-transform.ts:63',message:'transformTripToV0Format result',data:{resultSegmentsCount:result.segments?.length,firstResultSegment:result.segments?.[0],firstResultSegmentDays:result.segments?.[0]?.days?.length,firstResultSegmentFirstDay:result.segments?.[0]?.days?.[0]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H3'})}).catch(()=>{});
-  // #endregion
   
   return result
 }
@@ -111,9 +104,6 @@ function transformSegment(segment: DBSegment, segmentIndex: number, tripStartDat
  * Calculate days structure for a segment with grouped reservations
  */
 function calculateSegmentDays(segment: DBSegment, tripStartDate: Date): V0Day[] {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'v0-data-transform.ts:104',message:'calculateSegmentDays called',data:{segmentId:segment.id,segmentName:segment.name,reservationsCount:segment.reservations?.length,hasReservations:!!segment.reservations,reservations:segment.reservations},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
   const startTime = segment.startTime || tripStartDate
   const endTime = segment.endTime || tripStartDate
   
@@ -143,10 +133,6 @@ function calculateSegmentDays(segment: DBSegment, tripStartDate: Date): V0Day[] 
       return resDay === currentDay
     })
     
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'v0-data-transform.ts:134',message:'Day reservations filtered',data:{dayIndex:i,dayNumber:dayNumber,currentDate:currentDate.toISOString(),dayReservationsCount:dayReservations.length,dayReservations:dayReservations.map(r=>({id:r.id,name:r.name,startTime:r.startTime}))},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
-    
     const items = dayReservations.map((res, idx) => transformReservationToItem(res, idx))
     
     days.push({
@@ -157,10 +143,6 @@ function calculateSegmentDays(segment: DBSegment, tripStartDate: Date): V0Day[] 
     })
   }
   
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'v0-data-transform.ts:145',message:'calculateSegmentDays result',data:{daysCount:days.length,days:days.map(d=>({day:d.day,date:d.date,itemsCount:d.items.length}))},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
-  
   return days
 }
 
@@ -169,7 +151,6 @@ function calculateSegmentDays(segment: DBSegment, tripStartDate: Date): V0Day[] 
  */
 function transformReservationToItem(reservation: DBReservation, index: number): V0Item {
   const categoryName = reservation.reservationType?.category?.name?.toLowerCase() || "other"
-  const typeName = reservation.reservationType?.name?.toLowerCase() || "other"
   
   return {
     id: index + 1,
@@ -190,7 +171,7 @@ function transformReservation(res: DBReservation): V0Reservation {
   
   // Calculate nights for hotel stays
   const nights = isHotel && res.startTime && res.endTime 
-    ? calculateNights(res.startTime, res.endTime, res.departureTimezone || "UTC")
+    ? calculateNights(res.startTime, res.endTime)
     : undefined
   
   return {
@@ -291,7 +272,7 @@ function getReservationIcon(category: string) {
 /**
  * Calculate number of nights between check-in and check-out
  */
-function calculateNights(startTime: Date, endTime: Date, timezone: string): number {
+function calculateNights(startTime: Date, endTime: Date): number {
   const start = new Date(startTime)
   const end = new Date(endTime)
   

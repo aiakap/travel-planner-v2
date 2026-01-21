@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { useChat } from "@ai-sdk/react"
 import { UIMessage } from "ai"
 import { Button } from "@/components/ui/button"
-import { Send, Plus, GripVertical, Table2, GitBranch, Grid3X3, MessageCircle, Calendar, Loader2, MapPin } from "lucide-react"
+import { Send, Plus, GripVertical, Table2, GitBranch, Grid3X3, MessageCircle, Calendar, Loader2, MapPin, Sparkles } from "lucide-react"
 import { ChatWelcomeMessage } from "@/components/chat-welcome-message"
 import { ChatQuickActions } from "@/components/chat-quick-actions"
 import { ChatContextWelcome } from "@/components/chat-context-welcome"
@@ -29,30 +29,111 @@ import { PlaceSuggestion, GooglePlaceData } from "@/lib/types/place-suggestion"
 // Helper to extract text content from message parts
 function getMessageText(message: UIMessage | undefined): string {
   if (!message) return ""
-  return message.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("") || message.content || ""
+  return message.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("") || ""
 }
 
 // Helper to extract place suggestions from tool invocations
 function getPlaceSuggestions(message: UIMessage): PlaceSuggestion[] {
   const suggestions: PlaceSuggestion[] = [];
   
-  if (!message.parts) return suggestions;
+  if (!message.parts) {
+    console.log("🔍 [getPlaceSuggestions] No parts in message");
+    return suggestions;
+  }
   
-  message.parts.forEach((part: any) => {
-    if (part.type === "tool-result" && part.toolName === "suggest_place") {
-      const result = part.result;
-      if (result?.success && result?.placeName) {
-        suggestions.push({
+  console.log("🔍 [getPlaceSuggestions] Analyzing message parts:", {
+    totalParts: message.parts.length,
+    partTypes: message.parts.map((p: any) => p.type),
+  });
+  
+  message.parts.forEach((part: any, idx: number) => {
+    // AI SDK can return tool results in different formats:
+    // 1. type: "tool-result" with toolName and result fields
+    // 2. type: "tool-{toolName}" with args field
+    // 3. Nested result structure
+    
+    const isSuggestPlaceTool = 
+      (part.type === "tool-result" && part.toolName === "suggest_place") ||
+      part.type === "tool-suggest_place" ||
+      part.toolName === "suggest_place";
+    
+    console.log(`🔍 [getPlaceSuggestions] Part ${idx}:`, {
+      type: part.type,
+      toolName: part.toolName,
+      hasResult: !!part.result,
+      hasArgs: !!part.args,
+      hasOutput: !!part.output,
+      allKeys: Object.keys(part),
+      isSuggestPlaceTool,
+    });
+    
+    // If this looks like a suggest_place tool, log the full part
+    if (isSuggestPlaceTool) {
+      console.log(`🔬 [getPlaceSuggestions] FULL PART ${idx}:`, JSON.stringify(part, null, 2));
+    }
+    
+    if (isSuggestPlaceTool) {
+      // Try to find the result in various locations
+      let result = null;
+      
+      // Option 1: part.output (tool-result format from server)
+      if (part.output) {
+        result = part.output;
+      }
+      // Option 2: part.result (alternative tool-result format)
+      else if (part.result) {
+        result = part.result;
+      }
+      // Option 3: part.args (tool invocation format with arguments)
+      else if (part.args) {
+        // The args contain what was passed to the tool, so we need to construct the result
+        result = {
+          success: true,
+          placeName: part.args.placeName,
+          category: part.args.category,
+          type: part.args.type,
+          context: {
+            dayNumber: part.args.dayNumber,
+            timeOfDay: part.args.timeOfDay,
+            specificTime: part.args.specificTime,
+            notes: part.args.notes,
+          },
+          tripId: part.args.tripId,
+          segmentId: part.args.segmentId,
+        };
+      }
+      
+      console.log("✨ [getPlaceSuggestions] Found suggest_place result:", {
+        hasResult: !!result,
+        placeName: result?.placeName,
+        category: result?.category,
+      });
+      
+      if (result?.placeName) {
+        const suggestion: PlaceSuggestion = {
           placeName: result.placeName,
           category: result.category,
           type: result.type,
           context: result.context,
           tripId: result.tripId,
           segmentId: result.segmentId,
+        };
+        suggestions.push(suggestion);
+        console.log("✅ [getPlaceSuggestions] Added suggestion:", suggestion.placeName);
+      } else {
+        console.error("❌ [getPlaceSuggestions] Invalid suggest_place result:", {
+          hasResult: !!result,
+          placeName: result?.placeName,
+          partKeys: Object.keys(part),
         });
       }
     }
   });
+  
+  console.log(`🔍 [getPlaceSuggestions] Total suggestions extracted: ${suggestions.length}`);
+  if (suggestions.length > 0) {
+    console.log("📍 [getPlaceSuggestions] Place names:", suggestions.map(s => s.placeName));
+  }
   
   return suggestions;
 }
@@ -61,6 +142,7 @@ function getPlaceSuggestions(message: UIMessage): PlaceSuggestion[] {
 interface DBTrip {
   id: string
   title: string
+  description: string
   startDate: Date
   endDate: Date
   imageUrl: string | null
@@ -144,7 +226,7 @@ export function ExperienceBuilderClient({
     initialSelectedConversation?.id || null
   )
   const [hasStartedPlanning, setHasStartedPlanning] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>("table")
+  const [viewMode, setViewMode] = useState<ViewMode>("timeline")
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat")
   const [leftPanelWidth, setLeftPanelWidth] = useState(40)
   const [selectedReservation, setSelectedReservation] = useState<any>(null)
@@ -185,9 +267,9 @@ export function ExperienceBuilderClient({
           part.type === "tool-result" && 
           part.toolName === "create_trip" && 
           part.result?.success === true
-        );
+        ) as any;
 
-        if (tripResult && tripResult.result?.tripId) {
+        if (tripResult && tripResult?.result?.tripId) {
           // Trip was created, navigate to it with the trip ID
           setTimeout(() => {
             window.location.href = `/experience-builder?tripId=${tripResult.result.tripId}`;
@@ -402,6 +484,7 @@ export function ExperienceBuilderClient({
         id: m.id,
         role: m.role as any,
         content: m.content,
+        parts: [{ type: "text" as const, text: m.content }],
       })) || [])
     }
   }
@@ -437,18 +520,70 @@ What would you like to change about this plan, or should I create it as is?`;
     setHasStartedPlanning(true);
   }
 
+  // Helper function to find place name in text with flexible matching
+  const findPlaceInText = (text: string, placeName: string, startFrom: number): number => {
+    // Try exact match first
+    let index = text.indexOf(placeName, startFrom);
+    if (index !== -1) return index;
+    
+    // Try with "the " prefix (e.g., "the Grand Hotel" when placeName is "Grand Hotel")
+    index = text.indexOf(`the ${placeName}`, startFrom);
+    if (index !== -1) return index + 4; // Skip "the "
+    
+    // Try with "The " prefix
+    index = text.indexOf(`The ${placeName}`, startFrom);
+    if (index !== -1) return index + 4; // Skip "The "
+    
+    // Try case-insensitive search
+    const lowerText = text.toLowerCase();
+    const lowerPlace = placeName.toLowerCase();
+    index = lowerText.indexOf(lowerPlace, startFrom);
+    if (index !== -1) return index;
+    
+    // Try matching without common prefixes like "Hotel", "The", etc.
+    const placeWithoutPrefix = placeName.replace(/^(Hotel|The|Le|La|L'|Restaurant)\s+/i, '');
+    if (placeWithoutPrefix !== placeName) {
+      index = lowerText.indexOf(placeWithoutPrefix.toLowerCase(), startFrom);
+      if (index !== -1) {
+        // Find the actual start in the original text (accounting for case)
+        const actualText = text.substring(index);
+        const match = actualText.match(new RegExp(`\\b${placeWithoutPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'));
+        if (match) {
+          return index + match.index!;
+        }
+      }
+    }
+    
+    return -1;
+  };
+
   // Render text with clickable place suggestions
   const renderTextWithPlaceLinks = (text: string, suggestions: PlaceSuggestion[]) => {
+    console.log("🎨 [renderTextWithPlaceLinks] Called with:", {
+      textLength: text.length,
+      textPreview: text.substring(0, 100) + "...",
+      suggestionsCount: suggestions.length,
+      placeNames: suggestions.map(s => s.placeName),
+    });
+    
     if (suggestions.length === 0) {
-      return text;
+      console.log("⚠️  [renderTextWithPlaceLinks] No suggestions, rendering plain text");
+      return <span className="whitespace-pre-wrap">{text}</span>;
     }
 
     // Split text by place names and create clickable links
     let lastIndex = 0;
     const elements: React.ReactNode[] = [];
+    let linkedCount = 0;
 
     suggestions.forEach((suggestion, idx) => {
-      const placeIndex = text.indexOf(suggestion.placeName, lastIndex);
+      const placeIndex = findPlaceInText(text, suggestion.placeName, lastIndex);
+      
+      console.log(`🔍 [renderTextWithPlaceLinks] Looking for "${suggestion.placeName}":`, {
+        found: placeIndex !== -1,
+        position: placeIndex,
+        searchStartedAt: lastIndex,
+      });
       
       if (placeIndex !== -1) {
         // Add text before the place name
@@ -460,25 +595,37 @@ What would you like to change about this plan, or should I create it as is?`;
           );
         }
 
-        // Add clickable place name
+        // Determine the actual text to highlight (might include "the " prefix)
+        const actualTextMatch = text.substring(placeIndex, placeIndex + suggestion.placeName.length);
+
+        // Add clickable place name with visual indicator
         elements.push(
           <button
             key={`place-${idx}`}
             onClick={() => {
+              console.log("🖱️  [renderTextWithPlaceLinks] Place clicked:", suggestion.placeName);
               if (selectedTripId || suggestion.tripId) {
                 setSelectedSuggestion({
                   suggestion,
                   tripId: selectedTripId || suggestion.tripId!,
                 });
+              } else {
+                console.warn("⚠️  [renderTextWithPlaceLinks] No tripId available for suggestion");
               }
             }}
-            className="text-slate-500 hover:text-slate-700 underline decoration-slate-300 cursor-pointer transition-colors font-medium"
+            className="text-blue-600 hover:text-blue-800 underline decoration-blue-300 hover:decoration-blue-500 cursor-pointer transition-colors font-medium inline-flex items-center gap-0.5"
+            title="Click to see details and add to itinerary"
           >
-            {suggestion.placeName}
+            {actualTextMatch}
+            <Sparkles className="h-3 w-3 inline" />
           </button>
         );
 
+        linkedCount++;
         lastIndex = placeIndex + suggestion.placeName.length;
+      } else {
+        console.warn(`❌ [renderTextWithPlaceLinks] Place name "${suggestion.placeName}" NOT FOUND in text`);
+        console.warn(`   Text around this area: "${text.substring(Math.max(0, lastIndex - 50), lastIndex + 100)}"`);
       }
     });
 
@@ -489,7 +636,9 @@ What would you like to change about this plan, or should I create it as is?`;
       );
     }
 
-    return <>{elements}</>;
+    console.log(`✅ [renderTextWithPlaceLinks] Rendered ${linkedCount}/${suggestions.length} clickable links`);
+
+    return <span className="whitespace-pre-wrap inline">{elements}</span>;
   };
 
   // Handle adding suggestion to itinerary
@@ -539,8 +688,8 @@ What would you like to change about this plan, or should I create it as is?`;
         const { createConversation } = await import("@/lib/actions/chat-actions")
         const newConversation = await createConversation("New Conversation", false)
         
-        // Update state
-        setConversations([newConversation, ...conversations])
+        // Update state - add messages field to match Conversation type
+        setConversations([{ ...newConversation, messages: [] }, ...conversations])
         setCurrentConversationId(newConversation.id)
         setSelectedTripId(null)
         setMessages([])
@@ -601,6 +750,25 @@ What would you like to change about this plan, or should I create it as is?`;
   }
 
   const tripTotals = getTripTotals()
+
+  // Handler for chatting about an item
+  const handleChatAboutItem = (reservation: any, itemTitle: string) => {
+    const prompt = `Tell me more about ${reservation.vendor} (${itemTitle}). Here are the details: ${reservation.text || 'No additional details'}`
+    sendMessage({ text: prompt })
+    setHasStartedPlanning(true)
+  }
+
+  // Handler for editing an item
+  const handleEditItem = (reservation: any) => {
+    // This will open the reservation detail modal
+    setSelectedReservation({
+      reservation,
+      itemTitle: reservation.vendor,
+      itemTime: reservation.startTime || '',
+      itemType: 'reservation',
+      dayDate: '',
+    })
+  }
 
   return (
     <div ref={containerRef} className="bg-slate-50 flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 80px)' }}>
@@ -753,6 +921,8 @@ What would you like to change about this plan, or should I create it as is?`;
                         segments={transformedTrip.segments}
                         heroImage={transformedTrip.heroImage}
                         onSelectReservation={setSelectedReservation}
+                        onChatAboutItem={handleChatAboutItem}
+                        onEditItem={handleEditItem}
                       />
                     </div>
                   </>
@@ -765,8 +935,132 @@ What would you like to change about this plan, or should I create it as is?`;
 
       {/* Desktop View */}
       <div className="hidden md:flex flex-1 overflow-hidden">
-        {/* Left Panel - Chat */}
+        {/* Left Panel - Itinerary */}
         <div className="flex flex-col h-full border-r bg-white overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
+          {/* Trip Selector - Always visible at top */}
+          <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
+            <div className="flex items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <MapPin className="h-5 w-5 text-slate-700 flex-shrink-0" />
+                <span className="text-sm font-medium text-slate-700">Trip:</span>
+                <TripSelector trips={trips} selectedTripId={selectedTripId} onTripSelect={handleTripSelect} compact={true} />
+              </div>
+              
+              {/* Edit button for trip (only when trip is selected) */}
+              {selectedTripId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-3 text-slate-600 hover:text-slate-900"
+                  onClick={() => setIsTripEditModalOpen(true)}
+                >
+                  Edit
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {!selectedTripId || !transformedTrip ? (
+            <ItineraryEmptyState />
+          ) : (
+            <>
+              {transformedTrip && (
+                <div className="border-b border-slate-200 p-3 bg-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h1 className="text-sm font-bold">{transformedTrip?.title || "Select a trip"}</h1>
+                      <p className="text-[10px] text-muted-foreground">{transformedTrip?.dates || ""}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {transformedTrip && (
+                        <div className="text-right">
+                          <div className="text-xs font-semibold">${tripTotals.total.toLocaleString()}</div>
+                        </div>
+                      )}
+                      {transformedTrip && (
+                        <div className="flex gap-1 border rounded-lg p-0.5">
+                          <Button
+                            variant={viewMode === "table" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setViewMode("table")}
+                            title="Table View"
+                          >
+                            <Table2 className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant={viewMode === "timeline" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setViewMode("timeline")}
+                            title="Timeline View"
+                          >
+                            <GitBranch className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant={viewMode === "photos" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setViewMode("photos")}
+                            title="Photo Grid View"
+                          >
+                            <Grid3X3 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      <Button variant="outline" size="sm" className="h-7 text-xs bg-transparent">
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto p-3 overscroll-contain">
+                {transformedTrip ? (
+                  <>
+                    {viewMode === "table" && (
+                      <TableView 
+                        segments={transformedTrip.segments} 
+                        onSelectReservation={setSelectedReservation}
+                        onChatAboutItem={handleChatAboutItem}
+                        onEditItem={handleEditItem}
+                      />
+                    )}
+                    {viewMode === "timeline" && (
+                      <TimelineView
+                        segments={transformedTrip.segments}
+                        heroImage={transformedTrip.heroImage}
+                        onSelectReservation={setSelectedReservation}
+                        onChatAboutItem={handleChatAboutItem}
+                        onEditItem={handleEditItem}
+                      />
+                    )}
+                    {viewMode === "photos" && (
+                      <PhotosView segments={transformedTrip.segments} onSelectReservation={setSelectedReservation} />
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    <p>Select a trip from the dropdown to view details</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Resizable Divider */}
+        <div
+          className="w-2 bg-slate-200 hover:bg-slate-300 cursor-col-resize flex items-center justify-center group transition-colors"
+          onMouseDown={handleMouseDown}
+        >
+          <GripVertical className="h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" />
+        </div>
+
+        {/* Right Panel - Chat */}
+        <div className="flex flex-col h-full bg-white overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
           <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
             <div className="flex items-center justify-between gap-3 w-full">
               <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -782,7 +1076,7 @@ What would you like to change about this plan, or should I create it as is?`;
                     currentConversationId={currentConversationId}
                     onSelectConversation={handleConversationSelect}
                     tripId={selectedTripId}
-                    onConversationsChange={setConversations}
+                    onConversationsChange={(newConversations) => setConversations(newConversations)}
                   />
                 )}
               </div>
@@ -903,123 +1197,6 @@ What would you like to change about this plan, or should I create it as is?`;
               </Button>
             </form>
           </div>
-        </div>
-
-        {/* Resizable Divider */}
-        <div
-          className="w-2 bg-slate-200 hover:bg-slate-300 cursor-col-resize flex items-center justify-center group transition-colors"
-          onMouseDown={handleMouseDown}
-        >
-          <GripVertical className="h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" />
-        </div>
-
-        {/* Right Panel - Itinerary */}
-        <div className="flex flex-col h-full bg-white overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
-          {/* Trip Selector - Always visible at top */}
-          <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
-            <div className="flex items-center justify-between gap-3 w-full">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <MapPin className="h-5 w-5 text-slate-700 flex-shrink-0" />
-                <span className="text-sm font-medium text-slate-700">Trip:</span>
-                <TripSelector trips={trips} selectedTripId={selectedTripId} onTripSelect={handleTripSelect} compact={true} />
-              </div>
-              
-              {/* Edit button for trip (only when trip is selected) */}
-              {selectedTripId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-3 text-slate-600 hover:text-slate-900"
-                  onClick={() => setIsTripEditModalOpen(true)}
-                >
-                  Edit
-                </Button>
-              )}
-            </div>
-          </div>
-          
-          {!selectedTripId || !transformedTrip ? (
-            <ItineraryEmptyState />
-          ) : (
-            <>
-              {transformedTrip && (
-                <div className="border-b border-slate-200 p-3 bg-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h1 className="text-sm font-bold">{transformedTrip?.title || "Select a trip"}</h1>
-                      <p className="text-[10px] text-muted-foreground">{transformedTrip?.dates || ""}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {transformedTrip && (
-                        <div className="text-right">
-                          <div className="text-xs font-semibold">${tripTotals.total.toLocaleString()}</div>
-                        </div>
-                      )}
-                      {transformedTrip && (
-                        <div className="flex gap-1 border rounded-lg p-0.5">
-                          <Button
-                            variant={viewMode === "table" ? "default" : "ghost"}
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setViewMode("table")}
-                            title="Table View"
-                          >
-                            <Table2 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant={viewMode === "timeline" ? "default" : "ghost"}
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setViewMode("timeline")}
-                            title="Timeline View"
-                          >
-                            <GitBranch className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant={viewMode === "photos" ? "default" : "ghost"}
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setViewMode("photos")}
-                            title="Photo Grid View"
-                          >
-                            <Grid3X3 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                      <Button variant="outline" size="sm" className="h-7 text-xs bg-transparent">
-                        <Plus className="h-3 w-3 mr-1" />
-                        Add
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex-1 overflow-y-auto p-3 overscroll-contain">
-                {transformedTrip ? (
-                  <>
-                    {viewMode === "table" && (
-                      <TableView segments={transformedTrip.segments} onSelectReservation={setSelectedReservation} />
-                    )}
-                    {viewMode === "timeline" && (
-                      <TimelineView
-                        segments={transformedTrip.segments}
-                        heroImage={transformedTrip.heroImage}
-                        onSelectReservation={setSelectedReservation}
-                      />
-                    )}
-                    {viewMode === "photos" && (
-                      <PhotosView segments={transformedTrip.segments} onSelectReservation={setSelectedReservation} />
-                    )}
-                  </>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <p>Select a trip from the dropdown to view details</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
         </div>
       </div>
 

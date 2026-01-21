@@ -167,8 +167,8 @@ export default function ReservationForm({
   const { lookupTimezone, isLoading: isLookingUp } = useTimezoneLookup();
 
   // Debounce timers for location inputs
-  const departureDebounceRef = useRef<NodeJS.Timeout>();
-  const arrivalDebounceRef = useRef<NodeJS.Timeout>();
+  const departureDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const arrivalDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Handle departure location change with debounced timezone lookup
   const handleDepartureLocationChange = useCallback(

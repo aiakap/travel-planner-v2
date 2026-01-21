@@ -30,6 +30,12 @@ if (typeof globalThis !== "undefined") {
 
 const nextConfig: NextConfig = {
   /* config options here */
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
+  typescript: {
+    ignoreBuildErrors: false,
+  },
   images: {
     remotePatterns: [
       {
@@ -46,6 +52,14 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "source.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "maps.googleapis.com",
+      },
+      {
+        protocol: "https",
+        hostname: "oaidalleapiprodscus.blob.core.windows.net",
       },
     ],
   },
