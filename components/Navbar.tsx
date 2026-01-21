@@ -3,6 +3,7 @@
 import { login, logout } from "@/lib/auth-actions";
 import { Session } from "next-auth";
 import Link from "next/link";
+import Image from "next/image";
 
 interface NavbarProps {
   session: Session | null;
@@ -12,13 +13,22 @@ export default function Navbar({ session }: NavbarProps) {
   return (
     <nav className="bg-white/95 backdrop-blur-sm shadow-sm py-4 border-b border-slate-100 sticky top-0 z-50 transition-smooth">
       <div className="container mx-auto flex justify-between items-center px-6 lg:px-8">
-        <Link href={"/"} className="flex flex-col hover:opacity-80 transition-smooth">
-          <span className="text-2xl font-display tracking-wide text-slate-900">
-            Bespoke
-          </span>
-          <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 -mt-1">
-            Experiences
-          </span>
+        <Link href={"/"} className="flex items-center gap-3 hover:opacity-80 transition-smooth">
+          <Image 
+            src="/logo.png" 
+            alt="Bespoke Logo" 
+            width={40} 
+            height={40}
+            className="object-contain"
+          />
+          <div className="flex flex-col">
+            <span className="text-2xl font-display tracking-wide text-slate-900">
+              Bespoke
+            </span>
+            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 -mt-1">
+              Experiences
+            </span>
+          </div>
         </Link>
 
         <div className="flex items-center space-x-6">

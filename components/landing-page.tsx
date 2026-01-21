@@ -198,11 +198,20 @@ export default function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex flex-col mb-4">
-                <span className="text-2xl font-display tracking-wide">Bespoke</span>
-                <span className="text-xs uppercase tracking-[0.2em] text-white/60 -mt-1">
-                  Experiences
-                </span>
+              <div className="flex items-center gap-3 mb-4">
+                <Image 
+                  src="/logo.png" 
+                  alt="Bespoke Logo" 
+                  width={40} 
+                  height={40}
+                  className="object-contain"
+                />
+                <div className="flex flex-col">
+                  <span className="text-2xl font-display tracking-wide">Bespoke</span>
+                  <span className="text-xs uppercase tracking-[0.2em] text-white/60 -mt-1">
+                    Experiences
+                  </span>
+                </div>
               </div>
               <p className="text-white/60 text-sm">
                 Personalized travel experiences crafted for you
