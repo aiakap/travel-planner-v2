@@ -1,8 +1,6 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import { useChat } from "@ai-sdk/react"
-import { UIMessage } from "ai"
 import { Button } from "@/components/ui/button"
 import { Send, Plus, GripVertical, Table2, GitBranch, Grid3X3, MessageCircle, Calendar, Loader2, MapPin } from "lucide-react"
 import { ChatWelcomeMessage } from "@/components/chat-welcome-message"
@@ -23,127 +21,18 @@ import type { V0Itinerary } from "@/lib/v0-types"
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization"
 import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts"
 import { renameTripConversation, createTripConversation } from "@/lib/actions/chat-actions"
-import { PlaceSuggestion } from "@/lib/types/place-suggestion"
 import { MessageSegmentsRenderer } from "@/components/message-segments-renderer"
 import { MessageSegment } from "@/lib/types/place-pipeline"
-import { useMessageSegments } from "@/lib/hooks/use-message-segments"
 
-// Helper to extract text content from message parts
-function getMessageText(message: UIMessage | undefined): string {
-  if (!message) return ""
-  return message.parts?.filter((part: any) => part.type === "text").map((part: any) => part.text).join("") || ""
-}
-
-// Helper to extract place suggestions from tool invocations
-function getPlaceSuggestions(message: UIMessage): PlaceSuggestion[] {
-  const suggestions: PlaceSuggestion[] = [];
-  
-  if (!message.parts) {
-    console.log("🔍 [getPlaceSuggestions] No parts in message");
-    return suggestions;
-  }
-  
-  console.log("🔍 [getPlaceSuggestions] Analyzing message parts:", {
-    totalParts: message.parts.length,
-    partTypes: message.parts.map((p: any) => p.type),
-  });
-  
-  message.parts.forEach((part: any, idx: number) => {
-    // AI SDK can return tool results in different formats:
-    // 1. type: "tool-result" with toolName and result fields
-    // 2. type: "tool-{toolName}" with args field
-    // 3. Nested result structure
-    
-    const isSuggestPlaceTool = 
-      (part.type === "tool-result" && part.toolName === "suggest_place") ||
-      part.type === "tool-suggest_place" ||
-      part.toolName === "suggest_place";
-    
-    console.log(`🔍 [getPlaceSuggestions] Part ${idx}:`, {
-      type: part.type,
-      toolName: part.toolName,
-      hasResult: !!part.result,
-      hasArgs: !!part.args,
-      hasOutput: !!part.output,
-      allKeys: Object.keys(part),
-      isSuggestPlaceTool,
-    });
-    
-    // If this looks like a suggest_place tool, log the full part
-    if (isSuggestPlaceTool) {
-      console.log(`🔬 [getPlaceSuggestions] FULL PART ${idx}:`, JSON.stringify(part, null, 2));
-    }
-    
-    if (isSuggestPlaceTool) {
-      // Try to find the result in various locations
-      let result = null;
-      
-      // Option 1: part.output (tool-result format from server)
-      if (part.output) {
-        result = part.output;
-      }
-      // Option 2: part.result (alternative tool-result format)
-      else if (part.result) {
-        result = part.result;
-      }
-      // Option 3: part.args (tool invocation format with arguments)
-      else if (part.args) {
-        // The args contain what was passed to the tool, so we need to construct the result
-        result = {
-          success: true,
-          placeName: part.args.placeName,
-          category: part.args.category,
-          type: part.args.type,
-          context: {
-            dayNumber: part.args.dayNumber,
-            timeOfDay: part.args.timeOfDay,
-            specificTime: part.args.specificTime,
-            notes: part.args.notes,
-          },
-          tripId: part.args.tripId,
-          segmentId: part.args.segmentId,
-        };
-      }
-      
-      console.log("✨ [getPlaceSuggestions] Found suggest_place result:", {
-        hasResult: !!result,
-        placeName: result?.placeName,
-        category: result?.category,
-      });
-      
-      if (result?.placeName) {
-        const suggestion: PlaceSuggestion = {
-          placeName: result.placeName,
-          category: result.category,
-          type: result.type,
-          context: result.context,
-          tripId: result.tripId,
-          segmentId: result.segmentId,
-        };
-        suggestions.push(suggestion);
-        console.log("✅ [getPlaceSuggestions] Added suggestion:", suggestion.placeName);
-      } else {
-        console.error("❌ [getPlaceSuggestions] Invalid suggest_place result:", {
-          hasResult: !!result,
-          placeName: result?.placeName,
-          partKeys: Object.keys(part),
-        });
-      }
-    }
-  });
-  
-  console.log(`🔍 [getPlaceSuggestions] Total suggestions extracted: ${suggestions.length}`);
-  if (suggestions.length > 0) {
-    console.log("📍 [getPlaceSuggestions] Place names:", suggestions.map(s => s.placeName));
-  }
-  
-  return suggestions;
-}
-
-// Extended UIMessage type to include segments
-interface EnhancedUIMessage extends UIMessage {
+// Simple message type with segments
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
   segments?: MessageSegment[];
 }
+
+// Removed old helper functions - no longer needed with non-streaming API!
 
 // Type for database trip with all relations
 interface DBTrip {
@@ -245,45 +134,69 @@ export function ExpClient({
   const containerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Chat integration
+  // Chat integration - Simple non-streaming version
   const [input, setInput] = useState("")
-  const { messages, sendMessage, status, setMessages } = useChat({
-    api: "/api/chat" as any,
-    body: { conversationId: currentConversationId } as any,
-    initialMessages: initialSelectedConversation?.messages.map(m => ({
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    initialSelectedConversation?.messages.map(m => ({
       id: m.id,
-      role: m.role as any,
+      role: m.role as "user" | "assistant",
       content: m.content,
-    })) || [],
-  } as any)
-  
-  const isLoading = status === ("in_progress" as any)
+    })) || []
+  )
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Message segments hook for converting text to segments
-  const { getSegmentsForMessage, isProcessing: isProcessingSegments } = useMessageSegments()
+  // Simple sendMessage function that calls our non-streaming API
+  const sendMessage = async (text: string) => {
+    if (!currentConversationId || !text.trim()) return;
 
-  // Watch for trip creation in chat messages
-  useEffect(() => {
-    // Check if a trip was just created (look for create_trip tool call in recent messages)
-    if (messages.length > 0 && !selectedTripId) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage.role === "assistant" && lastMessage.parts) {
-        // Find the create_trip tool result
-        const tripResult = lastMessage.parts.find((part: any) => 
-          part.type === "tool-result" && 
-          part.toolName === "create_trip" && 
-          part.result?.success === true
-        ) as any;
+    // Add user message immediately
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: text,
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
 
-        if (tripResult && tripResult?.result?.tripId) {
-          // Trip was created, navigate to it with the trip ID
-          setTimeout(() => {
-            window.location.href = `/test/exp?tripId=${tripResult.result.tripId}`;
-          }, 1500); // Small delay to ensure DB updates are complete
-        }
+    try {
+      const response = await fetch("/api/chat/simple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          conversationId: currentConversationId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
       }
+
+      const data = await response.json();
+
+      // Add assistant message with segments
+      const assistantMessage: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: data.content,
+        segments: data.segments,
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("❌ [sendMessage] Error:", error);
+      // Add error message
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        role: "assistant",
+        content: "Sorry, I encountered an error processing your request. Please try again.",
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
-  }, [messages, selectedTripId])
+  }
+
+  // Tool call handling is removed - trips are created via direct tool invocation in the chat API
 
   // Resizable panel handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -319,43 +232,7 @@ export function ExpClient({
     }
   }, [handleMouseMove, handleMouseUp])
 
-  // Monitor chat messages for trip creation/updates
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1]
-    console.log("🔍 [Trip Detection] Last message:", lastMessage)
-    console.log("🔍 [Trip Detection] Message role:", lastMessage?.role)
-    console.log("🔍 [Trip Detection] Message content:", getMessageText(lastMessage))
-    console.log("🔍 [Trip Detection] Tool invocations:", (lastMessage as any)?.toolInvocations)
-    
-    if (lastMessage?.role === "assistant") {
-      const content = getMessageText(lastMessage).toLowerCase()
-      console.log("🔍 [Trip Detection] Checking for trip creation, content:", content)
-      
-      // Check for tool invocations first (more reliable)
-      const toolInvocations = (lastMessage as any)?.toolInvocations
-      if (toolInvocations?.some((call: any) => call.toolName === "create_trip" && call.state === "result")) {
-        console.log("✅ [Trip Detection] Trip creation detected via tool invocation!")
-        setTimeout(() => refetchTripsAndSelect(), 500) // Small delay for DB sync
-        return
-      }
-      
-      // Fallback to text detection with multiple phrases
-      const tripCreationPhrases = [
-        "created trip",
-        "created your trip", 
-        "i've created",
-        "trip has been created",
-        "successfully created"
-      ]
-      
-      if (tripCreationPhrases.some(phrase => content.includes(phrase))) {
-        console.log("✅ [Trip Detection] Trip creation detected via text content!")
-        setTimeout(() => refetchTripsAndSelect(), 500)
-      } else {
-        console.log("❌ [Trip Detection] No trip creation detected")
-      }
-    }
-  }, [messages])
+  // Trip creation detection is handled by the chat API now
 
   const refetchTripsAndSelect = async () => {
     console.log("🔄 [Refetch] Starting trip refetch...")
@@ -476,38 +353,7 @@ export function ExpClient({
     autoCreateChat()
   }, [selectedTripId, conversations.length, currentConversationId, trips])
 
-  // Process assistant messages to generate segments
-  useEffect(() => {
-    const processLastMessage = async () => {
-      const lastMessage = messages[messages.length - 1] as EnhancedUIMessage;
-      
-      if (
-        lastMessage?.role === "assistant" && 
-        !lastMessage.segments && 
-        !isProcessingSegments &&
-        !isLoading // Don't process while still loading
-      ) {
-        const text = getMessageText(lastMessage);
-        
-        // Check if message has any place-related content
-        // The pipeline will detect and extract places automatically
-        if (text && text.length > 10) {
-          console.log('🔄 [EXP] Processing assistant message for segments');
-          const segments = await getSegmentsForMessage(text, []);
-          
-          // Update message with segments
-          setMessages(prev => prev.map(msg => 
-            msg.id === lastMessage.id 
-              ? { ...msg, segments } as EnhancedUIMessage
-              : msg
-          ));
-          console.log('✅ [EXP] Segments attached to message');
-        }
-      }
-    };
-    
-    processLastMessage();
-  }, [messages, isProcessingSegments, isLoading]);
+  // No complex useEffect needed - messages come with segments pre-attached from API!
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -549,13 +395,13 @@ ${luckyPrompt}
 
 What would you like to change about this plan, or should I create it as is?`;
     
-    sendMessage({ text: confirmationMessage });
+    sendMessage(confirmationMessage);
     setHasStartedPlanning(true);
   }
   
   // Handle quick action selection
   const handleQuickAction = (prompt: string) => {
-    sendMessage({ text: prompt });
+    sendMessage(prompt);
     setHasStartedPlanning(true);
   }
 
@@ -653,7 +499,7 @@ What would you like to change about this plan, or should I create it as is?`;
   // Handler for chatting about an item
   const handleChatAboutItem = (reservation: any, itemTitle: string) => {
     const prompt = `Tell me more about ${reservation.vendor} (${itemTitle}). Here are the details: ${reservation.text || 'No additional details'}`
-    sendMessage({ text: prompt })
+    sendMessage(prompt)
     setHasStartedPlanning(true)
   }
 
@@ -733,37 +579,29 @@ What would you like to change about this plan, or should I create it as is?`;
                 </div>
               ) : (
                 <>
-                  {messages.map((msg, i) => {
-                    const enhancedMsg = msg as EnhancedUIMessage;
-                    const textContent = getMessageText(enhancedMsg);
-
-                    return (
-                      <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                        <div
-                          className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
-                            msg.role === "user"
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-50 text-slate-900 border border-slate-100"
-                          }`}
-                        >
-                          <div className="whitespace-pre-wrap leading-relaxed text-sm">
-                            {msg.role === "assistant" && enhancedMsg.segments ? (
-                              <>
-                                {console.log('🎨 [EXP Mobile] Rendering segments:', enhancedMsg.segments.length)}
-                                <MessageSegmentsRenderer 
-                                  segments={enhancedMsg.segments}
-                                  tripId={selectedTripId || undefined}
-                                  onReservationAdded={refetchTrip}
-                                />
-                              </>
-                            ) : (
-                              textContent
-                            )}
-                          </div>
+                  {messages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
+                          msg.role === "user"
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-50 text-slate-900 border border-slate-100"
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap leading-relaxed text-sm">
+                          {msg.role === "assistant" && msg.segments ? (
+                            <MessageSegmentsRenderer 
+                              segments={msg.segments}
+                              tripId={selectedTripId || undefined}
+                              onReservationAdded={refetchTrip}
+                            />
+                          ) : (
+                            msg.content
+                          )}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                   {isLoading && <AILoadingAnimation />}
                 </>
               )}
@@ -772,7 +610,7 @@ What would you like to change about this plan, or should I create it as is?`;
               <form onSubmit={(e) => {
                 e.preventDefault()
                 if (input.trim() && !isLoading) {
-                  sendMessage({ text: input })
+                  sendMessage(input)
                   setInput("")
                   if (!hasStartedPlanning) setHasStartedPlanning(true)
                 }
@@ -1009,7 +847,7 @@ What would you like to change about this plan, or should I create it as is?`;
                 <ChatContextWelcome
                   tripData={transformedTrip}
                   onSuggestionClick={(prompt) => {
-                    sendMessage({ text: prompt })
+                    sendMessage(prompt)
                     setHasStartedPlanning(true)
                   }}
                 />
@@ -1045,11 +883,7 @@ What would you like to change about this plan, or should I create it as is?`;
               )
             ) : (
               <>
-                {messages.map((msg, i) => {
-                  const enhancedMsg = msg as EnhancedUIMessage;
-                  const textContent = getMessageText(enhancedMsg);
-
-                  return (
+                {messages.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                       <div
                         className={`max-w-[70%] rounded-lg px-5 py-3 ${
@@ -1059,27 +893,19 @@ What would you like to change about this plan, or should I create it as is?`;
                         }`}
                       >
                         <div className="whitespace-pre-wrap leading-relaxed">
-                          {msg.role === "assistant" && enhancedMsg.segments ? (
-                            <>
-                              {console.log('🎨 [EXP Desktop] Rendering segments:', {
-                                count: enhancedMsg.segments.length,
-                                placeSegments: enhancedMsg.segments.filter(s => s.type === 'place').length,
-                                hasPlaceData: enhancedMsg.segments.filter(s => s.type === 'place').map(s => !!s.placeData),
-                              })}
-                              <MessageSegmentsRenderer 
-                                segments={enhancedMsg.segments}
-                                tripId={selectedTripId || undefined}
-                                onReservationAdded={refetchTrip}
-                              />
-                            </>
+                          {msg.role === "assistant" && msg.segments ? (
+                            <MessageSegmentsRenderer 
+                              segments={msg.segments}
+                              tripId={selectedTripId || undefined}
+                              onReservationAdded={refetchTrip}
+                            />
                           ) : (
-                            textContent
+                            msg.content
                           )}
                         </div>
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
                 {isLoading && <AILoadingAnimation />}
                 <div ref={messagesEndRef} />
               </>
@@ -1090,7 +916,7 @@ What would you like to change about this plan, or should I create it as is?`;
             <form onSubmit={(e) => {
               e.preventDefault()
               if (input.trim() && !isLoading) {
-                sendMessage({ text: input })
+                sendMessage(input)
                 setInput("")
                 if (!hasStartedPlanning) setHasStartedPlanning(true)
               }

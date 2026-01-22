@@ -1,0 +1,302 @@
+import { auth } from "@/auth";
+import { NextResponse } from "next/server";
+import { generatePlaceSuggestions } from "@/lib/ai/generate-place-suggestions";
+import { resolvePlaces } from "@/lib/google-places/resolve-suggestions";
+import { assemblePlaceLinks } from "@/lib/html/assemble-place-links";
+import { MessageSegment } from "@/lib/types/place-pipeline";
+import { prisma } from "@/lib/prisma";
+
+export const maxDuration = 60;
+
+// Helper to get trip context for the conversation
+async function getTripContext(conversationId: string, userId: string): Promise<string | null> {
+  try {
+    // Get conversation with trip info
+    const conversation = await prisma.chatConversation.findFirst({
+      where: {
+        id: conversationId,
+        userId,
+      },
+      include: {
+        trip: {
+          include: {
+            segments: {
+              include: {
+                segmentType: true,
+                reservations: {
+                  include: {
+                    reservationType: {
+                      include: {
+                        category: true,
+                      },
+                    },
+                    reservationStatus: true,
+                  },
+                  orderBy: {
+                    startTime: 'asc',
+                  },
+                },
+              },
+              orderBy: {
+                order: 'asc',
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!conversation?.trip) {
+      return null;
+    }
+
+    const trip = conversation.trip;
+
+    // Format trip data as context
+    let context = `\n\n## CURRENT TRIP CONTEXT\n\n`;
+    context += `You are currently discussing the trip: "${trip.title}"\n`;
+    context += `Description: ${trip.description}\n`;
+    context += `Dates: ${new Date(trip.startDate).toLocaleDateString()} to ${new Date(trip.endDate).toLocaleDateString()}\n`;
+    context += `Trip ID: ${trip.id}\n\n`;
+
+    if (trip.segments.length > 0) {
+      context += `### Trip Segments (${trip.segments.length} total):\n\n`;
+
+      trip.segments.forEach((segment, idx) => {
+        context += `**Segment ${idx + 1}: ${segment.name}**\n`;
+        context += `- Type: ${segment.segmentType.name}\n`;
+        context += `- From: ${segment.startTitle}\n`;
+        context += `- To: ${segment.endTitle}\n`;
+        if (segment.startTime) {
+          context += `- Start: ${new Date(segment.startTime).toLocaleString()}\n`;
+        }
+        if (segment.endTime) {
+          context += `- End: ${new Date(segment.endTime).toLocaleString()}\n`;
+        }
+        if (segment.notes) {
+          context += `- Notes: ${segment.notes}\n`;
+        }
+        context += `- Segment ID: ${segment.id}\n`;
+
+        if (segment.reservations.length > 0) {
+          context += `\n  **Reservations in this segment (${segment.reservations.length}):**\n`;
+          segment.reservations.forEach((res, resIdx) => {
+            context += `  ${resIdx + 1}. ${res.name}\n`;
+            context += `     - Category: ${res.reservationType.category.name}\n`;
+            context += `     - Type: ${res.reservationType.name}\n`;
+            context += `     - Status: ${res.reservationStatus.name}\n`;
+            if (res.startTime) {
+              context += `     - Time: ${new Date(res.startTime).toLocaleString()}`;
+              if (res.endTime) {
+                context += ` to ${new Date(res.endTime).toLocaleTimeString()}`;
+              }
+              context += `\n`;
+            }
+            if (res.location) {
+              context += `     - Location: ${res.location}\n`;
+            }
+            if (res.cost) {
+              context += `     - Cost: ${res.currency || '$'}${res.cost}\n`;
+            }
+            if (res.confirmationNumber) {
+              context += `     - Confirmation: ${res.confirmationNumber}\n`;
+            }
+            if (res.notes) {
+              context += `     - Notes: ${res.notes}\n`;
+            }
+            context += `     - Reservation ID: ${res.id}\n`;
+          });
+        } else {
+          context += `\n  No reservations in this segment yet.\n`;
+        }
+        context += `\n`;
+      });
+    } else {
+      context += `No segments have been added to this trip yet.\n\n`;
+    }
+
+    context += `\n**IMPORTANT**: When answering questions about this trip, always reference the specific details above. You have complete knowledge of all segments, reservations, times, locations, and costs. Use this information to provide accurate, contextual responses.\n`;
+
+    return context;
+  } catch (error) {
+    console.error("[getTripContext] Error:", error);
+    return null;
+  }
+}
+
+// Helper to save message directly
+async function saveMessageDirect({
+  conversationId,
+  userId,
+  role,
+  content,
+}: {
+  conversationId: string;
+  userId: string;
+  role: string;
+  content: string;
+}) {
+  // Verify conversation belongs to user
+  const conversation = await prisma.chatConversation.findFirst({
+    where: {
+      id: conversationId,
+      userId: userId,
+    },
+  });
+
+  if (!conversation) {
+    console.error("[saveMessageDirect] Conversation not found:", conversationId);
+    return null;
+  }
+
+  const message = await prisma.chatMessage.create({
+    data: {
+      conversationId,
+      role,
+      content,
+    },
+  });
+
+  // Update conversation timestamp
+  await prisma.chatConversation.update({
+    where: { id: conversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  return message;
+}
+
+/**
+ * Non-streaming chat API
+ * 
+ * This endpoint:
+ * 1. Accepts a message and conversation history
+ * 2. Calls AI to generate response with place suggestions
+ * 3. Runs the 3-stage pipeline to resolve places and create segments
+ * 4. Returns complete message with segments in one response
+ */
+export async function POST(req: Request) {
+  try {
+    const session = await auth();
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { message, conversationId } = await req.json();
+    const userId = session.user.id;
+
+    if (!message || !conversationId) {
+      return NextResponse.json(
+        { error: "Message and conversationId are required" },
+        { status: 400 }
+      );
+    }
+
+    console.log("\n" + "=".repeat(80));
+    console.log("💬 [Simple Chat API] Processing message");
+    console.log("   User:", userId);
+    console.log("   Conversation:", conversationId);
+    console.log("   Message:", message);
+    console.log("=".repeat(80));
+
+    // Get trip context
+    const tripContext = await getTripContext(conversationId, userId);
+
+    // Save user message
+    await saveMessageDirect({
+      conversationId,
+      userId,
+      role: "user",
+      content: message,
+    });
+
+    // Stage 1: Generate AI response with place suggestions
+    console.log("\n📍 Running 3-stage pipeline...");
+    const stage1Start = Date.now();
+    
+    let stage1Output;
+    try {
+      // Pass trip context as part of the query for now
+      const fullQuery = tripContext 
+        ? `${message}\n\n${tripContext}`
+        : message;
+      
+      stage1Output = await generatePlaceSuggestions(fullQuery);
+      console.log(`✅ Stage 1 complete (${Date.now() - stage1Start}ms)`);
+      console.log(`   Generated ${stage1Output.places.length} place suggestions`);
+    } catch (error) {
+      console.error("❌ Stage 1 failed:", error);
+      return NextResponse.json(
+        { error: `Failed to generate response: ${error instanceof Error ? error.message : "Unknown error"}` },
+        { status: 500 }
+      );
+    }
+
+    // Stage 2: Resolve places with Google Places API
+    const stage2Start = Date.now();
+    let stage2Output;
+    try {
+      stage2Output = await resolvePlaces(stage1Output.places);
+      console.log(`✅ Stage 2 complete (${Date.now() - stage2Start}ms)`);
+      const successCount = Object.values(stage2Output.placeMap).filter(
+        p => !p.notFound
+      ).length;
+      console.log(`   Resolved ${successCount}/${stage1Output.places.length} places`);
+    } catch (error) {
+      console.error("❌ Stage 2 failed:", error);
+      return NextResponse.json(
+        { error: `Failed to resolve places: ${error instanceof Error ? error.message : "Unknown error"}` },
+        { status: 500 }
+      );
+    }
+
+    // Stage 3: Assemble segments with clickable links
+    const stage3Start = Date.now();
+    let segments: MessageSegment[];
+    try {
+      const stage3Output = assemblePlaceLinks(
+        stage1Output.text,
+        stage1Output.places,
+        stage2Output.placeMap
+      );
+      segments = stage3Output.segments;
+      console.log(`✅ Stage 3 complete (${Date.now() - stage3Start}ms)`);
+      const placeSegments = segments.filter(s => s.type === "place").length;
+      console.log(`   Created ${segments.length} segments (${placeSegments} places)`);
+    } catch (error) {
+      console.error("❌ Stage 3 failed:", error);
+      return NextResponse.json(
+        { error: `Failed to assemble response: ${error instanceof Error ? error.message : "Unknown error"}` },
+        { status: 500 }
+      );
+    }
+
+    // Save assistant message
+    await saveMessageDirect({
+      conversationId,
+      userId,
+      role: "assistant",
+      content: stage1Output.text,
+    });
+
+    const totalTime = Date.now() - stage1Start;
+    console.log("\n" + "=".repeat(80));
+    console.log("✅ [Simple Chat API] Complete");
+    console.log(`   Total time: ${totalTime}ms`);
+    console.log("=".repeat(80) + "\n");
+
+    // Return the complete response with segments
+    return NextResponse.json({
+      role: "assistant",
+      content: stage1Output.text,
+      segments,
+    });
+  } catch (error) {
+    console.error("[Simple Chat API] Error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
+}
