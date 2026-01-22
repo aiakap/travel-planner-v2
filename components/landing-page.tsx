@@ -12,7 +12,7 @@ export default function LandingPage() {
         {/* Hero Image */}
         <Image
           src="/luxury-hotel-room.png"
-          alt="Bespoke Travel Experiences"
+          alt="Ntourage Travel Experiences"
           fill
           className="object-cover"
           priority
@@ -201,13 +201,13 @@ export default function LandingPage() {
               <div className="flex items-center gap-3 mb-4">
                 <Image 
                   src="/logo.png" 
-                  alt="Bespoke Logo" 
+                  alt="Ntourage Travel Logo" 
                   width={40} 
                   height={40}
                   className="object-contain"
                 />
                 <div className="flex flex-col">
-                  <span className="text-2xl font-display tracking-wide">Bespoke</span>
+                  <span className="text-2xl font-display tracking-wide">Ntourage Travel</span>
                   <span className="text-xs uppercase tracking-[0.2em] text-white/60 -mt-1">
                     Experiences
                   </span>
@@ -247,7 +247,7 @@ export default function LandingPage() {
           </div>
 
           <div className="border-t border-white/10 pt-8 text-center text-sm text-white/60">
-            <p>© {new Date().getFullYear()} Bespoke Experiences. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Ntourage Travel. All rights reserved.</p>
           </div>
         </div>
       </footer>

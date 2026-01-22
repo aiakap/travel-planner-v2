@@ -58,6 +58,7 @@ export interface MessageSegment {
 export interface Stage1Output {
   text: string; // Full AI response text
   places: PlaceSuggestion[]; // Structured place suggestions
+  tripSuggestion?: any; // Optional trip metadata for trip suggestion mode
 }
 
 export interface Stage2Output {
@@ -75,6 +76,8 @@ export interface Stage3Output {
 // Pipeline request/response types
 export interface PipelineRequest {
   query: string;
+  destination?: string; // For trip suggestion mode
+  profileData?: any; // For personalization
   tripContext?: {
     tripId?: string;
     segmentId?: string;

@@ -17,17 +17,10 @@ import {
   Play,
   RotateCcw,
   Download,
-  User,
-  Mail,
-  MapPin as MapPinIcon,
-  Phone,
-  Heart,
-  Plane,
   Plus,
   Table2,
   GitBranch,
   Grid3X3,
-  Calendar,
 } from "lucide-react";
 import { PipelineResponse, MessageSegment } from "@/lib/types/place-pipeline";
 import { MessageSegmentsRenderer } from "@/components/message-segments-renderer";
@@ -79,7 +72,6 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
   const [stage1Open, setStage1Open] = useState(true);
   const [stage2Open, setStage2Open] = useState(false);
   const [stage3Open, setStage3Open] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   
   // Itinerary display state (copied from experience builder)
   const [viewMode, setViewMode] = useState<ViewMode>("timeline");
@@ -311,129 +303,7 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
             </p>
           </div>
 
-          {/* Profile Display (Logged-in users only) */}
-          {user && profileData && (
-            <Collapsible open={profileOpen} onOpenChange={setProfileOpen}>
-              <Card className="border-2 border-blue-100">
-                <CollapsibleTrigger className="w-full">
-                  <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {profileOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                        <div className="text-left">
-                          <CardTitle className="flex items-center gap-2">
-                            <User className="h-5 w-5 text-blue-600" />
-                            User Profile: {user.name}
-                          </CardTitle>
-                          <CardDescription className="flex items-center gap-3 mt-1">
-                            <Badge variant="secondary">{profileData.contacts.length} contacts</Badge>
-                            <Badge variant="secondary">{profileData.hobbies.length} hobbies</Badge>
-                            <Badge variant="secondary">{profileData.travelPreferences.length} preferences</Badge>
-                            <Badge variant="secondary">{profileData.relationships.length} relationships</Badge>
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="space-y-4 pt-4">
-                    {/* Personal Info */}
-                    <div>
-                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        Personal Info
-                      </h4>
-                      <div className="pl-6 space-y-1 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2"><Mail className="h-3 w-3" /> {user.email}</div>
-                        {profileData.profile?.city && (
-                          <div className="flex items-center gap-2">
-                            <MapPinIcon className="h-3 w-3" />
-                            {profileData.profile.city}{profileData.profile.country && `, ${profileData.profile.country}`}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Contacts */}
-                    {profileData.contacts.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                          <Phone className="h-4 w-4" />
-                          Contacts ({profileData.contacts.length})
-                        </h4>
-                        <div className="pl-6 space-y-1 text-sm text-muted-foreground">
-                          {profileData.contacts.slice(0, 3).map((contact: any, idx: number) => (
-                            <div key={idx}>
-                              {contact.contactType.label}: {contact.value}
-                              {contact.label && ` (${contact.label})`}
-                              {contact.isPrimary && <Badge variant="outline" className="ml-2 text-xs">Primary</Badge>}
-                            </div>
-                          ))}
-                          {profileData.contacts.length > 3 && (
-                            <div className="italic">+{profileData.contacts.length - 3} more</div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Hobbies */}
-                    {profileData.hobbies.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                          <Heart className="h-4 w-4" />
-                          Hobbies & Interests ({profileData.hobbies.length})
-                        </h4>
-                        <div className="pl-6 flex flex-wrap gap-2">
-                          {profileData.hobbies.map((hobby: any, idx: number) => (
-                            <Badge key={idx} variant="outline" className="text-xs">
-                              {hobby.hobby.name}
-                              {hobby.level && ` (${hobby.level})`}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Travel Preferences */}
-                    {profileData.travelPreferences.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                          <Plane className="h-4 w-4" />
-                          Travel Preferences ({profileData.travelPreferences.length})
-                        </h4>
-                        <div className="pl-6 space-y-1 text-sm text-muted-foreground">
-                          {profileData.travelPreferences.slice(0, 5).map((pref: any, idx: number) => (
-                            <div key={idx}>
-                              {pref.preferenceType.label}: {pref.option.label}
-                            </div>
-                          ))}
-                          {profileData.travelPreferences.length > 5 && (
-                            <div className="italic">+{profileData.travelPreferences.length - 5} more</div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Relationships */}
-                    {profileData.relationships.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2">Relationships ({profileData.relationships.length})</h4>
-                        <div className="pl-6 space-y-1 text-sm text-muted-foreground">
-                          {profileData.relationships.map((rel: any, idx: number) => (
-                            <div key={idx}>
-                              {rel.relationshipType}: {rel.relatedUser?.name || "Unknown"}
-                              {rel.nickname && ` (${rel.nickname})`}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
-          )}
+          {/* Profile and Trip Suggestions moved to /test/profile-suggestions */}
 
           {/* Input Section */}
           <Card>

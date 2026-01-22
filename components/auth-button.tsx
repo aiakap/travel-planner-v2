@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { login } from "@/lib/auth-actions";
 
 interface AuthButtonProps {
   isLoggedIn: boolean;
@@ -20,7 +19,7 @@ export default function AuthButton({
     if (isLoggedIn) {
       router.push("/trips");
     } else {
-      await login();
+      router.push("/login");
     }
   };
 

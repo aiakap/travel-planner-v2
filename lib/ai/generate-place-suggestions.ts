@@ -68,8 +68,25 @@ export async function generatePlaceSuggestions(
     segmentId?: string;
     location?: string;
     dateRange?: { start: Date; end: Date };
+  },
+  suggestionContext?: {
+    destination?: string;
+    profileData?: any;
   }
 ): Promise<Stage1Output> {
+  // If destination provided, use trip suggestion generator
+  if (suggestionContext?.destination) {
+    const { generateSingleTripSuggestion } = await import("./generate-single-trip-suggestion");
+    const result = await generateSingleTripSuggestion(
+      suggestionContext.destination,
+      suggestionContext.profileData
+    );
+    return {
+      text: result.text,
+      places: result.places,
+      tripSuggestion: result.tripSuggestion,
+    };
+  }
   // Build context for the AI
   let contextPrompt = "";
   if (tripContext?.location) {

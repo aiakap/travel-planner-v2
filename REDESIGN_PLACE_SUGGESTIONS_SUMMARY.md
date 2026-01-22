@@ -4,10 +4,7 @@
 
 ### How Place Suggestions Work Today
 
-1. **AI Tool Call**
-   - AI uses `suggest_place` tool from `lib/ai/tools.ts`
-   - Returns structured data: `{ placeName, category, type, context }`
-   - Tool is mandatory - AI must call it for every place mentioned
+
 
 2. **Chat Display**
    - File: `components/chat-interface.tsx`

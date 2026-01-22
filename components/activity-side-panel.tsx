@@ -21,11 +21,12 @@ import {
   detectLocation,
   type AnonymousActivity,
 } from "@/lib/anonymous-tracking";
-import { login } from "@/lib/auth-actions";
+import { useRouter } from "next/navigation";
 
 export function ActivitySidePanel() {
   const [activity, setActivity] = useState<AnonymousActivity | null>(null);
   const [sessionDuration, setSessionDuration] = useState(0);
+  const router = useRouter();
 
   useEffect(() => {
     // Initial load
@@ -57,8 +58,8 @@ export function ActivitySidePanel() {
     }
   };
 
-  const handleLogin = async () => {
-    await login("/test/place-pipeline");
+  const handleLogin = () => {
+    router.push("/login?callbackUrl=/test/place-pipeline");
   };
 
   if (!activity) return null;

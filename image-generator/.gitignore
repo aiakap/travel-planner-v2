@@ -1,0 +1,19 @@
+# Environment variables
+.env
+.env.local
+
+# Generated images
+output/*.png
+output/*.jpg
+output/*.jpeg
+
+# Logs
+logs/queue.json
+logs/api-calls.jsonl
+
+# Dependencies
+node_modules/
+
+# Build
+.next/
+dist/

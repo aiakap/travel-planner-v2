@@ -19,7 +19,7 @@ export const maxDuration = 60; // Allow up to 60 seconds for the pipeline
 export async function POST(req: NextRequest) {
   try {
     const body: PipelineRequest = await req.json();
-    const { query, tripContext, stages } = body;
+    const { query, destination, profileData, tripContext, stages } = body;
 
     if (!query) {
       return NextResponse.json(
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       console.log("\n📍 STAGE 1: AI Generation");
       
       try {
-        const stage1Output = await generatePlaceSuggestions(query, tripContext);
+        const stage1Output = await generatePlaceSuggestions(query, tripContext, { destination, profileData });
         const stage1Timing = Date.now() - stage1Start;
         
         response.data!.stage1 = {

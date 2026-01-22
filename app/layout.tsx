@@ -23,7 +23,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Bespoke | Experiences Crafted for You",
+  title: "Ntourage Travel | Experiences Crafted for You",
   description: "Personalized travel experiences curated by experts and shaped by your community",
 };
 

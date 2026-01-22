@@ -1,5 +1,5 @@
 /**
- * Bespoke Theme Configuration
+ * Ntourage Travel Theme Configuration
  * 
  * Provides persona-based theme settings for luxury vs adventure travelers
  */
