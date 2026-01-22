@@ -25,7 +25,7 @@ const providers = [
 
 export function LoginClient({ callbackUrl, error }: LoginClientProps) {
   const handleSignIn = async (providerId: string) => {
-    await signIn(providerId, { callbackUrl: callbackUrl || "/trips" });
+    await signIn(providerId, { callbackUrl: callbackUrl || "/manage" });
   };
   
   return (

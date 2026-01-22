@@ -1,8 +1,42 @@
 "use server";
 
 import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
+import { generateObject } from "ai";
+import { z } from "zod";
 import { PlaceSuggestion } from "@/lib/types/place-pipeline";
+
+// Zod schema for structured output
+const TripSuggestionWithPlacesSchema = z.object({
+  text: z.string().describe("Natural language trip description (2-3 paragraphs)"),
+  places: z.array(z.object({
+    suggestedName: z.string().describe("Exact place name"),
+    category: z.enum(["Stay", "Eat", "Do", "Transport"]),
+    type: z.string().describe("Specific type like Hotel, Restaurant, Museum"),
+    searchQuery: z.string().describe("Optimized Google Places search query"),
+  })),
+  tripSuggestion: z.object({
+    title: z.string(),
+    destination: z.string(),
+    duration: z.string(),
+    description: z.string(),
+    why: z.string(),
+    highlights: z.array(z.string()),
+    estimatedBudget: z.string(),
+    bestTimeToVisit: z.string(),
+    combinedInterests: z.array(z.string()),
+    tripType: z.enum(["local_experience", "road_trip", "single_destination", "multi_destination"]),
+    transportMode: z.string(),
+    imageQuery: z.string(),
+    destinationKeywords: z.array(z.string()),
+    destinationLat: z.number(),
+    destinationLng: z.number(),
+    keyLocations: z.array(z.object({
+      name: z.string(),
+      lat: z.number(),
+      lng: z.number(),
+    })),
+  }),
+});
 
 // Trip suggestion metadata schema (kept for map/card display)
 export interface AITripSuggestion {
@@ -44,13 +78,22 @@ export async function generateSingleTripSuggestion(
   // Build profile summary for AI (if available)
   let profileContext = "";
   if (profileData) {
-    const hobbiesList = profileData.hobbies.map(h => h.hobby.name).join(", ");
+    console.log("🔍 [Profile Data] Checking profile data structure...");
+    console.log("   Has hobbies:", !!profileData.hobbies);
+    console.log("   Has preferences:", !!profileData.preferences);
+    console.log("   Has relationships:", !!profileData.relationships);
+    
+    const hobbiesList = profileData.hobbies?.map(h => h.hobby.name).join(", ") || "";
     const preferencesList = profileData.preferences
-      .map(p => `${p.preferenceType.name}: ${p.option.label}`)
-      .join("; ");
+      ?.map(p => `${p.preferenceType.name}: ${p.option.label}`)
+      .join("; ") || "";
     const relationshipsList = profileData.relationships
-      .map(r => `${r.relationshipType}${r.nickname ? ` (${r.nickname})` : ""}`)
-      .join(", ");
+      ?.map(r => `${r.relationshipType}${r.nickname ? ` (${r.nickname})` : ""}`)
+      .join(", ") || "";
+    
+    console.log("   Hobbies count:", profileData.hobbies?.length || 0);
+    console.log("   Preferences count:", profileData.preferences?.length || 0);
+    console.log("   Relationships count:", profileData.relationships?.length || 0);
     
     profileContext = `
 **Traveler Profile**:
@@ -143,33 +186,20 @@ Example output structure:
   }
 }`;
 
-  const result = await generateText({
+  console.log("🤖 [Stage 1] Generating trip suggestion with AI");
+  console.log("   Destination:", destination);
+  console.log("   Has profile data:", !!profileData);
+
+  const result = await generateObject({
     model: openai("gpt-4o"),
-    messages: [
-      {
-        role: "system",
-        content: "You are a travel planning assistant. You MUST respond with valid JSON only, no other text.",
-      },
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
+    schema: TripSuggestionWithPlacesSchema,
+    prompt: prompt,
     temperature: 0.7,
   });
 
-  // Parse the JSON response
-  try {
-    const parsed = JSON.parse(result.text);
-    
-    // Validate structure
-    if (!parsed.text || !parsed.places || !parsed.tripSuggestion) {
-      throw new Error("Missing required fields in AI response");
-    }
+  console.log("✅ [Stage 1] Structured response received");
+  console.log("   Places count:", result.object.places.length);
+  console.log("   Place names:", result.object.places.map(p => p.suggestedName));
 
-    return parsed as TripSuggestionWithPlaces;
-  } catch (error) {
-    console.error("Failed to parse AI response:", result.text);
-    throw new Error(`AI returned invalid JSON: ${error instanceof Error ? error.message : "Unknown error"}`);
-  }
+  return result.object;
 }

@@ -12,7 +12,7 @@ export default async function LoginPage({
   
   // Already logged in
   if (session?.user) {
-    redirect(params.callbackUrl || "/trips");
+    redirect(params.callbackUrl || "/manage");
   }
   
   return (

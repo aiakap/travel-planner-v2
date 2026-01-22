@@ -12,5 +12,5 @@ export const logout = async () => {
 
 // Login with specific provider
 export const loginWithProvider = async (provider: string, callbackUrl?: string) => {
-  await signIn(provider, { redirectTo: callbackUrl || "/trips" });
+  await signIn(provider, { redirectTo: callbackUrl || "/manage" });
 };

@@ -52,5 +52,5 @@ export async function createTrip(formData: FormData) {
     }
   }
 
-  redirect("/trips");
+  redirect("/manage");
 }

@@ -17,7 +17,7 @@ export default function AuthButton({
 
   const handleClick = async () => {
     if (isLoggedIn) {
-      router.push("/trips");
+      router.push("/manage");
     } else {
       router.push("/login");
     }

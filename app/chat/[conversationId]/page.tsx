@@ -47,7 +47,7 @@ export default async function ConversationPage({
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/trips">
+          <Link href="/manage">
             <Button variant="outline" size="sm">
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back

@@ -29,7 +29,6 @@ export async function deleteTrip(tripId: string) {
     where: { id: tripId },
   });
 
-  revalidatePath("/trips");
   revalidatePath("/manage");
   
   return { success: true };

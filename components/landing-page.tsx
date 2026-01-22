@@ -221,7 +221,7 @@ export default function LandingPage() {
             <div>
               <h3 className="font-display font-bold mb-4">Product</h3>
               <ul className="space-y-2 text-sm text-white/60">
-                <li><Link href="/trips" className="hover:text-white transition-smooth">My Trips</Link></li>
+                <li><Link href="/manage" className="hover:text-white transition-smooth">My Trips</Link></li>
                 <li><Link href="/globe" className="hover:text-white transition-smooth">Explore Globe</Link></li>
                 <li><Link href="/chat" className="hover:text-white transition-smooth">AI Chat</Link></li>
               </ul>

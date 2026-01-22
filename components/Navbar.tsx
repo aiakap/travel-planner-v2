@@ -1,20 +1,17 @@
 "use client";
 
 import { Session } from "next-auth";
-import { signOut } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { AuthStatusIndicator } from "@/components/auth-status-indicator";
+import { UserMenu } from "@/components/user-menu";
+import { TestMenu } from "@/components/test-menu";
 
 interface NavbarProps {
   session: Session | null;
 }
 
 export default function Navbar({ session }: NavbarProps) {
-  const handleSignOut = async () => {
-    await signOut({ callbackUrl: "/" });
-  };
-
   return (
     <>
       <AuthStatusIndicator />
@@ -34,30 +31,6 @@ export default function Navbar({ session }: NavbarProps) {
           {session ? (
             <>
               <Link
-                href={"/trips"}
-                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
-              >
-                My Trips
-              </Link>
-              <Link
-                href={"/test/place-pipeline"}
-                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
-              >
-                Test Chat
-              </Link>
-              <Link
-                href={"/test/profile-suggestions"}
-                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
-              >
-                Suggestions
-              </Link>
-              <Link
-                href={"/test/simple-suggestion"}
-                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
-              >
-                Simple Test
-              </Link>
-              <Link
                 href={"/experience-builder"}
                 className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
               >
@@ -75,25 +48,9 @@ export default function Navbar({ session }: NavbarProps) {
               >
                 Globe
               </Link>
-              <Link
-                href={"/profile"}
-                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
-              >
-                Profile
-              </Link>
-              <Link
-                href={"/settings/accounts"}
-                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
-              >
-                Accounts
-              </Link>
 
-              <button
-                className="px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-smooth hover:shadow-md"
-                onClick={handleSignOut}
-              >
-                Sign Out
-              </button>
+              <TestMenu />
+              <UserMenu />
             </>
           ) : (
             <Link

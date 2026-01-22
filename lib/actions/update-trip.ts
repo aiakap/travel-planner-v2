@@ -71,7 +71,7 @@ export async function updateTrip(tripId: string, formData: FormData) {
     }
   }
 
-  redirect("/trips");
+  redirect("/manage");
 }
 
 export async function renameTrip(tripId: string, newTitle: string) {

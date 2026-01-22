@@ -21,9 +21,9 @@ export default async function AuthLandingPage({
   const suggestionId = params.suggestion;
   const pendingSuggestion = await getPendingSuggestion(suggestionId);
 
-  // No suggestion found - redirect to trips
+  // No suggestion found - redirect to manage
   if (!pendingSuggestion) {
-    redirect("/trips");
+    redirect("/manage");
   }
 
   return (

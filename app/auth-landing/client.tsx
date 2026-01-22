@@ -70,7 +70,7 @@ export function AuthLandingClient({ suggestion, suggestionId }: AuthLandingClien
     if (suggestionId) {
       await clearPendingSuggestion();
     }
-    router.push("/trips");
+    router.push("/manage");
   };
 
   const handleTripCreated = (tripId: string) => {
@@ -89,7 +89,7 @@ export function AuthLandingClient({ suggestion, suggestionId }: AuthLandingClien
     if (newTripId) {
       router.push(`/trips/${newTripId}`);
     } else {
-      router.push("/trips");
+      router.push("/manage");
     }
   };
 

@@ -163,7 +163,7 @@ export default async function ReturningUserPage() {
                 Plan a New Trip
               </Button>
             </Link>
-            <Link href="/trips">
+            <Link href="/manage">
               <Button className="w-full justify-start" variant="outline" size="lg">
                 <Calendar className="w-4 h-4 mr-2" />
                 View All Trips

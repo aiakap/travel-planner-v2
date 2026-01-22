@@ -598,10 +598,10 @@ export default function ManageClient({
             </p>
           </div>
           <div className="flex gap-3">
-            <Link href="/trips">
+            <Link href="/">
               <Button variant="outline">
                 <ExternalLink className="h-4 w-4 mr-2" />
-                Dashboard
+                Home
               </Button>
             </Link>
             <Link href="/trips/new">

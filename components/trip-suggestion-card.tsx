@@ -89,9 +89,6 @@ export function TripSuggestionCard({ suggestion, imageUrl, onClick }: TripSugges
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
             />
-            {imageLoaded && (
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-            )}
           </>
         )}
         
@@ -104,17 +101,15 @@ export function TripSuggestionCard({ suggestion, imageUrl, onClick }: TripSugges
         
         {/* Trip Type Badge */}
         {getTripTypeBadge()}
-        
-        {/* Title Overlay - always show */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent">
-          <h3 className="text-lg font-bold text-white line-clamp-2 drop-shadow-lg">
-            {suggestion.title}
-          </h3>
-        </div>
       </div>
 
       {/* Content Section */}
       <div className="p-4 space-y-3">
+        {/* Title - moved here from overlay */}
+        <h3 className="text-lg font-bold text-slate-800 line-clamp-2">
+          {suggestion.title}
+        </h3>
+        
         {/* Quick Info */}
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
           <span className="flex items-center gap-1">
