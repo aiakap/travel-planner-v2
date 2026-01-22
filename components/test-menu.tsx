@@ -21,10 +21,10 @@ export function TestMenu() {
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem asChild>
           <Link
-            href="/demo"
+            href="/demo/amadeus"
             className="cursor-pointer"
           >
-            Demo
+            Amadeus + Maps Demo
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
@@ -33,6 +33,14 @@ export function TestMenu() {
             className="cursor-pointer"
           >
             Test Chat
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link
+            href="/test/exp"
+            className="cursor-pointer"
+          >
+            EXP
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
@@ -49,14 +57,6 @@ export function TestMenu() {
             className="cursor-pointer"
           >
             Simple Test
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link
-            href="/test/flight-search"
-            className="cursor-pointer"
-          >
-            Flight Search
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

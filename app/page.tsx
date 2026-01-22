@@ -41,7 +41,15 @@ async function getTimeZoneForCoordinates(
 }
 
 export default async function HomePage() {
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/page.tsx:43',message:'HomePage function entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+  
   const session = await auth();
+
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/page.tsx:48',message:'Session retrieved',data:{hasSession:!!session,hasUserId:!!session?.user?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
 
   // If not logged in, show marketing landing page
   if (!session?.user?.id) {
@@ -151,6 +159,10 @@ export default async function HomePage() {
   }
 
   const userName = session.user.name?.split(" ")[0] || "Traveler";
+
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/page.tsx:156',message:'About to render DashboardPage',data:{tripsCount:trips.length,userName,hasStats:!!stats},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1,H4'})}).catch(()=>{});
+  // #endregion
 
   return (
     <DashboardPage

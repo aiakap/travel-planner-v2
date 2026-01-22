@@ -1,5 +1,11 @@
 "use client";
 
+// #region agent log
+if (typeof window !== 'undefined') {
+  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dashboard-page.tsx:1',message:'DashboardPage module loading',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1,H4'})}).catch(()=>{});
+}
+// #endregion
+
 import {
   Trip,
   Segment,
@@ -54,12 +60,24 @@ export function DashboardPage({
   userName,
   segmentTimeZones,
 }: DashboardPageProps) {
+  // #region agent log
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dashboard-page.tsx:51',message:'DashboardPage component rendering',data:{tripsCount:trips.length,userName},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1,H4'})}).catch(()=>{});
+  }
+  // #endregion
+  
   // Find all upcoming trips sorted by date
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const upcomingTrips = trips
     .filter((trip) => new Date(trip.startDate) >= today)
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+  // #region agent log
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dashboard-page.tsx:64',message:'About to return JSX',data:{upcomingTripsCount:upcomingTrips.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1,H4'})}).catch(()=>{});
+  }
+  // #endregion
 
   return (
     <div className="min-h-screen bg-white">
