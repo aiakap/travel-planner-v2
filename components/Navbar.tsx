@@ -15,15 +15,15 @@ export default function Navbar({ session }: NavbarProps) {
   return (
     <>
       <AuthStatusIndicator />
-      <nav className="bg-white backdrop-blur-sm shadow-sm py-4 border-b border-slate-200 sticky top-0 z-50 transition-smooth">
+      <nav className="backdrop-blur-sm shadow-sm py-3 border-b border-slate-200 sticky top-0 z-50 transition-smooth" style={{ backgroundColor: '#F4F4F3' }}>
         <div className="container mx-auto flex justify-between items-center px-6 lg:px-8">
         <Link href={"/"} className="hover:opacity-80 transition-smooth">
           <Image 
-            src="/logo.png" 
+            src="/ntourage-logo.png" 
             alt="Ntourage Travel" 
-            width={120} 
-            height={120}
-            className="object-contain"
+            width={1024} 
+            height={214}
+            className="object-contain h-[60px] w-auto"
           />
         </Link>
 
@@ -31,7 +31,7 @@ export default function Navbar({ session }: NavbarProps) {
           {session ? (
             <>
               <Link
-                href={"/experience-builder"}
+                href={"/exp"}
                 className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
               >
                 Experience Builder
@@ -41,12 +41,6 @@ export default function Navbar({ session }: NavbarProps) {
                 className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
               >
                 Manage
-              </Link>
-              <Link
-                href={"/globe"}
-                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
-              >
-                Globe
               </Link>
               <Link
                 href={"/suggestions"}

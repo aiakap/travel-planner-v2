@@ -39,6 +39,54 @@ async function geocodeLocation(location: string): Promise<{
 
 export function createTripPlanningTools(userId: string, conversationId?: string) {
   return {
+    update_in_memory_trip: tool({
+      description: "Update the trip metadata in memory (not database). Use this to populate trip details from conversation. This updates the UI immediately without creating database records.",
+      inputSchema: z.object({
+        title: z.string().optional().describe("Trip title"),
+        description: z.string().optional().describe("Trip description"),
+        startDate: z.string().optional().describe("Start date in YYYY-MM-DD format"),
+        endDate: z.string().optional().describe("End date in YYYY-MM-DD format"),
+      }),
+      execute: async ({ title, description, startDate, endDate }) => {
+        return {
+          success: true,
+          updateType: "trip_metadata",
+          updates: { title, description, startDate, endDate },
+          message: "Trip metadata updated in memory",
+        };
+      },
+    }),
+
+    add_in_memory_segment: tool({
+      description: "Add a segment/part to the in-memory trip (not database). User can create segments immediately, even before trip metadata is complete. Each segment represents a destination or travel leg.",
+      inputSchema: z.object({
+        name: z.string().describe("Segment name (e.g., 'Stay in Tokyo', 'Train to Kyoto')"),
+        segmentType: z.enum(["Flight", "Drive", "Train", "Ferry", "Walk", "Other"]).describe("Type of segment"),
+        startLocation: z.string().describe("Starting location (city, country)"),
+        endLocation: z.string().describe("Ending location (city, country)"),
+        startTime: z.string().optional().describe("Start date/time in ISO format"),
+        endTime: z.string().optional().describe("End date/time in ISO format"),
+        notes: z.string().optional().describe("Additional notes"),
+      }),
+      execute: async ({ name, segmentType, startLocation, endLocation, startTime, endTime, notes }) => {
+        return {
+          success: true,
+          updateType: "add_segment",
+          segment: {
+            tempId: `temp-${Date.now()}-${Math.random()}`,
+            name,
+            segmentType,
+            startLocation,
+            endLocation,
+            startTime: startTime || null,
+            endTime: endTime || null,
+            notes: notes || null,
+          },
+          message: `Added segment: ${name}`,
+        };
+      },
+    }),
+
     suggest_place: tool({
       description:
         "🚨 MANDATORY: You MUST call this tool for EVERY SINGLE place name you mention. If you mention 'Hotel Pulitzer Amsterdam' or 'The Dylan Amsterdam', you MUST call this tool for EACH ONE. Suggest a place (restaurant, hotel, activity, etc.) to the user. This creates an interactive suggestion that the user can click to see details and add to their itinerary. Use this instead of suggest_reservation when making recommendations. DO NOT SKIP THIS TOOL.",

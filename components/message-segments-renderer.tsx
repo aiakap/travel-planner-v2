@@ -3,10 +3,10 @@
 import { MapPin } from "lucide-react";
 import { MessageSegment, PlaceSuggestion, GooglePlaceData } from "@/lib/types/place-pipeline";
 import { PlaceHoverCard } from "@/components/place-hover-card";
-import { TripCard } from "@/app/test/exp/components/trip-card";
-import { SegmentCard } from "@/app/test/exp/components/segment-card";
-import { ReservationCard } from "@/app/test/exp/components/reservation-card";
-import { ContextCard } from "@/app/test/exp/components/context-card";
+import { TripCard } from "@/app/exp/components/trip-card";
+import { SegmentCard } from "@/app/exp/components/segment-card";
+import { ReservationCard } from "@/app/exp/components/reservation-card";
+import { ContextCard } from "@/app/exp/components/context-card";
 
 interface MessageSegmentsRendererProps {
   segments: MessageSegment[];

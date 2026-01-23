@@ -1,6 +1,7 @@
 "use client";
 
-import { FlaskConical } from "lucide-react";
+import { useState } from "react";
+import { FlaskConical, Globe } from "lucide-react";
 import Link from "next/link";
 import {
   DropdownMenu,
@@ -10,15 +11,46 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function TestMenu() {
+  const [open, setOpen] = useState(false);
+  let closeTimer: NodeJS.Timeout;
+
+  const handleMouseEnter = () => {
+    clearTimeout(closeTimer);
+    setOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    closeTimer = setTimeout(() => {
+      setOpen(false);
+    }, 150);
+  };
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-smooth focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
-          <FlaskConical className="w-4 h-4" />
-          <span>Test</span>
+        <button 
+          className="flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition-smooth focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <FlaskConical className="w-5 h-5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent 
+        align="end" 
+        className="w-48"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <DropdownMenuItem asChild>
+          <Link
+            href="/globe"
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <Globe className="w-4 h-4" />
+            <span>Globe</span>
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link
             href="/demo/amadeus"
@@ -37,10 +69,10 @@ export function TestMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link
-            href="/test/exp"
+            href="/test/experience-builder"
             className="cursor-pointer"
           >
-            EXP
+            Experience Builder (Old)
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

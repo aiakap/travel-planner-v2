@@ -272,7 +272,7 @@ export function ExperienceBuilderClient({
         if (tripResult && tripResult?.result?.tripId) {
           // Trip was created, navigate to it with the trip ID
           setTimeout(() => {
-            window.location.href = `/experience-builder?tripId=${tripResult.result.tripId}`;
+            window.location.href = `/test/experience-builder?tripId=${tripResult.result.tripId}`;
           }, 1500); // Small delay to ensure DB updates are complete
         }
       }
@@ -378,8 +378,8 @@ export function ExperienceBuilderClient({
           console.log("✅ [Refetch] Selected trip ID set to:", newestTrip.id)
           
           // Update URL without reload
-          window.history.pushState({}, '', `/experience-builder?tripId=${newestTrip.id}`)
-          console.log("✅ [Refetch] URL updated to:", `/experience-builder?tripId=${newestTrip.id}`)
+          window.history.pushState({}, '', `/test/experience-builder?tripId=${newestTrip.id}`)
+          console.log("✅ [Refetch] URL updated to:", `/test/experience-builder?tripId=${newestTrip.id}`)
           
           // Fetch conversations for the new trip
           console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)
@@ -681,7 +681,7 @@ What would you like to change about this plan, or should I create it as is?`;
   const handleTripSelect = async (tripId: string | null) => {
     if (tripId) {
       // Navigate to trip with URL parameter
-      window.location.href = `/experience-builder?tripId=${tripId}`
+      window.location.href = `/test/experience-builder?tripId=${tripId}`
     } else {
       // Create a new conversation for a new trip
       try {
@@ -696,11 +696,11 @@ What would you like to change about this plan, or should I create it as is?`;
         setHasStartedPlanning(false)
         
         // Navigate to new conversation
-        window.location.href = `/experience-builder`
+        window.location.href = `/test/experience-builder`
       } catch (error) {
         console.error("Error creating new conversation:", error)
         // Fallback to simple navigation
-        window.location.href = `/experience-builder`
+        window.location.href = `/test/experience-builder`
       }
     }
   }

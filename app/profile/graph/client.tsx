@@ -16,7 +16,7 @@ import { ClearAllModal } from "@/components/clear-all-modal";
 import { ConversationalMessage } from "@/components/conversational-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Download, Trash2, MessageCircle, User, Network, FileText, GripVertical, Loader2, Send, BookOpen } from "lucide-react";
+import { Trash2, MessageCircle, Network, FileText, GripVertical, Loader2, Send, BookOpen, MapPin, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PendingSuggestion, InlineSuggestion, GraphCategory } from "@/lib/types/profile-graph";
@@ -462,21 +462,6 @@ export function ProfileGraphClient({
     console.log("Nodes changed:", nodes.length);
   };
 
-  // Handle download XML
-  const handleDownloadXml = () => {
-    if (!xmlData) return;
-    
-    const blob = new Blob([xmlData], { type: "application/xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `profile-graph-${new Date().toISOString().split("T")[0]}.xml`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   // Handle clear graph - show confirmation modal
   const handleClearGraph = () => {
     setClearAllModal(true);
@@ -576,16 +561,12 @@ export function ProfileGraphClient({
       <div className="flex flex-col h-full border-r bg-white overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
         {/* Fixed Header */}
         <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
-          <div className="flex items-center gap-3 w-full">
-            <Link href="/profile">
-              <Button variant="ghost" size="sm" className="h-8">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
-            <span className="text-sm font-medium text-slate-700">Chat:</span>
-            <span className="text-sm text-slate-600">Tell me anything, I'll update your profile</span>
+          <div className="flex flex-col w-full">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
+              <span className="text-base font-semibold text-slate-900">Profile Intake</span>
+            </div>
+            <span className="text-xs text-slate-600 ml-7">Share your travel preferences and we'll build your profile</span>
           </div>
         </div>
 
@@ -693,9 +674,12 @@ export function ProfileGraphClient({
       <div className="flex flex-col overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
         {/* Right Header */}
         <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <User className="h-5 w-5 text-slate-700" />
-            <span className="text-sm font-medium text-slate-700">Traveler Briefing</span>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-slate-700" />
+              <span className="text-base font-semibold text-slate-900">Dossier</span>
+            </div>
+            <span className="text-xs text-slate-600 ml-7">Your comprehensive traveler profile</span>
           </div>
           
           <div className="flex items-center gap-3">
@@ -731,16 +715,26 @@ export function ProfileGraphClient({
             </div>
             
             {/* Actions */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadXml}
-              disabled={!xmlData}
-              className="h-8"
-            >
-              <Download className="w-3 h-3 mr-1" />
-              Export
-            </Button>
+            <Link href="/trips/new">
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 bg-blue-600 hover:bg-blue-700"
+              >
+                <MapPin className="w-3 h-3 mr-1" />
+                Plan a Trip
+              </Button>
+            </Link>
+            <Link href="/suggestions">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+              >
+                <Sparkles className="w-3 h-3 mr-1" />
+                Trip Suggestions
+              </Button>
+            </Link>
             <Button
               variant="outline"
               size="sm"

@@ -273,8 +273,8 @@ export function ExpClient({
           console.log("✅ [Refetch] Selected trip ID set to:", newestTrip.id)
           
           // Update URL without reload
-          window.history.pushState({}, '', `/test/exp?tripId=${newestTrip.id}`)
-          console.log("✅ [Refetch] URL updated to:", `/test/exp?tripId=${newestTrip.id}`)
+          window.history.pushState({}, '', `/exp?tripId=${newestTrip.id}`)
+          console.log("✅ [Refetch] URL updated to:", `/exp?tripId=${newestTrip.id}`)
           
           // Fetch conversations for the new trip
           console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)
@@ -431,7 +431,7 @@ What would you like to change about this plan, or should I create it as is?`;
   const handleTripSelect = async (tripId: string | null) => {
     if (tripId) {
       // Navigate to trip with URL parameter
-      window.location.href = `/test/exp?tripId=${tripId}`
+      window.location.href = `/exp?tripId=${tripId}`
     } else {
       // Create a new conversation for a new trip
       try {
@@ -446,11 +446,11 @@ What would you like to change about this plan, or should I create it as is?`;
         setHasStartedPlanning(false)
         
         // Navigate to new conversation
-        window.location.href = `/test/exp`
+        window.location.href = `/exp`
       } catch (error) {
         console.error("Error creating new conversation:", error)
         // Fallback to simple navigation
-        window.location.href = `/test/exp`
+        window.location.href = `/exp`
       }
     }
   }

@@ -7,7 +7,7 @@ import { MessageSegment } from "@/lib/types/place-pipeline";
 import { prisma } from "@/lib/prisma";
 import { parseIntentFromResponse } from "@/lib/ai/parse-intent";
 import { createFullItinerary } from "@/lib/actions/create-full-itinerary";
-import { parseCardsFromText } from "@/app/test/exp/lib/parse-card-syntax";
+import { parseCardsFromText } from "@/app/exp/lib/parse-card-syntax";
 
 export const maxDuration = 60;
 
