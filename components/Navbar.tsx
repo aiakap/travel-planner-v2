@@ -48,6 +48,12 @@ export default function Navbar({ session }: NavbarProps) {
               >
                 Globe
               </Link>
+              <Link
+                href={"/suggestions"}
+                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
+              >
+                Suggestions
+              </Link>
 
               <TestMenu />
               <UserMenu />

@@ -33,7 +33,12 @@ export async function generateAITripSuggestions(profileData: {
   hobbies: Array<{ hobby: { name: string; category: string | null } }>;
   preferences: Array<{ preferenceType: { name: string }; option: { value: string; label: string } }>;
   relationships: Array<{ relationshipType: string; nickname: string | null }>;
-  profile: { city: string | null; country: string | null } | null;
+  profile: { 
+    name: string | null;
+    dateOfBirth: Date | string | null;
+    city: string | null; 
+    country: string | null;
+  } | null;
 }): Promise<AITripSuggestion[]> {
   
   // Build profile summary for AI
@@ -47,9 +52,21 @@ export async function generateAITripSuggestions(profileData: {
   const location = profileData.profile?.city 
     ? `${profileData.profile.city}${profileData.profile.country ? `, ${profileData.profile.country}` : ""}`
     : "Unknown";
+  
+  // Calculate age from date of birth if available
+  let ageInfo = "";
+  if (profileData.profile?.dateOfBirth) {
+    const dob = new Date(profileData.profile.dateOfBirth);
+    const today = new Date();
+    const age = today.getFullYear() - dob.getFullYear();
+    ageInfo = ` (Age: ${age})`;
+  }
+  
+  const travelerName = profileData.profile?.name || "Traveler";
 
   const prompt = `Generate 4 DIVERSE personalized trip suggestions for this traveler:
 
+**Traveler**: ${travelerName}${ageInfo}
 **Hobbies/Interests**: ${hobbiesList || "None specified"}
 **Travel Preferences**: ${preferencesList || "None specified"}
 **Traveling with**: ${relationshipsList || "Solo"}

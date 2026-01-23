@@ -48,7 +48,7 @@ export function TestMenu() {
             href="/test/profile-suggestions"
             className="cursor-pointer"
           >
-            Suggestions
+            Suggestions Old
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

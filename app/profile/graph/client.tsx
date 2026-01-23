@@ -379,20 +379,43 @@ export function ProfileGraphClient({
     }
   };
 
-  // Handle node deletion - show confirmation modal
-  const handleNodeDelete = (nodeId: string) => {
+  // Handle node deletion - delete immediately without confirmation
+  const handleNodeDelete = async (nodeId: string) => {
     const node = graphData.nodes.find(n => n.id === nodeId);
     if (!node) return;
     
-    setDeleteModal({
-      isOpen: true,
-      nodeId: nodeId,
-      nodeName: node.value || node.label,
-      nodeType: node.type as 'item' | 'subnode' | 'category',
-      category: node.category,
-      subcategory: node.metadata?.subcategory,
-      value: node.value
-    });
+    try {
+      const response = await fetch("/api/profile-graph/delete-item", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          nodeId: nodeId,
+          category: node.category,
+          subcategory: node.metadata?.subcategory,
+          value: node.value
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete item");
+      }
+
+      const data = await response.json();
+
+      // Update graph with item removed
+      if (data.graphData) {
+        setGraphData(data.graphData);
+      }
+      if (data.xmlData) {
+        setXmlData(data.xmlData);
+      }
+
+      console.log("✅ Item deleted from profile");
+    } catch (error) {
+      console.error("Error deleting item:", error);
+    }
   };
 
   // Confirm node deletion

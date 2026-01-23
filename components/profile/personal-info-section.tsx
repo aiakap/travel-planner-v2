@@ -54,31 +54,31 @@ export function PersonalInfoSection({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Personal Information</h2>
+        <h2 className="text-xl font-semibold">Personal Information</h2>
         {!isEditing && (
-          <Button onClick={() => setIsEditing(true)} variant="outline">
+          <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
             Edit
           </Button>
         )}
       </div>
 
-      <div className="flex items-center gap-4 pb-4 border-b">
+      <div className="flex items-center gap-3 pb-3 border-b">
         {userImage ? (
-          <img src={userImage} alt={userName} className="w-16 h-16 rounded-full" />
+          <img src={userImage} alt={userName} className="w-12 h-12 rounded-full" />
         ) : (
-          <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
-            <User className="w-8 h-8 text-gray-500" />
+          <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+            <User className="w-6 h-6 text-gray-500" />
           </div>
         )}
         <div>
-          <div className="text-lg font-semibold">{userName}</div>
-          <div className="text-sm text-gray-500">{userEmail}</div>
+          <div className="font-semibold">{userName}</div>
+          <div className="text-xs text-gray-500">{userEmail}</div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="firstName">First Name</Label>
@@ -145,13 +145,14 @@ export function PersonalInfoSection({
         </div>
 
         {isEditing && (
-          <div className="flex gap-2 pt-4">
-            <Button type="submit" disabled={loading}>
-              {loading ? "Saving..." : "Save Changes"}
+          <div className="flex gap-2 pt-2">
+            <Button type="submit" disabled={loading} size="sm">
+              {loading ? "Saving..." : "Save"}
             </Button>
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => {
                 setIsEditing(false);
                 setFormData({

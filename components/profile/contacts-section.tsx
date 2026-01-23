@@ -63,17 +63,17 @@ export function ContactsSection({ initialContacts, contactTypes }: ContactsSecti
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Contact Information</h2>
+        <h2 className="text-xl font-semibold">Contact Information</h2>
         <Button onClick={() => setIsAdding(true)} size="sm">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Contact
+          <Plus className="w-4 h-4 mr-1" />
+          Add
         </Button>
       </div>
 
       {isAdding && (
-        <div className="p-4 border rounded-lg space-y-4 bg-gray-50">
+        <div className="p-3 border rounded-lg space-y-3 bg-gray-50">
           <div className="space-y-2">
             <Label>Contact Type</Label>
             <Select value={newContact.contactTypeId} onValueChange={(value) => setNewContact({ ...newContact, contactTypeId: value })}>
@@ -117,20 +117,20 @@ export function ContactsSection({ initialContacts, contactTypes }: ContactsSecti
 
       <div className="space-y-2">
         {contacts.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No contacts added yet.</p>
+          <p className="text-gray-500 text-center py-4 text-sm">No contacts added yet.</p>
         ) : (
           contacts.map((contact) => (
-            <div key={contact.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-              <div className="flex items-center gap-3">
+            <div key={contact.id} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleTogglePrimary(contact.id, contact.isPrimary)}
                   className="hover:scale-110 transition-transform"
                 >
-                  <Star className={`w-4 h-4 ${contact.isPrimary ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                  <Star className={`w-3.5 h-3.5 ${contact.isPrimary ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
                 </button>
                 <div>
-                  <div className="font-medium">{contact.contactType.label}</div>
-                  <div className="text-sm text-gray-600">{contact.value}</div>
+                  <div className="text-sm font-medium">{contact.contactType.label}</div>
+                  <div className="text-xs text-gray-600">{contact.value}</div>
                   {contact.label && (
                     <div className="text-xs text-gray-500">{contact.label}</div>
                   )}
@@ -141,7 +141,7 @@ export function ContactsSection({ initialContacts, contactTypes }: ContactsSecti
                 variant="ghost"
                 size="sm"
               >
-                <Trash2 className="w-4 h-4 text-red-500" />
+                <Trash2 className="w-3.5 h-3.5 text-red-500" />
               </Button>
             </div>
           ))

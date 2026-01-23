@@ -50,14 +50,21 @@ export async function getUserProfileGraph(userId?: string) {
       });
     }
     
-    // Fetch user separately
+    // Fetch user with profile
     const user = await prisma.user.findUnique({
       where: { id: targetUserId },
       select: {
         id: true,
         name: true,
         email: true,
-        image: true
+        image: true,
+        profile: {
+          select: {
+            dateOfBirth: true,
+            city: true,
+            country: true
+          }
+        }
       }
     });
     
