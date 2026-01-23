@@ -202,7 +202,6 @@ export async function POST(req: Request) {
       system: systemPrompt,
       messages: modelMessages,
       tools: tools,
-      maxSteps: 15, // Allow multiple tool calls for complete trip creation
       toolChoice: "auto", // Explicitly enable automatic tool selection
       temperature: 0.7, // Slightly more creative for better tool usage
       onFinish: async ({ text, toolCalls, toolResults }) => {
@@ -216,11 +215,11 @@ export async function POST(req: Request) {
             toolCalls.forEach((call, idx) => {
               console.log(`\n📞 Tool Call ${idx + 1}:`, {
                 toolName: call.toolName,
-                args: call.args,
+                args: ('args' in call) ? call.args : undefined,
               });
               
               // Specifically highlight suggest_place calls
-              if (call.toolName === "suggest_place") {
+              if (call.toolName === "suggest_place" && 'args' in call) {
                 console.log("✨ PLACE SUGGESTION DETECTED:", call.args);
               }
             });

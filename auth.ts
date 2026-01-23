@@ -85,12 +85,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       ? [Twitter({
           clientId: process.env.TWITTER_CLIENT_ID,
           clientSecret: process.env.TWITTER_CLIENT_SECRET,
-          version: "2.0",
-          authorization: {
-            params: {
-              scope: "tweet.read users.read follows.read offline.access"
-            }
-          }
         })]
       : [],
     
@@ -145,9 +139,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         console.log("Account Refresh Token:", account?.refresh_token ? "Present" : "Missing");
         console.log("=== SIGNIN CALLBACK END ===");
         
-        authLogger.signIn(user.id, account?.provider || "unknown", {
-          email: user.email,
-          name: user.name,
+        authLogger.signIn(user.id || "unknown", account?.provider || "unknown", {
+          email: user.email || undefined,
+          name: user.name || undefined,
         });
 
         // Check if user exists in database
@@ -160,7 +154,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         if (!dbUser && account) {
           // New user - will be created by PrismaAdapter
           console.log("Creating new user via PrismaAdapter");
-          authLogger.userCreated(user.id, account.provider, user.email || undefined);
+          authLogger.userCreated(user.id || "unknown", account.provider, user.email || undefined);
         }
 
         // The PrismaAdapter will handle account creation

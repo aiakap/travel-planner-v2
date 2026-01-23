@@ -30,6 +30,7 @@ model User {
   relationships UserRelationship[] @relation("UserRelationships")
   relatedTo     UserRelationship[] @relation("RelatedToUser")
   travelPreferences UserTravelPreference[]
+  profileGraph  UserProfileGraph?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -394,4 +395,15 @@ model UserRelationship {
   updatedAt       DateTime @updatedAt
   
   @@unique([userId, relatedUserId])
+}
+
+model UserProfileGraph {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  graphData String?  @db.Text // XML storage for profile graph
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

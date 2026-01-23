@@ -113,7 +113,7 @@ export function ExpClient({
   userId,
   profileData = null,
   quickActions = [],
-}: ExperienceBuilderClientProps) {
+}: ExpClientProps) {
   // State
   const [trips, setTrips] = useState<DBTrip[]>(initialTrips)
   const [selectedTripId, setSelectedTripId] = useState<string | null>(initialSelectedTrip?.id || null)
@@ -173,6 +173,18 @@ export function ExpClient({
       }
 
       const data = await response.json();
+
+      // Check if trip was created by AI
+      if (data.tripCreated && data.tripId && !selectedTripId) {
+        console.log("🎉 [Client] Trip created by AI:", data.tripId);
+        console.log("   Scheduling trip refetch...");
+        
+        // Refetch trips and select the new one after a small delay
+        setTimeout(async () => {
+          console.log("🔄 [Client] Executing refetchTripsAndSelect");
+          await refetchTripsAndSelect();
+        }, 500); // Small delay to ensure DB write completes
+      }
 
       // Add assistant message with segments
       const assistantMessage: ChatMessage = {
@@ -318,32 +330,42 @@ export function ExpClient({
     }
   }
 
-  // Auto-create conversation if trip has none
+  // Auto-create conversation if needed
   useEffect(() => {
     const autoCreateChat = async () => {
-      // Only auto-create if:
-      // 1. A trip is selected
-      // 2. No conversations exist for this trip
-      // 3. Not currently creating one
-      if (selectedTripId && conversations.length === 0 && !currentConversationId) {
+      // Only auto-create if no conversations exist and no conversation is currently set
+      if (conversations.length === 0 && !currentConversationId) {
         try {
-          const selectedTrip = trips.find(t => t.id === selectedTripId)
-          const tripName = selectedTrip?.title || "your trip"
+          let newConversation
           
-          const newConversation = await createTripConversation(
-            selectedTripId, 
-            `Chat about ${tripName}`
-          )
+          if (selectedTripId) {
+            // Create conversation linked to existing trip
+            const selectedTrip = trips.find(t => t.id === selectedTripId)
+            const tripName = selectedTrip?.title || "your trip"
+            
+            newConversation = await createTripConversation(
+              selectedTripId, 
+              `Chat about ${tripName}`
+            )
+            
+            // Add a greeting message from the assistant
+            setMessages([{
+              id: 'greeting',
+              role: 'assistant',
+              content: `What can I help with regarding ${tripName}?`,
+            } as any])
+          } else {
+            // Create standalone conversation for new trip planning
+            const { createConversation } = await import("@/lib/actions/chat-actions")
+            const created = await createConversation("New Trip Planning", false)
+            newConversation = {
+              ...created,
+              messages: [],
+            }
+          }
           
           setConversations([newConversation])
           setCurrentConversationId(newConversation.id)
-          
-          // Add a greeting message from the assistant
-          setMessages([{
-            id: 'greeting',
-            role: 'assistant',
-            content: `What can I help with regarding ${tripName}?`,
-          } as any])
         } catch (error) {
           console.error("Error auto-creating conversation:", error)
         }
@@ -496,12 +518,198 @@ What would you like to change about this plan, or should I create it as is?`;
     }
   };
 
-  // Handler for chatting about an item
-  const handleChatAboutItem = (reservation: any, itemTitle: string) => {
-    const prompt = `Tell me more about ${reservation.vendor} (${itemTitle}). Here are the details: ${reservation.text || 'No additional details'}`
-    sendMessage(prompt)
-    setHasStartedPlanning(true)
-  }
+  // Handler for chatting about the trip
+  const handleChatAboutTrip = async (rawTrip: DBTrip, transformedTrip: V0Itinerary) => {
+    setIsLoading(true);
+    setHasStartedPlanning(true);
+    
+    try {
+      // Fetch AI-generated actions
+      const response = await fetch('/api/chat/context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'trip',
+          data: {
+            title: transformedTrip.title,
+            dates: transformedTrip.dates,
+            totalCost: tripTotals.total,
+            segmentsCount: transformedTrip.segments.length,
+            totalReservations: transformedTrip.segments.reduce((acc, s) => 
+              acc + (s.days?.reduce((a, d) => 
+                a + (d.items?.reduce((b, i) => b + (i.reservations?.length || 0), 0) || 0), 0) || 0), 0),
+            description: rawTrip.description
+          },
+          fullTripContext: rawTrip
+        })
+      });
+      
+      const { actions } = await response.json();
+      
+      // Format dates for editing (YYYY-MM-DD)
+      const formatDateForInput = (date: Date) => {
+        return date.toISOString().split('T')[0];
+      };
+      
+      // Create context card message
+      const contextMessage: ChatMessage = {
+        id: `context-${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        segments: [{
+          type: 'context_card',
+          contextType: 'trip',
+          data: {
+            tripId: rawTrip.id,
+            title: transformedTrip.title,
+            startDate: formatDateForInput(rawTrip.startDate),
+            endDate: formatDateForInput(rawTrip.endDate),
+            dates: transformedTrip.dates,
+            totalCost: tripTotals.total,
+            segmentsCount: transformedTrip.segments.length,
+            totalReservations: transformedTrip.segments.reduce((acc, s) => 
+              acc + (s.days?.reduce((a, d) => 
+                a + (d.items?.reduce((b, i) => b + (i.reservations?.length || 0), 0) || 0), 0) || 0), 0),
+            description: rawTrip.description
+          },
+          actions,
+          onSaved: refetchTrip
+        }]
+      };
+      
+      setMessages(prev => [...prev, contextMessage]);
+    } catch (error) {
+      console.error('Error generating trip context:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handler for chatting about a segment
+  const handleChatAboutSegment = async (segment: any) => {
+    setIsLoading(true);
+    setHasStartedPlanning(true);
+    
+    try {
+      const response = await fetch('/api/chat/context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'segment',
+          data: {
+            name: segment.name,
+            type: segment.type,
+            startLocation: segment.startLocation || segment.startDate,
+            endLocation: segment.endLocation || segment.endDate,
+            startDate: segment.startDate,
+            endDate: segment.endDate,
+            reservationsCount: segment.days?.reduce((acc: number, d: any) => 
+              acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0
+          },
+          fullTripContext: selectedTrip
+        })
+      });
+      
+      const { actions } = await response.json();
+      
+      const contextMessage: ChatMessage = {
+        id: `context-${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        segments: [{
+          type: 'context_card',
+          contextType: 'segment',
+          data: {
+            segmentId: segment.id,
+            name: segment.name,
+            type: segment.type,
+            startLocation: segment.startLocation || 'N/A',
+            endLocation: segment.endLocation || 'N/A',
+            startDate: segment.startDate,
+            endDate: segment.endDate,
+            reservationsCount: segment.days?.reduce((acc: number, d: any) => 
+              acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0
+          },
+          actions,
+          onSaved: refetchTrip
+        }]
+      };
+      
+      setMessages(prev => [...prev, contextMessage]);
+    } catch (error) {
+      console.error('Error generating segment context:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handler for chatting about an item (reservation)
+  const handleChatAboutItem = async (reservation: any, itemTitle: string) => {
+    setIsLoading(true);
+    setHasStartedPlanning(true);
+    
+    try {
+      const response = await fetch('/api/chat/context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'reservation',
+          data: {
+            vendor: reservation.vendor,
+            name: reservation.vendor,
+            category: itemTitle,
+            status: reservation.status,
+            confirmationNumber: reservation.confirmationNumber,
+            cost: reservation.cost,
+            startTime: reservation.startTime,
+            endTime: reservation.endTime,
+            text: reservation.text,
+            contactPhone: reservation.contactPhone,
+            contactEmail: reservation.contactEmail,
+            website: reservation.website
+          },
+          fullTripContext: selectedTrip
+        })
+      });
+      
+      const { actions } = await response.json();
+      
+      const contextMessage: ChatMessage = {
+        id: `context-${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        segments: [{
+          type: 'context_card',
+          contextType: 'reservation',
+          data: {
+            reservationId: reservation.id,
+            vendor: reservation.vendor,
+            name: reservation.vendor,
+            category: itemTitle,
+            status: reservation.status,
+            confirmationNumber: reservation.confirmationNumber,
+            cost: reservation.cost,
+            startTime: reservation.startTime,
+            endTime: reservation.endTime,
+            text: reservation.text
+          },
+          actions,
+          onSaved: refetchTrip
+        }]
+      };
+      
+      setMessages(prev => [...prev, contextMessage]);
+    } catch (error) {
+      console.error('Error generating reservation context:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handler for context action clicks
+  const handleContextAction = (prompt: string) => {
+    sendMessage(prompt);
+  };
 
   // Handler for editing an item
   const handleEditItem = (reservation: any) => {
@@ -551,30 +759,69 @@ What would you like to change about this plan, or should I create it as is?`;
             <div className="flex-1 overflow-y-auto p-4">
               {!hasStartedPlanning && messages.length === 0 ? (
                 <div className="space-y-4">
-                  <ChatWelcomeMessage
-                    userName={profileData?.profile?.firstName || undefined}
-                    hobbies={profileData?.hobbies.map(h => h.hobby.name) || []}
-                    recentTrips={profileData?.recentTrips || []}
-                  />
-                  
-                  {quickActions.length > 0 && (
-                    <ChatQuickActions
-                      suggestions={quickActions}
-                      onSelect={handleQuickAction}
-                    />
-                  )}
-                  
-                  <div className="max-w-2xl mx-auto">
-                    <button
-                      onClick={handleGetLucky}
-                      disabled={isLoading}
-                      className="w-full px-4 py-3 bg-slate-900 hover:bg-slate-800 text-white text-sm rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Surprise me with a trip idea
-                    </button>
-                    <p className="text-xs text-slate-400 text-center mt-2">
-                      I'll show you a plan that you can adjust before creating
-                    </p>
+                  <div className="max-w-2xl mx-auto py-8 px-4">
+                    <h2 className="text-3xl font-light text-slate-900 mb-4">
+                      Let's plan your perfect trip
+                    </h2>
+                    
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6">
+                      <h3 className="font-medium text-blue-900 mb-3">
+                        How it works:
+                      </h3>
+                      <ol className="space-y-2 text-sm text-blue-800">
+                        <li className="flex gap-3">
+                          <span className="font-semibold flex-shrink-0">1.</span>
+                          <span>Tell me where you want to go - I'll create a trip with smart defaults</span>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="font-semibold flex-shrink-0">2.</span>
+                          <span>Edit the trip card inline or keep chatting to refine</span>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="font-semibold flex-shrink-0">3.</span>
+                          <span>Add flights, hotels, activities - in any order you want</span>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="font-semibold flex-shrink-0">4.</span>
+                          <span>Click cards to edit details or use the itinerary panel on the right</span>
+                        </li>
+                      </ol>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <p className="text-sm text-slate-600 font-medium">
+                        Try saying:
+                      </p>
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => {
+                            sendMessage("I want to visit Tokyo for a week");
+                            setHasStartedPlanning(true);
+                          }}
+                          className="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors text-sm text-slate-700"
+                        >
+                          "I want to visit Tokyo for a week"
+                        </button>
+                        <button
+                          onClick={() => {
+                            sendMessage("Plan a trip to Paris and Rome");
+                            setHasStartedPlanning(true);
+                          }}
+                          className="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors text-sm text-slate-700"
+                        >
+                          "Plan a trip to Paris and Rome"
+                        </button>
+                        <button
+                          onClick={() => {
+                            sendMessage("I need a beach vacation in June");
+                            setHasStartedPlanning(true);
+                          }}
+                          className="w-full text-left px-4 py-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors text-sm text-slate-700"
+                        >
+                          "I need a beach vacation in June"
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -594,6 +841,7 @@ What would you like to change about this plan, or should I create it as is?`;
                               segments={msg.segments}
                               tripId={selectedTripId || undefined}
                               onReservationAdded={refetchTrip}
+                              onActionClick={handleContextAction}
                             />
                           ) : (
                             msg.content
@@ -652,12 +900,23 @@ What would you like to change about this plan, or should I create it as is?`;
                   <>
                     <div className="border-b p-3 bg-card">
                       <div className="flex items-center justify-between">
-                        <div>
+                        <div className="flex-1">
                           <h1 className="text-sm font-bold">{transformedTrip.title}</h1>
                           <p className="text-[10px] text-muted-foreground">{transformedTrip.dates}</p>
                         </div>
-                        <div className="text-right">
-                          <div className="text-xs font-semibold">${tripTotals.total.toLocaleString()}</div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => selectedTrip && handleChatAboutTrip(selectedTrip, transformedTrip)}
+                            className="h-7 w-7 p-0 hover:bg-slate-100"
+                            title="Chat about this trip"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                          <div className="text-right">
+                            <div className="text-xs font-semibold">${tripTotals.total.toLocaleString()}</div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -667,6 +926,7 @@ What would you like to change about this plan, or should I create it as is?`;
                         heroImage={transformedTrip.heroImage}
                         onSelectReservation={setSelectedReservation}
                         onChatAboutItem={handleChatAboutItem}
+                        onChatAboutSegment={handleChatAboutSegment}
                         onEditItem={handleEditItem}
                       />
                     </div>
@@ -680,132 +940,8 @@ What would you like to change about this plan, or should I create it as is?`;
 
       {/* Desktop View */}
       <div className="hidden md:flex flex-1 overflow-hidden">
-        {/* Left Panel - Itinerary */}
+        {/* Left Panel - Chat */}
         <div className="flex flex-col h-full border-r bg-white overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
-          {/* Trip Selector - Always visible at top */}
-          <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
-            <div className="flex items-center justify-between gap-3 w-full">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <MapPin className="h-5 w-5 text-slate-700 flex-shrink-0" />
-                <span className="text-sm font-medium text-slate-700">Trip:</span>
-                <TripSelector trips={trips} selectedTripId={selectedTripId} onTripSelect={handleTripSelect} compact={true} />
-              </div>
-              
-              {/* Edit button for trip (only when trip is selected) */}
-              {selectedTripId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-3 text-slate-600 hover:text-slate-900"
-                  onClick={() => setIsTripEditModalOpen(true)}
-                >
-                  Edit
-                </Button>
-              )}
-            </div>
-          </div>
-          
-          {!selectedTripId || !transformedTrip ? (
-            <ItineraryEmptyState />
-          ) : (
-            <>
-              {transformedTrip && (
-                <div className="border-b border-slate-200 p-3 bg-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h1 className="text-sm font-bold">{transformedTrip?.title || "Select a trip"}</h1>
-                      <p className="text-[10px] text-muted-foreground">{transformedTrip?.dates || ""}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {transformedTrip && (
-                        <div className="text-right">
-                          <div className="text-xs font-semibold">${tripTotals.total.toLocaleString()}</div>
-                        </div>
-                      )}
-                      {transformedTrip && (
-                        <div className="flex gap-1 border rounded-lg p-0.5">
-                          <Button
-                            variant={viewMode === "table" ? "default" : "ghost"}
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setViewMode("table")}
-                            title="Table View"
-                          >
-                            <Table2 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant={viewMode === "timeline" ? "default" : "ghost"}
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setViewMode("timeline")}
-                            title="Timeline View"
-                          >
-                            <GitBranch className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant={viewMode === "photos" ? "default" : "ghost"}
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setViewMode("photos")}
-                            title="Photo Grid View"
-                          >
-                            <Grid3X3 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                      <Button variant="outline" size="sm" className="h-7 text-xs bg-transparent">
-                        <Plus className="h-3 w-3 mr-1" />
-                        Add
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex-1 overflow-y-auto p-3 overscroll-contain">
-                {transformedTrip ? (
-                  <>
-                    {viewMode === "table" && (
-                      <TableView 
-                        segments={transformedTrip.segments} 
-                        onSelectReservation={setSelectedReservation}
-                        onChatAboutItem={handleChatAboutItem}
-                        onEditItem={handleEditItem}
-                      />
-                    )}
-                    {viewMode === "timeline" && (
-                      <TimelineView
-                        segments={transformedTrip.segments}
-                        heroImage={transformedTrip.heroImage}
-                        onSelectReservation={setSelectedReservation}
-                        onChatAboutItem={handleChatAboutItem}
-                        onEditItem={handleEditItem}
-                      />
-                    )}
-                    {viewMode === "photos" && (
-                      <PhotosView segments={transformedTrip.segments} onSelectReservation={setSelectedReservation} />
-                    )}
-                  </>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <p>Select a trip from the dropdown to view details</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Resizable Divider */}
-        <div
-          className="w-2 bg-slate-200 hover:bg-slate-300 cursor-col-resize flex items-center justify-center group transition-colors"
-          onMouseDown={handleMouseDown}
-        >
-          <GripVertical className="h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" />
-        </div>
-
-        {/* Right Panel - Chat */}
-        <div className="flex flex-col h-full bg-white overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
           <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
             <div className="flex items-center justify-between gap-3 w-full">
               <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -898,6 +1034,7 @@ What would you like to change about this plan, or should I create it as is?`;
                               segments={msg.segments}
                               tripId={selectedTripId || undefined}
                               onReservationAdded={refetchTrip}
+                              onActionClick={handleContextAction}
                             />
                           ) : (
                             msg.content
@@ -942,6 +1079,141 @@ What would you like to change about this plan, or should I create it as is?`;
               </Button>
             </form>
           </div>
+        </div>
+
+        {/* Resizable Divider */}
+        <div
+          className="w-2 bg-slate-200 hover:bg-slate-300 cursor-col-resize flex items-center justify-center group transition-colors"
+          onMouseDown={handleMouseDown}
+        >
+          <GripVertical className="h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" />
+        </div>
+
+        {/* Right Panel - Itinerary */}
+        <div className="flex flex-col h-full bg-white overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
+          {/* Trip Selector - Always visible at top */}
+          <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
+            <div className="flex items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <MapPin className="h-5 w-5 text-slate-700 flex-shrink-0" />
+                <span className="text-sm font-medium text-slate-700">Trip:</span>
+                <TripSelector trips={trips} selectedTripId={selectedTripId} onTripSelect={handleTripSelect} compact={true} />
+              </div>
+              
+              {/* Edit button for trip (only when trip is selected) */}
+              {selectedTripId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-3 text-slate-600 hover:text-slate-900"
+                  onClick={() => setIsTripEditModalOpen(true)}
+                >
+                  Edit
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {!selectedTripId || !transformedTrip ? (
+            <ItineraryEmptyState />
+          ) : (
+            <>
+              {transformedTrip && (
+                <div className="border-b border-slate-200 p-3 bg-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h1 className="text-sm font-bold">{transformedTrip?.title || "Select a trip"}</h1>
+                      <p className="text-[10px] text-muted-foreground">{transformedTrip?.dates || ""}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => selectedTrip && handleChatAboutTrip(selectedTrip, transformedTrip)}
+                        className="h-7 w-7 p-0 hover:bg-slate-100"
+                        title="Chat about this trip"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
+                      {transformedTrip && (
+                        <div className="text-right">
+                          <div className="text-xs font-semibold">${tripTotals.total.toLocaleString()}</div>
+                        </div>
+                      )}
+                      {transformedTrip && (
+                        <div className="flex gap-1 border rounded-lg p-0.5">
+                          <Button
+                            variant={viewMode === "timeline" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setViewMode("timeline")}
+                            title="Timeline View"
+                          >
+                            <GitBranch className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant={viewMode === "table" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setViewMode("table")}
+                            title="Table View"
+                          >
+                            <Table2 className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant={viewMode === "photos" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setViewMode("photos")}
+                            title="Photo Grid View"
+                          >
+                            <Grid3X3 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      <Button variant="outline" size="sm" className="h-7 text-xs bg-transparent">
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto p-3 overscroll-contain">
+                {transformedTrip ? (
+                  <>
+                    {viewMode === "table" && (
+                      <TableView 
+                        segments={transformedTrip.segments} 
+                        onSelectReservation={setSelectedReservation}
+                        onChatAboutItem={handleChatAboutItem}
+                        onChatAboutSegment={handleChatAboutSegment}
+                        onEditItem={handleEditItem}
+                      />
+                    )}
+                    {viewMode === "timeline" && (
+                      <TimelineView
+                        segments={transformedTrip.segments}
+                        heroImage={transformedTrip.heroImage}
+                        onSelectReservation={setSelectedReservation}
+                        onChatAboutItem={handleChatAboutItem}
+                        onChatAboutSegment={handleChatAboutSegment}
+                        onEditItem={handleEditItem}
+                      />
+                    )}
+                    {viewMode === "photos" && (
+                      <PhotosView segments={transformedTrip.segments} onSelectReservation={setSelectedReservation} />
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    <p>Select a trip from the dropdown to view details</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

@@ -5,6 +5,9 @@ import { resolvePlaces } from "@/lib/google-places/resolve-suggestions";
 import { assemblePlaceLinks } from "@/lib/html/assemble-place-links";
 import { MessageSegment } from "@/lib/types/place-pipeline";
 import { prisma } from "@/lib/prisma";
+import { parseIntentFromResponse } from "@/lib/ai/parse-intent";
+import { createFullItinerary } from "@/lib/actions/create-full-itinerary";
+import { parseCardsFromText } from "@/app/test/exp/lib/parse-card-syntax";
 
 export const maxDuration = 60;
 
@@ -211,8 +214,8 @@ export async function POST(req: Request) {
       content: message,
     });
 
-    // Stage 1: Generate AI response with place suggestions
-    console.log("\n📍 Running 3-stage pipeline...");
+    // Stage 1: Generate AI response (NO TOOLS - just text and place suggestions)
+    console.log("\n📍 Running 3-stage pipeline with server actions...");
     const stage1Start = Date.now();
     
     let stage1Output;
@@ -224,7 +227,7 @@ export async function POST(req: Request) {
       
       stage1Output = await generatePlaceSuggestions(fullQuery);
       console.log(`✅ Stage 1 complete (${Date.now() - stage1Start}ms)`);
-      console.log(`   Generated ${stage1Output.places.length} place suggestions`);
+      // console.log(`   Generated ${stage1Output.places.length} place suggestions`);
     } catch (error) {
       console.error("❌ Stage 1 failed:", error);
       return NextResponse.json(
@@ -233,16 +236,55 @@ export async function POST(req: Request) {
       );
     }
 
+    // Stage 1.5: Parse intent and create trip if needed using server actions
+    let tripCreated = false;
+    let tripId: string | undefined;
+    
+    try {
+      const intent = parseIntentFromResponse(stage1Output.text, (stage1Output as any).places || []);
+      console.log(`   Intent parsed: shouldCreateTrip=${intent.shouldCreateTrip}`);
+      
+      if (intent.shouldCreateTrip && intent.destination && intent.startDate && intent.endDate) {
+        console.log(`   Creating trip via server actions...`);
+        console.log(`   - Destination: ${intent.destination}`);
+        console.log(`   - Dates: ${intent.startDate.toLocaleDateString()} to ${intent.endDate.toLocaleDateString()}`);
+        console.log(`   - Hotels: ${intent.hotels.length}`);
+        console.log(`   - Restaurants: ${intent.restaurants.length}`);
+        console.log(`   - Activities: ${intent.activities.length}`);
+        
+        const result = await createFullItinerary({
+          destination: intent.destination,
+          startDate: intent.startDate,
+          endDate: intent.endDate,
+          title: intent.title,
+          description: intent.description,
+          hotelNames: intent.hotels,
+          restaurantNames: intent.restaurants,
+          activityNames: intent.activities,
+          conversationId,
+          defaultStatus: "Pending", // Default for AI-created items
+        });
+        
+        tripCreated = true;
+        tripId = result.tripId;
+        console.log(`   ✅ Trip created: ${tripId}`);
+      }
+    } catch (error) {
+      console.error("❌ Failed to parse intent or create trip:", error);
+      // Don't fail the whole request - continue with place suggestions
+    }
+
     // Stage 2: Resolve places with Google Places API
     const stage2Start = Date.now();
     let stage2Output;
     try {
-      stage2Output = await resolvePlaces(stage1Output.places);
+      const places = (stage1Output as any).places || [];
+      stage2Output = await resolvePlaces(places);
       console.log(`✅ Stage 2 complete (${Date.now() - stage2Start}ms)`);
       const successCount = Object.values(stage2Output.placeMap).filter(
         p => !p.notFound
       ).length;
-      console.log(`   Resolved ${successCount}/${stage1Output.places.length} places`);
+      console.log(`   Resolved ${successCount}/${places.length} places`);
     } catch (error) {
       console.error("❌ Stage 2 failed:", error);
       return NextResponse.json(
@@ -251,19 +293,31 @@ export async function POST(req: Request) {
       );
     }
 
+    // Stage 2.5: Parse card syntax from AI response
+    const { segments: cardSegments, cleanText } = parseCardsFromText(stage1Output.text);
+    console.log(`   Parsed ${cardSegments.length} card segments from AI response`);
+    
+    // Update text to remove card syntax
+    stage1Output.text = cleanText;
+
     // Stage 3: Assemble segments with clickable links
     const stage3Start = Date.now();
     let segments: MessageSegment[];
     try {
+      const places = (stage1Output as any).places || [];
       const stage3Output = assemblePlaceLinks(
         stage1Output.text,
-        stage1Output.places,
+        places,
         stage2Output.placeMap
       );
-      segments = stage3Output.segments;
+      
+      // Combine card segments with place segments
+      segments = [...cardSegments, ...stage3Output.segments];
+      
       console.log(`✅ Stage 3 complete (${Date.now() - stage3Start}ms)`);
       const placeSegments = segments.filter(s => s.type === "place").length;
-      console.log(`   Created ${segments.length} segments (${placeSegments} places)`);
+      const cardCount = cardSegments.length;
+      console.log(`   Created ${segments.length} segments (${placeSegments} places, ${cardCount} cards)`);
     } catch (error) {
       console.error("❌ Stage 3 failed:", error);
       return NextResponse.json(
@@ -286,11 +340,13 @@ export async function POST(req: Request) {
     console.log(`   Total time: ${totalTime}ms`);
     console.log("=".repeat(80) + "\n");
 
-    // Return the complete response with segments
+    // Return the complete response with segments and trip info
     return NextResponse.json({
       role: "assistant",
       content: stage1Output.text,
       segments,
+      tripCreated,
+      tripId,
     });
   } catch (error) {
     console.error("[Simple Chat API] Error:", error);

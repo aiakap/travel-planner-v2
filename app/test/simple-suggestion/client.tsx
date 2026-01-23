@@ -78,9 +78,12 @@ export function SimpleSuggestionClient({ user, profileData }: SimpleSuggestionCl
           const query = tripSuggestion.imageQuery || tripSuggestion.destination;
           const place = await searchPlace(query);
 
-          if (place?.photos?.[0]?.reference) {
-            const photoUrl = await getPhotoUrl(place.photos[0].reference, 800);
-            setSuggestionImage(photoUrl);
+          if (place?.photos?.[0]) {
+            const photo = place.photos[0] as any;
+            if (photo.reference) {
+              const photoUrl = await getPhotoUrl(photo.reference, 800);
+              setSuggestionImage(photoUrl);
+            }
           } else {
             // Fallback to Unsplash
             const searchTerms = tripSuggestion.destinationKeywords?.length

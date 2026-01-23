@@ -375,13 +375,13 @@ export default function DemoPage() {
               title="Forward Geocoding"
               input={demoGeocodingData.forwardGeocoding.address}
               output={`${demoGeocodingData.forwardGeocoding.result.formattedAddress}\nLat: ${demoGeocodingData.forwardGeocoding.result.location.lat}, Lng: ${demoGeocodingData.forwardGeocoding.result.location.lng}`}
-              apiCall="https://maps.googleapis.com/maps/api/geocode/json?address=Eiffel+Tower,Paris,France"
+              apiEndpoint="https://maps.googleapis.com/maps/api/geocode/json"
             />
             <GeocodingDisplay
               title="Reverse Geocoding"
               input={`Lat: ${demoGeocodingData.reverseGeocoding.location.lat}, Lng: ${demoGeocodingData.reverseGeocoding.location.lng}`}
               output={demoGeocodingData.reverseGeocoding.result.formattedAddress}
-              apiCall="https://maps.googleapis.com/maps/api/geocode/json?latlng=41.9028,12.4964"
+              apiEndpoint="https://maps.googleapis.com/maps/api/geocode/json"
             />
           </div>
         </section>
@@ -600,11 +600,11 @@ export default function DemoPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Departure:</span>{" "}
-                  {demoReservations[0].departureLocation}
+                  {(demoReservations[0] as any).departureLocation || "N/A"}
                 </div>
                 <div>
                   <span className="text-muted-foreground">Arrival:</span>{" "}
-                  {demoReservations[0].arrivalLocation}
+                  {(demoReservations[0] as any).arrivalLocation || "N/A"}
                 </div>
                 <div>
                   <span className="text-muted-foreground">Cost:</span>{" "}

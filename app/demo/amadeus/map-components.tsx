@@ -319,6 +319,16 @@ export function FlightPathMap({ departure, arrival, title, description, flightIn
   const departureCoords = airportCoordinates[departure];
   const arrivalCoords = airportCoordinates[arrival];
 
+  // useEffect must be called unconditionally before any early returns
+  useEffect(() => {
+    if (!mapInstance || !departureCoords || !arrivalCoords) return;
+
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({ lat: departureCoords.lat, lng: departureCoords.lng });
+    bounds.extend({ lat: arrivalCoords.lat, lng: arrivalCoords.lng });
+    mapInstance.fitBounds(bounds);
+  }, [mapInstance, departureCoords, arrivalCoords]);
+
   if (!departureCoords || !arrivalCoords) {
     return (
       <Card>
@@ -332,15 +342,6 @@ export function FlightPathMap({ departure, arrival, title, description, flightIn
       </Card>
     );
   }
-
-  useEffect(() => {
-    if (!mapInstance) return;
-
-    const bounds = new google.maps.LatLngBounds();
-    bounds.extend({ lat: departureCoords.lat, lng: departureCoords.lng });
-    bounds.extend({ lat: arrivalCoords.lat, lng: arrivalCoords.lng });
-    mapInstance.fitBounds(bounds);
-  }, [mapInstance, departureCoords, arrivalCoords]);
 
   if (!apiKey) return <div className="text-sm text-muted-foreground">Missing Google Maps API key.</div>;
   if (loadError) return <div className="text-sm text-destructive">Error loading maps.</div>;

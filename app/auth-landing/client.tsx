@@ -32,7 +32,10 @@ export function AuthLandingClient({ suggestion, suggestionId }: AuthLandingClien
       placeName: suggestion.suggestion.suggestedName,
       category: categoryMap[suggestion.suggestion.category] || "Activity",
       type: suggestion.suggestion.type,
-      context: suggestion.suggestion.context,
+      context: suggestion.suggestion.context ? {
+        ...suggestion.suggestion.context,
+        timeOfDay: suggestion.suggestion.context.timeOfDay as "morning" | "afternoon" | "evening" | "night" | undefined,
+      } : undefined,
     };
   };
 

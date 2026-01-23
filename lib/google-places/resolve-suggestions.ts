@@ -89,6 +89,7 @@ export async function resolvePlaces(
       // Step 1: Text search to find the place
       const searchUrl = new URL(`${PLACES_API_BASE}/textsearch/json`);
       searchUrl.searchParams.append("query", suggestion.searchQuery);
+      searchUrl.searchParams.append("language", "en");
       searchUrl.searchParams.append("key", GOOGLE_PLACES_API_KEY);
 
       const searchResponse = await fetch(searchUrl.toString());
@@ -130,6 +131,7 @@ export async function resolvePlaces(
         "geometry",
         "types",
       ].join(","));
+      detailsUrl.searchParams.append("language", "en");
       detailsUrl.searchParams.append("key", GOOGLE_PLACES_API_KEY);
 
       const detailsResponse = await fetch(detailsUrl.toString());

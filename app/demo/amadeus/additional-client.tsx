@@ -312,7 +312,7 @@ export function SeatmapDisplayTable({ seatmaps }: { seatmaps: any[] }) {
                       <td className="p-2">{seatmap.aircraft.code}</td>
                       <td className="p-2">{seatmap.class}</td>
                       <td className="p-2 text-xs">
-                        {sampleSeats.map(s => s.number).join(', ')}...
+                        {sampleSeats.map((s: any) => s.number).join(', ')}...
                       </td>
                     </tr>
                   </TooltipTrigger>

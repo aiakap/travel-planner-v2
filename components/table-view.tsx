@@ -52,10 +52,11 @@ interface TableViewProps {
     dayDate: string
   }) => void
   onChatAboutItem?: (reservation: Reservation, itemTitle: string) => void
+  onChatAboutSegment?: (segment: any) => void
   onEditItem?: (reservation: Reservation) => void
 }
 
-export function TableView({ segments, onSelectReservation, onChatAboutItem, onEditItem }: TableViewProps) {
+export function TableView({ segments, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TableViewProps) {
   // #region agent log
   fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'table-view.tsx:54',message:'TableView rendering',data:{segmentsCount:segments?.length,hasSegments:!!segments,firstSegment:segments?.[0],firstSegmentDays:segments?.[0]?.days?.length,firstSegmentFirstDay:segments?.[0]?.days?.[0]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2,H5'})}).catch(()=>{});
   // #endregion
@@ -143,7 +144,7 @@ export function TableView({ segments, onSelectReservation, onChatAboutItem, onEd
           <div key={segment.id} className="border rounded-lg overflow-hidden">
             {/* Segment Header */}
             <div
-              className="p-2 flex items-center justify-between"
+              className="p-2 flex items-center justify-between group/segment"
               style={{ backgroundColor: `${segmentColor}20`, borderLeft: `4px solid ${segmentColor}` }}
             >
               <div className="flex items-center gap-2">
@@ -152,9 +153,23 @@ export function TableView({ segments, onSelectReservation, onChatAboutItem, onEd
                   {segment.startDate} - {segment.endDate}
                 </span>
               </div>
-              <span className="text-xs font-medium">
-                ${segmentCosts.total.toLocaleString()}
-              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChatAboutSegment?.(segment);
+                  }}
+                  className="h-6 w-6 p-0 hover:bg-slate-200/50 opacity-0 group-hover/segment:opacity-100 transition-opacity"
+                  title="Chat about this segment"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </Button>
+                <span className="text-xs font-medium">
+                  ${segmentCosts.total.toLocaleString()}
+                </span>
+              </div>
             </div>
 
             {/* List View */}

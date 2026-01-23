@@ -18,6 +18,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { GooglePlaceData, PlaceSuggestion as PipelinePlaceSuggestion } from "@/lib/types/place-pipeline";
+import { GooglePlaceData as AmadeusGooglePlaceData, PlaceSuggestion as AmadeusPlaceSuggestion } from "@/lib/types/amadeus-pipeline";
 import { PlaceSuggestion as LegacyPlaceSuggestion, GooglePlaceData as LegacyGooglePlaceData } from "@/lib/types/place-suggestion";
 import { getPhotoUrl } from "@/lib/google-places/resolve-suggestions";
 import { useEffect, useState } from "react";
@@ -27,11 +28,11 @@ import { savePendingSuggestion, PendingSuggestion } from "@/lib/pending-suggesti
 import { trackPlaceClick } from "@/lib/anonymous-tracking";
 
 interface PlaceHoverCardProps {
-  placeData: GooglePlaceData | undefined;
+  placeData: GooglePlaceData | AmadeusGooglePlaceData | undefined;
   placeName: string;
   children: React.ReactNode;
   tripId?: string; // Optional trip ID for adding to itinerary
-  suggestion?: PipelinePlaceSuggestion; // Original suggestion data
+  suggestion?: PipelinePlaceSuggestion | AmadeusPlaceSuggestion; // Original suggestion data
   onReservationAdded?: () => void; // Callback when reservation is successfully added
 }
 

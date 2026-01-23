@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { PlaceSuggestion, Stage1Output } from "@/lib/types/place-pipeline";
+import { PlaceSuggestion, TransportSuggestion, HotelSuggestion, Stage1Output } from "@/lib/types/amadeus-pipeline";
 
 /**
  * Stage 1: AI Structured Generation
@@ -12,18 +12,49 @@ import { PlaceSuggestion, Stage1Output } from "@/lib/types/place-pipeline";
  * for Stage 3 matching to work.
  */
 
-const SYSTEM_PROMPT = `You are a travel planning assistant that suggests specific places (hotels, restaurants, activities, transportation).
+// ============================================================================
+// Date Helper Functions for AI Prompt
+// ============================================================================
+
+function getTomorrowDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().split('T')[0];
+}
+
+function get3DaysLaterDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 3);
+  return date.toISOString().split('T')[0];
+}
+
+function get7DaysLaterDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 7);
+  return date.toISOString().split('T')[0];
+}
+
+function getTodayDate(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+const SYSTEM_PROMPT = `You are a travel planning assistant that suggests specific places, flights, and hotels.
 
 CRITICAL INSTRUCTIONS:
-1. You MUST output valid JSON with exactly two fields: "text" and "places"
-2. The "text" field contains your full natural language response
-3. The "places" field contains an array of place suggestions
-4. IMPORTANT: Every place name you mention in "text" MUST appear EXACTLY as written in the "places" array "suggestedName" field
-5. Use the EXACT same spelling, capitalization, and formatting in both fields
+1. You MUST output PURE JSON (no markdown, no code fences, no \`\`\`json tags)
+2. Output valid JSON with exactly FOUR fields: "text", "places", "transport", and "hotels"
+3. The "text" field contains your full natural language response
+4. The "places" field contains restaurants, attractions, and general venues (for Google Places lookup)
+5. The "transport" field contains flights and transfers (for Amadeus API lookup)
+6. The "hotels" field contains hotels with date spans (for Amadeus hotel availability lookup)
+7. IMPORTANT: Every place/flight/hotel name you mention in "text" MUST appear EXACTLY as written in the respective array's "suggestedName" field
+8. Use the EXACT same spelling, capitalization, and formatting in both fields
+9. Items can appear in MULTIPLE arrays (e.g., a hotel in both "places" for Google info AND "hotels" for Amadeus availability)
+10. DO NOT wrap your response in markdown code blocks or backticks - output raw JSON only
 
 Example output structure:
 {
-  "text": "I recommend staying at Hôtel Plaza Athénée for luxury accommodations. For dinner, try Le Meurice which offers exceptional French cuisine.",
+  "text": "I recommend flying from JFK to Paris on the Air France flight, staying at Hôtel Plaza Athénée, and dining at Le Meurice.",
   "places": [
     {
       "suggestedName": "Hôtel Plaza Athénée",
@@ -32,8 +63,7 @@ Example output structure:
       "searchQuery": "Hotel Plaza Athenee Paris France",
       "context": {
         "dayNumber": 1,
-        "timeOfDay": "evening",
-        "notes": "Luxury hotel with exceptional service"
+        "notes": "Luxury hotel in 8th arrondissement"
       }
     },
     {
@@ -44,22 +74,75 @@ Example output structure:
       "context": {
         "dayNumber": 1,
         "timeOfDay": "evening",
-        "specificTime": "7:00 PM",
-        "notes": "Fine dining French cuisine"
+        "specificTime": "7:00 PM"
       }
+    }
+  ],
+  "transport": [
+    {
+      "suggestedName": "JFK to Paris flight",
+      "type": "Flight",
+      "origin": "JFK",
+      "destination": "CDG",
+      "departureDate": "${getTomorrowDate()}",
+      "departureTime": "18:30",
+      "returnDate": "${get7DaysLaterDate()}",
+      "adults": 2,
+      "travelClass": "ECONOMY"
+    }
+  ],
+  "hotels": [
+    {
+      "suggestedName": "Hôtel Plaza Athénée",
+      "location": "Paris",
+      "checkInDate": "${getTomorrowDate()}",
+      "checkOutDate": "${get3DaysLaterDate()}",
+      "guests": 2,
+      "rooms": 1,
+      "searchQuery": "Hotel Plaza Athenee Paris France"
     }
   ]
 }
 
+WHEN TO INCLUDE IN EACH ARRAY:
+
+"places" array - Include ALL of these:
+- Restaurants, cafes, dining venues
+- Museums, attractions, landmarks
+- Activities, tours
+- Hotels (for Google Places info like address, rating, photos)
+- ANY venue you want Google Places details for
+
+"transport" array - Include ONLY when dates are mentioned:
+- Flights with specific routes and dates
+- Airport transfers with pickup times
+- Train/bus bookings with departure times
+
+"hotels" array - Include ONLY when dates are mentioned:
+- Hotels with check-in/check-out dates specified
+- SKIP if user just asks "suggest hotels" without dates
+
+IMPORTANT: Hotels should appear in BOTH "places" (for Google info) AND "hotels" (for Amadeus availability) when dates are provided.
+
+IMPORTANT DATE HANDLING:
+- Today's date is ${getTodayDate()}
+- ALWAYS use dates in the NEAR future (tomorrow to 30 days out)
+- If user says "March 15-20" and we're past that, use NEXT year
+- If user says "tomorrow" or "next week", calculate actual dates
+- If no dates provided for hotels, DO NOT add to "hotels" array
+- Default dates: check-in = tomorrow (${getTomorrowDate()}), check-out = 3 days later (${get3DaysLaterDate()})
+- Flight departure default = tomorrow, return = 7 days later
+
 Categories:
-- "Stay": Hotels, accommodations, lodging
-- "Eat": Restaurants, cafes, dining
-- "Do": Activities, museums, tours, attractions
-- "Transport": Flights, trains, buses, car rentals
+- "Stay": Hotels, accommodations
+- "Eat": Restaurants, cafes
+- "Do": Activities, museums, attractions
+- "Transport": Flights, transfers
 
-Types: Be specific (e.g., "Hotel", "Restaurant", "Museum", "Flight", "Train")
-
-SearchQuery: Optimize for Google Places API (include location, type, and any distinguishing features)`;
+Transport Types: "Flight", "Transfer", "Train", "Bus"
+Transfer Types: "PRIVATE", "SHARED", "TAXI", "AIRPORT_EXPRESS"
+Travel Classes: "ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST"
+`;
 
 export async function generatePlaceSuggestions(
   userQuery: string,
@@ -84,6 +167,8 @@ export async function generatePlaceSuggestions(
     return {
       text: result.text,
       places: result.places,
+      transport: [], // Trip suggestions don't include transport yet
+      hotels: [], // Trip suggestions don't include hotels yet
       tripSuggestion: result.tripSuggestion,
     };
   }
@@ -123,24 +208,37 @@ export async function generatePlaceSuggestions(
 
   console.log("✅ [Stage 1] Raw AI response:", result.text.substring(0, 200));
 
+  // Clean the response - remove markdown code fences if present
+  let cleanedText = result.text.trim();
+  
+  // Remove ```json and ``` wrappers
+  if (cleanedText.startsWith('```json')) {
+    cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  } else if (cleanedText.startsWith('```')) {
+    cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+  }
+  
+  cleanedText = cleanedText.trim();
+
   // Parse the JSON response
-  let parsed: { text: string; places: any[] };
+  let parsed: { text: string; places: any[]; transport: any[]; hotels: any[] };
   try {
-    parsed = JSON.parse(result.text);
+    parsed = JSON.parse(cleanedText);
   } catch (error) {
     console.error("❌ [Stage 1] Failed to parse JSON:", error);
-    console.error("❌ [Stage 1] Full response:", result.text);
+    console.error("❌ [Stage 1] Original response:", result.text.substring(0, 500));
+    console.error("❌ [Stage 1] Cleaned response:", cleanedText.substring(0, 500));
     throw new Error(`AI did not return valid JSON: ${error instanceof Error ? error.message : "Parse error"}`);
   }
 
   // Validate the structure
-  if (!parsed.text || !Array.isArray(parsed.places)) {
+  if (!parsed.text) {
     console.error("❌ [Stage 1] Invalid JSON structure:", parsed);
     throw new Error("AI returned JSON with incorrect structure");
   }
 
   // Validate and type the places array
-  const places: PlaceSuggestion[] = parsed.places.map((place, idx) => {
+  const places: PlaceSuggestion[] = (parsed.places || []).map((place, idx) => {
     if (!place.suggestedName || !place.category || !place.type || !place.searchQuery) {
       console.warn(`⚠️  [Stage 1] Place ${idx} missing required fields:`, place);
       throw new Error(`Place ${idx} is missing required fields`);
@@ -155,11 +253,54 @@ export async function generatePlaceSuggestions(
     };
   });
 
-  console.log(`✅ [Stage 1] Successfully generated ${places.length} place suggestions`);
-  console.log("   Place names:", places.map(p => p.suggestedName));
+  // Validate and type the transport array
+  const transport: TransportSuggestion[] = (parsed.transport || []).map((item, idx) => {
+    if (!item.suggestedName || !item.type || !item.origin || !item.destination || !item.departureDate) {
+      console.warn(`⚠️  [Stage 1] Transport ${idx} missing required fields:`, item);
+      throw new Error(`Transport ${idx} is missing required fields`);
+    }
+
+    return {
+      suggestedName: item.suggestedName,
+      type: item.type,
+      origin: item.origin,
+      destination: item.destination,
+      departureDate: item.departureDate,
+      departureTime: item.departureTime,
+      returnDate: item.returnDate,
+      adults: item.adults || 1,
+      travelClass: item.travelClass,
+      transferType: item.transferType,
+    };
+  });
+
+  // Validate and type the hotels array
+  const hotels: HotelSuggestion[] = (parsed.hotels || []).map((hotel, idx) => {
+    if (!hotel.suggestedName || !hotel.location || !hotel.checkInDate || !hotel.checkOutDate) {
+      console.warn(`⚠️  [Stage 1] Hotel ${idx} missing required fields:`, hotel);
+      throw new Error(`Hotel ${idx} is missing required fields`);
+    }
+
+    return {
+      suggestedName: hotel.suggestedName,
+      location: hotel.location,
+      checkInDate: hotel.checkInDate,
+      checkOutDate: hotel.checkOutDate,
+      guests: hotel.guests || 2,
+      rooms: hotel.rooms || 1,
+      searchQuery: hotel.searchQuery || `hotel in ${hotel.location}`,
+    };
+  });
+
+  console.log(`✅ [Stage 1] Successfully generated:`);
+  console.log(`   - ${places.length} place suggestions`);
+  console.log(`   - ${transport.length} transport suggestions`);
+  console.log(`   - ${hotels.length} hotel suggestions`);
 
   return {
     text: parsed.text,
     places,
+    transport,
+    hotels,
   };
 }

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { PlaceSuggestion } from "@/lib/types/place-suggestion";
 import { timeToMinutes, minutesToTime, addDuration } from "@/lib/time-utils";
+import { getDefaultTimeForType } from "@/lib/scheduling-utils";
 
 interface TimeSlot {
   day: number;
@@ -58,48 +59,8 @@ function parseTimeContext(suggestion: PlaceSuggestion): Partial<TimeSlot> | null
   return Object.keys(result).length > 0 ? result : null;
 }
 
-/**
- * Get default time based on reservation type
- */
-function getDefaultTimeForType(
-  category: string,
-  type: string
-): { startTime: string; endTime: string; duration: number } {
-  switch (category) {
-    case "Dining":
-      if (type.toLowerCase().includes("breakfast")) {
-        return { startTime: "08:00", endTime: "09:00", duration: 1 };
-      }
-      if (type.toLowerCase().includes("lunch")) {
-        return { startTime: "12:00", endTime: "13:30", duration: 1.5 };
-      }
-      // Default to dinner
-      return { startTime: "19:00", endTime: "21:00", duration: 2 };
-
-    case "Activity":
-      if (type.toLowerCase().includes("tour")) {
-        return { startTime: "10:00", endTime: "13:00", duration: 3 };
-      }
-      if (type.toLowerCase().includes("museum")) {
-        return { startTime: "10:00", endTime: "12:00", duration: 2 };
-      }
-      // Default activity
-      return { startTime: "14:00", endTime: "16:00", duration: 2 };
-
-    case "Stay":
-      // Hotel check-in
-      return { startTime: "15:00", endTime: "15:30", duration: 0.5 };
-
-    case "Travel":
-      // Default travel time
-      return { startTime: "10:00", endTime: "12:00", duration: 2 };
-
-    default:
-      return { startTime: "10:00", endTime: "12:00", duration: 2 };
-  }
-}
-
 // Time utility functions moved to @/lib/time-utils
+// getDefaultTimeForType moved to @/lib/scheduling-utils (non-async utility)
 
 /**
  * Find available time slots in a day, considering existing reservations
@@ -365,4 +326,47 @@ export async function getTripDays(tripId: string): Promise<
   }
 
   return days;
+}
+
+/**
+ * Get segment duration for hotel reservations
+ * Returns the start and end dates of a segment
+ */
+export async function getSegmentDuration(
+  tripId: string,
+  segmentId: string
+): Promise<{
+  startDate: string;
+  endDate: string;
+  segmentTitle: string;
+} | null> {
+  const trip = await prisma.trip.findUnique({
+    where: { id: tripId },
+    include: {
+      segments: {
+        orderBy: { order: "asc" },
+      },
+    },
+  });
+
+  if (!trip) return null;
+
+  const segment = trip.segments.find((s) => s.id === segmentId);
+  if (!segment) return null;
+
+  // Use segment's startTime and endTime if available
+  if (segment.startTime && segment.endTime) {
+    return {
+      startDate: new Date(segment.startTime).toISOString().split("T")[0],
+      endDate: new Date(segment.endTime).toISOString().split("T")[0],
+      segmentTitle: segment.endTitle || "this location",
+    };
+  }
+
+  // Otherwise, fallback to trip dates
+  return {
+    startDate: new Date(trip.startDate).toISOString().split("T")[0],
+    endDate: new Date(trip.endDate).toISOString().split("T")[0],
+    segmentTitle: segment.endTitle || "this location",
+  };
 }

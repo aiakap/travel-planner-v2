@@ -75,7 +75,7 @@ export function TripSuggestionsCarousel({ suggestions }: TripSuggestionsCarousel
             key={suggestion.id}
             className="flex-shrink-0 w-[320px] snap-start"
           >
-            <TripSuggestionCard suggestion={suggestion} />
+            <TripSuggestionCard suggestion={suggestion as any} onClick={() => {}} />
           </div>
         ))}
       </div>

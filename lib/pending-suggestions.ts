@@ -79,7 +79,7 @@ export async function clearPendingSuggestion(): Promise<void> {
 /**
  * Encode suggestion data for URL (alternative to cookies)
  */
-export function encodeSuggestion(data: PendingSuggestion): string {
+export async function encodeSuggestion(data: PendingSuggestion): Promise<string> {
   try {
     const json = JSON.stringify(data);
     return Buffer.from(json).toString("base64url");
@@ -92,7 +92,7 @@ export function encodeSuggestion(data: PendingSuggestion): string {
 /**
  * Decode suggestion data from URL
  */
-export function decodeSuggestion(encoded: string): PendingSuggestion | null {
+export async function decodeSuggestion(encoded: string): Promise<PendingSuggestion | null> {
   try {
     const json = Buffer.from(encoded, "base64url").toString("utf-8");
     return JSON.parse(json);

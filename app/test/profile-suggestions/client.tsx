@@ -112,10 +112,13 @@ export function ProfileSuggestionsClient({ user, profileData }: ProfileSuggestio
           const query = suggestion.imageQuery || suggestion.destination;
           const place = await searchPlace(query);
           
-          if (place?.photos?.[0]?.reference) {
+          if (place?.photos?.[0]) {
             // Get Google Places photo URL
-            const photoUrl = await getPhotoUrl(place.photos[0].reference, 800);
-            setSuggestionImages(prev => ({ ...prev, [idx]: photoUrl }));
+            const photo = place.photos[0] as any;
+            if (photo.reference) {
+              const photoUrl = await getPhotoUrl(photo.reference, 800);
+              setSuggestionImages(prev => ({ ...prev, [idx]: photoUrl }));
+            }
           } else {
             // Fallback to Unsplash
             const searchTerms = suggestion.destinationKeywords?.length 

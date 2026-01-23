@@ -21,9 +21,10 @@ import {
   Table2,
   GitBranch,
   Grid3X3,
+  TestTube,
 } from "lucide-react";
-import { PipelineResponse, MessageSegment } from "@/lib/types/place-pipeline";
-import { MessageSegmentsRenderer } from "@/components/message-segments-renderer";
+import { PipelineResponse, MessageSegment } from "@/lib/types/amadeus-pipeline";
+import { AmadeusSegmentsRenderer } from "@/components/amadeus-segments-renderer";
 import { TripSelector } from "@/components/trip-selector";
 import { ActivitySidePanel } from "@/components/activity-side-panel";
 import { trackSearch } from "@/lib/anonymous-tracking";
@@ -35,6 +36,7 @@ import { ReservationDetailModal } from "@/components/reservation-detail-modal";
 import { transformTripToV0Format } from "@/lib/v0-data-transform";
 import type { V0Itinerary } from "@/lib/v0-types";
 import { Toast } from "@/components/ui/toast";
+import Link from "next/link";
 
 type StageStatus = "idle" | "running" | "success" | "error";
 type ViewMode = "table" | "timeline" | "photos";
@@ -61,17 +63,19 @@ interface PlacePipelineClientProps {
 export function PlacePipelineClient({ user, trips: initialTrips, profileData }: PlacePipelineClientProps) {
   // Convert trips to state so we can update them
   const [trips, setTrips] = useState(initialTrips);
-  const [input, setInput] = useState("suggest 2 hotels in Paris");
+  const [input, setInput] = useState("Book a roundtrip flight from JFK to LAX on March 15-20");
   const [isRunning, setIsRunning] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   
   const [stage1, setStage1] = useState<StageState>({ status: "idle" });
   const [stage2, setStage2] = useState<StageState>({ status: "idle" });
   const [stage3, setStage3] = useState<StageState>({ status: "idle" });
+  const [stage4, setStage4] = useState<StageState>({ status: "idle" });
   
   const [stage1Open, setStage1Open] = useState(true);
   const [stage2Open, setStage2Open] = useState(false);
   const [stage3Open, setStage3Open] = useState(false);
+  const [stage4Open, setStage4Open] = useState(false);
   
   // Itinerary display state (copied from experience builder)
   const [viewMode, setViewMode] = useState<ViewMode>("timeline");
@@ -160,12 +164,14 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
     setStage1({ status: "idle" });
     setStage2({ status: "idle" });
     setStage3({ status: "idle" });
+    setStage4({ status: "idle" });
     setStage1Open(true);
     setStage2Open(false);
     setStage3Open(false);
+    setStage4Open(false);
 
     try {
-      // Run the complete pipeline
+      // Run the complete 4-stage pipeline
       setStage1({ status: "running" });
       
       const response = await fetch("/api/pipeline/run", {
@@ -180,7 +186,7 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
         throw new Error(result.error || "Pipeline failed");
       }
 
-      // Update all stages
+      // Update all 4 stages
       if (result.data?.stage1) {
         setStage1({
           status: "success",
@@ -206,6 +212,16 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
           status: "success",
           data: result.data.stage3,
           timing: result.data.stage3.timing,
+        });
+        setStage3Open(false);
+        setStage4Open(true);
+      }
+
+      if (result.data?.stage4) {
+        setStage4({
+          status: "success",
+          data: result.data.stage4,
+          timing: result.data.stage4.timing,
         });
       }
     } catch (error) {
@@ -269,7 +285,7 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
 
   const renderSegments = (segments: MessageSegment[]) => {
     return (
-      <MessageSegmentsRenderer 
+      <AmadeusSegmentsRenderer 
         segments={segments} 
         tripId={selectedTripId || undefined}
         onReservationAdded={async () => {
@@ -301,6 +317,14 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
             <p className="text-slate-600">
               Test the 3-stage pipeline: AI Generation → Google Places → HTML Assembly
             </p>
+            <div className="pt-2">
+              <Link href="/test/place-pipeline/amadeus-test">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <TestTube className="h-4 w-4" />
+                  Test Amadeus APIs Directly
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Profile and Trip Suggestions moved to /test/profile-suggestions */}
@@ -359,9 +383,10 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
               <div className="flex flex-wrap gap-2">
                 <span className="text-sm text-slate-500">Try:</span>
                 {[
-                  "suggest 2 hotels in Paris",
-                  "where should I eat dinner in Tokyo?",
-                  "plan activities for day 3 in Dubai",
+                  "Book a roundtrip flight from JFK to LAX on March 15-20",
+                  "Find hotels in Paris for 3 nights starting April 10",
+                  "Suggest restaurants and activities in Tokyo",
+                  "Plan a weekend: flights from NYC to Miami + hotel + dinner spots",
                 ].map((sample) => (
                   <Button
                     key={sample}
@@ -386,8 +411,8 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
                     <div className="flex items-center gap-3">
                       {stage1Open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                       <div className="text-left">
-                        <CardTitle>Stage 1: AI Generation</CardTitle>
-                        <CardDescription>GPT-4o generates structured text + place list</CardDescription>
+                        <CardTitle>Stage 1: Content Generation</CardTitle>
+                        <CardDescription>AI creates natural language with lookup requirements</CardDescription>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -414,29 +439,19 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
                     <>
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-sm">Generated Text</h4>
+                          <h4 className="font-semibold text-sm">Natural Language Section</h4>
                         </div>
-                        <div className="p-3 bg-slate-50 rounded border text-sm">
-                          {stage1.data.text}
+                        <div className="p-3 bg-slate-50 rounded border text-sm whitespace-pre-wrap">
+                          {stage1.data.naturalLanguageSection}
                         </div>
                       </div>
 
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-sm">
-                            Places Array ({stage1.data.places?.length || 0})
-                          </h4>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => copyToClipboard(stage1.data)}
-                          >
-                            <Copy className="h-3 w-3 mr-1" />
-                            Copy JSON
-                          </Button>
+                          <h4 className="font-semibold text-sm">Lookup Requirements</h4>
                         </div>
-                        <div className="p-3 bg-slate-50 rounded border text-xs font-mono overflow-auto max-h-60">
-                          <pre>{JSON.stringify(stage1.data.places, null, 2)}</pre>
+                        <div className="p-3 bg-slate-50 rounded border text-xs font-mono whitespace-pre-wrap">
+                          {stage1.data.lookupRequirements}
                         </div>
                       </div>
                     </>
@@ -446,7 +461,7 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
             </Card>
           </Collapsible>
 
-          {/* Stage 2: Google Places Resolution */}
+          {/* Stage 2: XML Extraction */}
           <Collapsible open={stage2Open} onOpenChange={setStage2Open}>
             <Card>
               <CollapsibleTrigger className="w-full">
@@ -455,15 +470,15 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
                     <div className="flex items-center gap-3">
                       {stage2Open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                       <div className="text-left">
-                        <CardTitle>Stage 2: Google Places Resolution</CardTitle>
-                        <CardDescription>Resolve each place to real Google Places data</CardDescription>
+                        <CardTitle>Stage 2: XML Extraction</CardTitle>
+                        <CardDescription>AI marks up text with context attributes and extracts entities</CardDescription>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {stage2.timing && (
                         <span className="text-sm text-slate-500 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {stage2.timing}ms
+                          {stage2.timing}ms total
                         </span>
                       )}
                       {getStatusBadge(stage2.status)}
@@ -481,53 +496,60 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
                   
                   {stage2.data && (
                     <>
-                      {/* Success/Failure Summary */}
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-                        {Object.values(stage2.data.placeMap).filter((p: any) => !p.notFound).length} of{" "}
-                        {Object.keys(stage2.data.placeMap).length} places resolved successfully
-                      </div>
-
-                      {/* Place Results */}
-                      <div className="space-y-2">
-                        {Object.entries(stage2.data.placeMap).map(([name, data]: [string, any]) => (
-                          <div
-                            key={name}
-                            className={`p-3 rounded border ${
-                              data.notFound ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <div className="font-semibold text-sm">{name}</div>
-                                {!data.notFound && (
-                                  <div className="text-xs text-slate-600 mt-1">
-                                    {data.name} • {data.formattedAddress}
-                                    {data.rating && ` • ${data.rating}⭐`}
-                                  </div>
-                                )}
-                                {data.notFound && (
-                                  <div className="text-xs text-red-600 mt-1">Not found in Google Places</div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
+                      {/* XML Marked Text */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-sm">Full Place Map</h4>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => copyToClipboard(stage2.data)}
-                          >
-                            <Copy className="h-3 w-3 mr-1" />
-                            Copy JSON
-                          </Button>
+                          <h4 className="font-semibold text-sm">XML-Marked Text</h4>
                         </div>
-                        <div className="p-3 bg-slate-50 rounded border text-xs font-mono overflow-auto max-h-60">
-                          <pre>{JSON.stringify(stage2.data.placeMap, null, 2)}</pre>
+                        <div className="p-3 bg-slate-50 rounded border text-xs font-mono whitespace-pre-wrap overflow-auto max-h-60">
+                          {stage2.data.markedText}
+                        </div>
+                      </div>
+
+                      {/* Entity Lists */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <h4 className="font-semibold text-sm mb-2">
+                            Places ({stage2.data.places?.length || 0})
+                          </h4>
+                          <div className="space-y-1">
+                            {stage2.data.places?.map((place: any, idx: number) => (
+                              <div key={idx} className="p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                                <div className="font-semibold">{place.name}</div>
+                                <div className="text-slate-600 text-xs">{place.context}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-semibold text-sm mb-2">
+                            Transport ({stage2.data.transport?.length || 0})
+                          </h4>
+                          <div className="space-y-1">
+                            {stage2.data.transport?.map((item: any, idx: number) => (
+                              <div key={idx} className="p-2 bg-indigo-50 border border-indigo-200 rounded text-xs">
+                                <div className="font-semibold">{item.name}</div>
+                                <div className="text-slate-600 text-xs">
+                                  {item.origin} → {item.destination}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-semibold text-sm mb-2">
+                            Hotels ({stage2.data.hotels?.length || 0})
+                          </h4>
+                          <div className="space-y-1">
+                            {stage2.data.hotels?.map((hotel: any, idx: number) => (
+                              <div key={idx} className="p-2 bg-purple-50 border border-purple-200 rounded text-xs">
+                                <div className="font-semibold">{hotel.name}</div>
+                                <div className="text-slate-600 text-xs">{hotel.context}</div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </>
@@ -537,7 +559,7 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
             </Card>
           </Collapsible>
 
-          {/* Stage 3: HTML Assembly */}
+          {/* Stage 3: API Lookups */}
           <Collapsible open={stage3Open} onOpenChange={setStage3Open}>
             <Card>
               <CollapsibleTrigger className="w-full">
@@ -546,15 +568,15 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
                     <div className="flex items-center gap-3">
                       {stage3Open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                       <div className="text-left">
-                        <CardTitle>Stage 3: HTML Assembly</CardTitle>
-                        <CardDescription>Assemble segments with clickable place links</CardDescription>
+                        <CardTitle>Stage 3: API Lookups</CardTitle>
+                        <CardDescription>Parallel lookups: Google Places • Flights • Hotels</CardDescription>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {stage3.timing && (
                         <span className="text-sm text-slate-500 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {stage3.timing}ms
+                          {stage3.timing}ms total
                         </span>
                       )}
                       {getStatusBadge(stage3.status)}
@@ -572,18 +594,171 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
                   
                   {stage3.data && (
                     <>
+                      {/* Stage 3A: Google Places */}
+                      <div className="pl-4 border-l-2 border-blue-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold">↳ Stage 3A: Google Places Lookup</h4>
+                          {stage3.data.subStages?.stage3A && (
+                            <span className="text-xs text-slate-500">
+                              {stage3.data.subStages.stage3A.timing}ms • {stage3.data.subStages.stage3A.count} results
+                            </span>
+                          )}
+                        </div>
+                        {Object.keys(stage3.data.placeMap || {}).length > 0 ? (
+                          <div className="space-y-2">
+                            {Object.entries(stage3.data.placeMap).map(([name, data]: [string, any]) => (
+                              <div
+                                key={name}
+                                className={`p-2 rounded border text-xs ${
+                                  data.notFound ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"
+                                }`}
+                              >
+                                <div className="font-semibold">{name}</div>
+                                {!data.notFound && (
+                                  <div className="text-slate-600 mt-1">
+                                    {data.name} • {data.formattedAddress}
+                                    {data.rating && ` • ${data.rating}⭐`}
+                                  </div>
+                                )}
+                                {data.notFound && (
+                                  <div className="text-red-600 mt-1">Not found</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-500">No places to lookup</div>
+                        )}
+                      </div>
+
+                      {/* Stage 3B: Transport */}
+                      <div className="pl-4 border-l-2 border-indigo-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold">↳ Stage 3B: Transport Availability Lookup</h4>
+                          {stage3.data.subStages?.stage3B && (
+                            <span className="text-xs text-slate-500">
+                              {stage3.data.subStages.stage3B.timing}ms • {stage3.data.subStages.stage3B.count} results
+                            </span>
+                          )}
+                        </div>
+                        {Object.keys(stage3.data.transportMap || {}).length > 0 ? (
+                          <div className="space-y-2">
+                            {Object.entries(stage3.data.transportMap).map(([name, data]: [string, any]) => (
+                              <div
+                                key={name}
+                                className={`p-2 rounded border text-xs ${
+                                  data.notFound ? "bg-red-50 border-red-200" : "bg-indigo-50 border-indigo-200"
+                                }`}
+                              >
+                                <div className="font-semibold">{name}</div>
+                                {!data.notFound && (
+                                  <div className="text-slate-600 mt-1">
+                                    ${parseFloat(data.price.total).toFixed(0)} {data.price.currency} • {data.itineraries.length} itinerary
+                                  </div>
+                                )}
+                                {data.notFound && (
+                                  <div className="text-red-600 mt-1">No flights found</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-500">No flights to lookup</div>
+                        )}
+                      </div>
+
+                      {/* Stage 3C: Hotels */}
+                      <div className="pl-4 border-l-2 border-purple-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold">↳ Stage 3C: Hotel Availability Lookup</h4>
+                          {stage3.data.subStages?.stage3C && (
+                            <span className="text-xs text-slate-500">
+                              {stage3.data.subStages.stage3C.timing}ms • {stage3.data.subStages.stage3C.count} results
+                            </span>
+                          )}
+                        </div>
+                        {Object.keys(stage3.data.hotelMap || {}).length > 0 ? (
+                          <div className="space-y-2">
+                            {Object.entries(stage3.data.hotelMap).map(([name, data]: [string, any]) => (
+                              <div
+                                key={name}
+                                className={`p-2 rounded border text-xs ${
+                                  data.notFound || !data.available ? "bg-red-50 border-red-200" : "bg-purple-50 border-purple-200"
+                                }`}
+                              >
+                                <div className="font-semibold">{name}</div>
+                                {!data.notFound && data.available && (
+                                  <div className="text-slate-600 mt-1">
+                                    {data.name} • ${parseFloat(data.price.total).toFixed(0)} {data.price.currency}
+                                    {data.rating && ` • ${data.rating}⭐`}
+                                  </div>
+                                )}
+                                {(data.notFound || !data.available) && (
+                                  <div className="text-red-600 mt-1">No availability</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-500">No hotels to lookup</div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Stage 4: HTML Assembly */}
+          <Collapsible open={stage4Open} onOpenChange={setStage4Open}>
+            <Card>
+              <CollapsibleTrigger className="w-full">
+                <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {stage4Open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                      <div className="text-left">
+                        <CardTitle>Stage 4: HTML Assembly</CardTitle>
+                        <CardDescription>Parse XML tags and create interactive segments with hover cards</CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {stage4.timing && (
+                        <span className="text-sm text-slate-500 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {stage4.timing}ms
+                        </span>
+                      )}
+                      {getStatusBadge(stage4.status)}
+                    </div>
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="space-y-4">
+                  {stage4.error && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                      {stage4.error}
+                    </div>
+                  )}
+                  
+                  {stage4.data && (
+                    <>
                       {/* Rendered Preview */}
                       <div>
                         <h4 className="font-semibold text-sm mb-2">Rendered Preview</h4>
                         <div className="p-4 bg-white rounded border">
-                          {renderSegments(stage3.data.segments)}
+                          {renderSegments(stage4.data.segments)}
                         </div>
                       </div>
 
                       {/* Segments Summary */}
                       <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-                        {stage3.data.segments.length} segments created •{" "}
-                        {stage3.data.segments.filter((s: MessageSegment) => s.type === "place").length} clickable places
+                        {stage4.data.segments.length} segments created •{" "}
+                        {stage4.data.segments.filter((s: MessageSegment) => s.type === "place").length} places •{" "}
+                        {stage4.data.segments.filter((s: MessageSegment) => s.type === "transport" || s.type === "flight").length} transport •{" "}
+                        {stage4.data.segments.filter((s: MessageSegment) => s.type === "hotel").length} hotels
                       </div>
 
                       {/* Raw Segments */}
@@ -593,14 +768,14 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => copyToClipboard(stage3.data)}
+                            onClick={() => copyToClipboard(stage4.data)}
                           >
                             <Copy className="h-3 w-3 mr-1" />
                             Copy JSON
                           </Button>
                         </div>
                         <div className="p-3 bg-slate-50 rounded border text-xs font-mono overflow-auto max-h-60">
-                          <pre>{JSON.stringify(stage3.data.segments, null, 2)}</pre>
+                          <pre>{JSON.stringify(stage4.data.segments, null, 2)}</pre>
                         </div>
                       </div>
                     </>
@@ -728,17 +903,11 @@ export function PlacePipelineClient({ user, trips: initialTrips, profileData }: 
       {/* Side Panel for Anonymous Users */}
       {!user && <ActivitySidePanel />}
 
-      {/* Reservation Detail Modal - copied from experience builder lines 1219-1235 */}
+      {/* Reservation Detail Modal */}
       {selectedReservation && (
         <ReservationDetailModal
-          isOpen={!!selectedReservation}
+          selectedReservation={selectedReservation}
           onClose={() => setSelectedReservation(null)}
-          reservation={selectedReservation.reservation}
-          itemTitle={selectedReservation.itemTitle}
-          itemTime={selectedReservation.itemTime}
-          itemType={selectedReservation.itemType}
-          dayDate={selectedReservation.dayDate}
-          tripId={selectedTripId || undefined}
         />
       )}
 

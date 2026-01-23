@@ -46,13 +46,55 @@ export interface PlaceDataMap {
   [suggestedName: string]: GooglePlaceData;
 }
 
-export interface MessageSegment {
-  type: "text" | "place";
-  content?: string; // For text segments
-  suggestion?: PlaceSuggestion; // For place segments
-  placeData?: GooglePlaceData; // For place segments
-  display?: string; // Display text for place segments
-}
+export type MessageSegment = 
+  | { type: "text"; content: string }
+  | { 
+      type: "place"; 
+      suggestion: PlaceSuggestion; 
+      placeData?: GooglePlaceData; 
+      display?: string;
+    }
+  | {
+      type: "trip_card";
+      tripId: string;
+      title: string;
+      startDate: string;
+      endDate: string;
+      description?: string;
+    }
+  | {
+      type: "segment_card";
+      segmentId: string;
+      name: string;
+      segmentType: string;
+      startLocation: string;
+      endLocation: string;
+      startTime?: string;
+      endTime?: string;
+    }
+  | {
+      type: "reservation_card";
+      reservationId: string;
+      name: string;
+      category: string;
+      type: string;
+      status: string;
+      cost?: number;
+      currency?: string;
+      location?: string;
+      startTime?: string;
+    }
+  | {
+      type: "context_card";
+      contextType: "trip" | "segment" | "reservation";
+      data: any;
+      actions: Array<{
+        id: string;
+        label: string;
+        prompt: string;
+      }>;
+      onSaved?: () => void;
+    };
 
 // Stage outputs
 export interface Stage1Output {

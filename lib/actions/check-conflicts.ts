@@ -141,7 +141,7 @@ export async function checkTimeConflict(
 
           if (requiredMinutes > availableMinutes) {
             travelTimeIssues.push({
-              from: previousReservation.vendor,
+              from: previousReservation.vendor || "Previous location",
               to: "Proposed location",
               requiredTime: requiredMinutes,
               availableTime: availableMinutes,
@@ -180,7 +180,7 @@ export async function checkTimeConflict(
           if (requiredMinutes > availableMinutes) {
             travelTimeIssues.push({
               from: "Proposed location",
-              to: nextReservation.vendor,
+              to: nextReservation.vendor || "Next location",
               requiredTime: requiredMinutes,
               availableTime: availableMinutes,
               shortfall: requiredMinutes - availableMinutes,

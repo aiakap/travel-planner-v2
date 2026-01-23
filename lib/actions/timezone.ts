@@ -90,11 +90,11 @@ export async function getSegmentTimeZones(
 /**
  * Format a date in a specific timezone
  */
-export function formatDateInTimeZone(
+export async function formatDateInTimeZone(
   date: Date,
   timeZoneId: string,
   options?: Intl.DateTimeFormatOptions
-): string {
+): Promise<string> {
   try {
     const defaultOptions: Intl.DateTimeFormatOptions = {
       year: "numeric",
@@ -105,7 +105,7 @@ export function formatDateInTimeZone(
       timeZoneName: "short",
       ...options,
     };
-
+  
     return new Intl.DateTimeFormat("en-US", {
       ...defaultOptions,
       timeZone: timeZoneId,
@@ -119,10 +119,10 @@ export function formatDateInTimeZone(
 /**
  * Get time difference message between two timezones
  */
-export function getTimeZoneDifferenceMessage(
+export async function getTimeZoneDifferenceMessage(
   timezone1: TimeZoneResult,
   timezone2: TimeZoneResult
-): string | null {
+): Promise<string | null> {
   const totalOffset1 = timezone1.offset + timezone1.dstOffset;
   const totalOffset2 = timezone2.offset + timezone2.dstOffset;
   const diffSeconds = totalOffset2 - totalOffset1;
@@ -139,11 +139,11 @@ export function getTimeZoneDifferenceMessage(
 /**
  * Calculate local time at destination given a time at origin
  */
-export function calculateDestinationTime(
+export async function calculateDestinationTime(
   originTime: Date,
   originTimezone: TimeZoneResult,
   destTimezone: TimeZoneResult
-): Date {
+): Promise<Date> {
   const originOffset = originTimezone.offset + originTimezone.dstOffset;
   const destOffset = destTimezone.offset + destTimezone.dstOffset;
   const diffMs = (destOffset - originOffset) * 1000;
@@ -154,15 +154,15 @@ export function calculateDestinationTime(
 /**
  * Check if a time crosses into the next day when traveling to a different timezone
  */
-export function checkDayBoundary(
+export async function checkDayBoundary(
   time: Date,
   fromTimezone: TimeZoneResult,
   toTimezone: TimeZoneResult
-): {
+): Promise<{
   crossesDayBoundary: boolean;
   daysDifference: number;
-} {
-  const destTime = calculateDestinationTime(time, fromTimezone, toTimezone);
+}> {
+  const destTime = await calculateDestinationTime(time, fromTimezone, toTimezone);
   
   const originDay = time.getUTCDate();
   const destDay = destTime.getUTCDate();

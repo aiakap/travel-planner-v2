@@ -1,4 +1,5 @@
 import { Github, Mail } from "lucide-react";
+import { ReactElement } from "react";
 
 interface ProviderIconProps {
   provider: string;
@@ -7,7 +8,7 @@ interface ProviderIconProps {
 }
 
 export function ProviderIcon({ provider, size = 24, className = "" }: ProviderIconProps) {
-  const iconMap: Record<string, JSX.Element> = {
+  const iconMap: Record<string, ReactElement> = {
     github: <Github className={className} size={size} />,
     google: (
       <svg className={className} width={size} height={size} viewBox="0 0 24 24">

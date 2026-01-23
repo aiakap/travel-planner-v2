@@ -118,10 +118,7 @@ export async function calculateRoute(
 
     // Add optimization if requested
     if (optimize && waypoints.length > 2) {
-      requestBody.routeModifiers = {
-        ...requestBody.routeModifiers,
-        optimizeWaypointOrder: true,
-      };
+      (requestBody.routeModifiers as any).optimizeWaypointOrder = true;
     }
 
     const response = await fetch(url, {
@@ -270,14 +267,14 @@ export async function optimizeDayRoute(
     }
 
     // Convert reservations to waypoints
-    const waypoints: RouteWaypoint[] = dayReservations.map((res) => ({
+    const waypoints = dayReservations.map((res) => ({
       location: {
         lat: res.latitude!,
         lng: res.longitude!,
       },
       name: res.vendor,
       reservationId: res.id,
-    }));
+    })) as RouteWaypoint[];
 
     // Calculate optimized route
     return await calculateRoute(waypoints, transportMode, true);

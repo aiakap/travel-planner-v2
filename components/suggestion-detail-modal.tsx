@@ -10,7 +10,6 @@ import {
   Clock,
   MapPin,
   Phone,
-  Mail,
   Globe,
   ExternalLink,
   Star,
@@ -18,21 +17,16 @@ import {
   Plus,
   DollarSign,
   Sparkles,
-  Lightbulb,
-  CheckCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PlaceSuggestion, GooglePlaceData } from "@/lib/types/place-suggestion";
-import { suggestScheduling, getTripDays } from "@/lib/smart-scheduling";
+import { suggestScheduling, getTripDays, getSegmentDuration } from "@/lib/smart-scheduling";
+import { getDefaultTimeForType } from "@/lib/scheduling-utils";
 import { checkTimeConflict, getAlternativeTimeSlots } from "@/lib/actions/check-conflicts";
 import { ConflictIndicator } from "@/components/conflict-indicator";
 import { AlternativeTimeSlots } from "@/components/alternative-time-slots";
+import { StatusIconIndicator } from "@/components/status-icon-indicator";
 
 interface SuggestionDetailModalProps {
   suggestion: PlaceSuggestion;
@@ -68,6 +62,16 @@ export function SuggestionDetailModal({
   const [cost, setCost] = useState<number>(0);
   const [schedulingReason, setSchedulingReason] = useState<string>("");
   const [status, setStatus] = useState<"suggested" | "planned" | "confirmed">("suggested");
+  
+  // Auto-expand end time for hotels (Stay category) and Travel
+  const shouldShowEndTimeByDefault = suggestion.category === "Stay" || suggestion.category === "Travel";
+  const [showEndTime, setShowEndTime] = useState<boolean>(shouldShowEndTimeByDefault);
+  
+  const [segmentInfo, setSegmentInfo] = useState<{
+    startDate: string;
+    endDate: string;
+    segmentTitle: string;
+  } | null>(null);
 
   // Trip days for selection
   const [tripDays, setTripDays] = useState<
@@ -165,6 +169,20 @@ export function SuggestionDetailModal({
 
         const days = await getTripDays(tripId);
         setTripDays(days);
+
+        // For hotels (Stay category), get segment duration
+        if (suggestion.category === "Stay" && suggestion.segmentId) {
+          const segInfo = await getSegmentDuration(tripId, suggestion.segmentId);
+          if (segInfo) {
+            setSegmentInfo(segInfo);
+            // Set dates to span the entire segment
+            setStartTime("15:00"); // Standard check-in time
+            setEndTime("11:00"); // Standard check-out time
+            setSchedulingReason(
+              `Hotel stay for entire ${segInfo.segmentTitle} segment (${segInfo.startDate} to ${segInfo.endDate})`
+            );
+          }
+        }
       } catch (error) {
         console.error("Error getting scheduling:", error);
       }
@@ -221,6 +239,21 @@ export function SuggestionDetailModal({
     const startMinutes = startHour * 60 + startMinute;
     const endMinutes = endHour * 60 + endMinute;
     return (endMinutes - startMinutes) / 60;
+  };
+
+  // Format duration for display
+  const formatDuration = (hours: number): string => {
+    if (hours < 1) {
+      return `${Math.round(hours * 60)} minutes`;
+    } else if (hours === 1) {
+      return "1 hour";
+    } else if (hours % 1 === 0) {
+      return `${hours} hours`;
+    } else {
+      const wholeHours = Math.floor(hours);
+      const minutes = Math.round((hours - wholeHours) * 60);
+      return `${wholeHours}h ${minutes}m`;
+    }
   };
 
   // Handle selecting an alternative time slot
@@ -286,26 +319,7 @@ export function SuggestionDetailModal({
     if (placeData?.photos && placeData.photos.length > 0) {
       return placeData.photos[0].url;
     }
-    // Fallback to Street View if no photos available
-    if (placeData?.geometry?.location) {
-      const { lat, lng } = placeData.geometry.location;
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      if (apiKey) {
-        return `https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${lat},${lng}&key=${apiKey}`;
-      }
-    }
     return "/placeholder.svg";
-  };
-
-  const getStreetViewUrl = () => {
-    if (placeData?.geometry?.location) {
-      const { lat, lng } = placeData.geometry.location;
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-      if (apiKey) {
-        return `https://maps.googleapis.com/maps/api/streetview?size=400x250&location=${lat},${lng}&fov=90&heading=0&pitch=0&key=${apiKey}`;
-      }
-    }
-    return null;
   };
 
   return (
@@ -348,9 +362,16 @@ export function SuggestionDetailModal({
         <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           {/* Header Info */}
           <div>
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-2">
               <div className="flex-1">
-                <h2 className="text-lg font-bold">{suggestion.placeName}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold">{suggestion.placeName}</h2>
+                  <StatusIconIndicator
+                    status={status}
+                    onStatusChange={setStatus}
+                    size="sm"
+                  />
+                </div>
                 <p className="text-sm text-muted-foreground">{suggestion.type}</p>
               </div>
               {renderRating()}
@@ -389,28 +410,6 @@ export function SuggestionDetailModal({
                     {day}
                   </p>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Street View Preview */}
-          {getStreetViewUrl() && (
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase">
-                Street View
-              </h3>
-              <div className="relative rounded-md overflow-hidden border border-border">
-                <img
-                  src={getStreetViewUrl()!}
-                  alt="Street View"
-                  className="w-full h-32 object-cover"
-                />
-                <div className="absolute bottom-2 right-2">
-                  <Badge className="bg-white/90 text-xs text-slate-700 backdrop-blur-sm">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    Location Preview
-                  </Badge>
-                </div>
               </div>
             </div>
           )}
@@ -478,53 +477,6 @@ export function SuggestionDetailModal({
               </div>
             )}
 
-            {/* Status Selection */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-2">
-                Reservation Status
-              </label>
-              <Select value={status} onValueChange={(v: any) => setStatus(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="suggested">
-                    <div className="flex items-center gap-2">
-                      <Lightbulb className="h-4 w-4 text-amber-600" />
-                      <div>
-                        <div className="font-medium">Suggestion</div>
-                        <div className="text-xs text-muted-foreground">
-                          Considering this option
-                        </div>
-                      </div>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="planned">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-sky-600" />
-                      <div>
-                        <div className="font-medium">Planned</div>
-                        <div className="text-xs text-muted-foreground">
-                          Decided but not booked
-                        </div>
-                      </div>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="confirmed">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-emerald-600" />
-                      <div>
-                        <div className="font-medium">Confirmed</div>
-                        <div className="text-xs text-muted-foreground">
-                          Reservation confirmed
-                        </div>
-                      </div>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Day Selection */}
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">
@@ -544,7 +496,7 @@ export function SuggestionDetailModal({
             </div>
 
             {/* Time Selection */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
                   <Clock className="h-3 w-3 inline mr-1" />
@@ -556,19 +508,50 @@ export function SuggestionDetailModal({
                   onChange={(e) => setStartTime(e.target.value)}
                   className="w-full border border-gray-300 px-3 py-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
+                {!showEndTime && (
+                  <div className="mt-1 flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Duration: {formatDuration(calculateDuration(startTime, endTime))}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowEndTime(true)}
+                      className="h-auto py-1 px-2 text-xs"
+                    >
+                      Customize end time
+                      <ChevronDown className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">
-                  <Clock className="h-3 w-3 inline mr-1" />
-                  End Time
-                </label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full border border-gray-300 px-3 py-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
+              
+              {showEndTime && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      <Clock className="h-3 w-3 inline mr-1" />
+                      End Time
+                    </label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowEndTime(false)}
+                      className="h-auto py-0 px-1 text-xs"
+                    >
+                      <ChevronUp className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full border border-gray-300 px-3 py-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Cost */}

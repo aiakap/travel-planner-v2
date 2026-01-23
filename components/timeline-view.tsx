@@ -57,10 +57,11 @@ interface TimelineViewProps {
     dayDate: string
   }) => void
   onChatAboutItem?: (reservation: Reservation, itemTitle: string) => void
+  onChatAboutSegment?: (segment: any) => void
   onEditItem?: (reservation: Reservation) => void
 }
 
-export function TimelineView({ segments, heroImage, onSelectReservation, onChatAboutItem, onEditItem }: TimelineViewProps) {
+export function TimelineView({ segments, heroImage, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TimelineViewProps) {
   const [collapsedSegments, setCollapsedSegments] = useState<Set<number>>(new Set())
   const [openContactMenu, setOpenContactMenu] = useState<number | null>(null)
   const contactMenuRef = useRef<HTMLDivElement>(null)
@@ -149,9 +150,8 @@ export function TimelineView({ segments, heroImage, onSelectReservation, onChatA
             <div key={segment.id} className="mb-6 last:mb-0">
               {/* Segment card with image */}
               <div
-                className="flex gap-3 p-3 rounded-xl backdrop-blur-md cursor-pointer hover:bg-white/10 transition-colors"
+                className="flex gap-3 p-3 rounded-xl backdrop-blur-md hover:bg-white/10 transition-colors relative group"
                 style={{ backgroundColor: `${segmentColor}15`, border: `1px solid ${segmentColor}40` }}
-                onClick={() => toggleSegment(segment.id)}
               >
                 {/* Segment image */}
                 <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden shadow-lg">
@@ -163,7 +163,7 @@ export function TimelineView({ segments, heroImage, onSelectReservation, onChatA
                 </div>
 
                 {/* Segment info */}
-                <div className="flex-1 flex flex-col justify-center min-w-0">
+                <div className="flex-1 flex flex-col justify-center min-w-0 cursor-pointer" onClick={() => toggleSegment(segment.id)}>
                   <div className="flex items-center gap-2">
                     {isCollapsed ? (
                       <ChevronRight className="h-4 w-4 shrink-0" style={{ color: segmentColor }} />
@@ -192,6 +192,20 @@ export function TimelineView({ segments, heroImage, onSelectReservation, onChatA
                     ))}
                   </div>
                 </div>
+                
+                {/* Chat icon */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChatAboutSegment?.(segment);
+                  }}
+                  className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20"
+                  title="Chat about this segment"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </Button>
               </div>
 
               {/* Timeline content */}

@@ -19,10 +19,13 @@ export async function fetchDestinationImage(
     const query = imageQuery || destination;
     const place = await searchPlace(query);
     
-    if (place?.photos?.[0]?.reference) {
-      const photoUrl = await getPhotoUrl(place.photos[0].reference, 800);
-      console.log(`✓ Found Google Places image for: ${query}`);
-      return photoUrl;
+    if (place?.photos?.[0]) {
+      const photoRef = (place.photos[0] as any).reference || (place.photos[0] as any).photo_reference;
+      if (photoRef) {
+        const photoUrl = await getPhotoUrl(photoRef, 800);
+        console.log(`✓ Found Google Places image for: ${query}`);
+        return photoUrl;
+      }
     }
   } catch (error) {
     console.error("Google Places image fetch failed:", error);
