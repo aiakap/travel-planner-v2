@@ -1,7 +1,7 @@
 /**
  * Suggest New Topic API Route
  * 
- * Generates a new mad-lib prompt when user clicks "suggest a new topic"
+ * Generates a new conversational prompt when user clicks "suggest a new topic"
  * or rejects suggestions
  */
 
@@ -37,9 +37,11 @@ export async function POST(req: NextRequest) {
     );
 
     console.log("✅ [New Topic API] New topic generated");
+    console.log("💡 [New Topic API] Response type:", response.suggestions ? "Conversational" : "Legacy");
 
     return NextResponse.json({
       message: response.message,
+      suggestions: response.suggestions || [],
       inlineSuggestions: response.inlineSuggestions || [],
       graphData: profileGraph.graphData
     });

@@ -9,10 +9,17 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SAMPLE_PROMPTS, PendingSuggestion, SmartSuggestion, InlineSuggestion } from "@/lib/types/profile-graph";
+import { SAMPLE_PROMPTS, PendingSuggestion, SmartSuggestion, InlineSuggestion, GraphCategory } from "@/lib/types/profile-graph";
 import { Loader2, Send, Sparkles } from "lucide-react";
 import { SuggestionBubble } from "@/components/suggestion-bubble";
-import { MadLibMessage } from "@/components/madlib-message";
+import { ConversationalMessage } from "@/components/conversational-message";
+
+interface ConversationalSuggestion {
+  text: string;
+  category: GraphCategory;
+  subcategory: string;
+  metadata?: Record<string, string>;
+}
 
 interface Message {
   role: "user" | "assistant";
@@ -20,12 +27,13 @@ interface Message {
   timestamp: Date;
   pendingSuggestions?: PendingSuggestion[];
   inlineSuggestions?: InlineSuggestion[];
+  conversationalSuggestions?: ConversationalSuggestion[];
 }
 
 interface GraphChatInterfaceProps {
   onMessageSent: (message: string, history: Message[]) => Promise<{
     message: string;
-    suggestions: string[];
+    suggestions: string[] | ConversationalSuggestion[];
     pendingSuggestions?: PendingSuggestion[];
     similarSuggestions?: PendingSuggestion[];
     inlineSuggestions?: InlineSuggestion[];
@@ -106,12 +114,19 @@ export function GraphChatInterface({
 
       const data = await response.json();
 
+      // Determine if suggestions are conversational format
+      const isConversational = data.suggestions && 
+        data.suggestions.length > 0 && 
+        typeof data.suggestions[0] === 'object' && 
+        'text' in data.suggestions[0];
+
       // Add idle prompt message
       const idleMessage: Message = {
         role: "assistant",
         content: data.message,
         timestamp: new Date(),
-        inlineSuggestions: data.inlineSuggestions || []
+        inlineSuggestions: data.inlineSuggestions || [],
+        conversationalSuggestions: isConversational ? data.suggestions : []
       };
 
       setMessages(prev => [...prev, idleMessage]);
@@ -143,13 +158,20 @@ export function GraphChatInterface({
       // Send to API
       const response = await onMessageSent(textToSend, messages);
 
+      // Determine if suggestions are conversational format
+      const isConversational = response.suggestions && 
+        response.suggestions.length > 0 && 
+        typeof response.suggestions[0] === 'object' && 
+        'text' in response.suggestions[0];
+
       // Add assistant response
       const assistantMessage: Message = {
         role: "assistant",
         content: response.message,
         timestamp: new Date(),
         pendingSuggestions: response.pendingSuggestions || [],
-        inlineSuggestions: response.inlineSuggestions || []
+        inlineSuggestions: response.inlineSuggestions || [],
+        conversationalSuggestions: isConversational ? response.suggestions as ConversationalSuggestion[] : []
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -414,12 +436,19 @@ export function GraphChatInterface({
 
       const data = await response.json();
 
+      // Determine if suggestions are conversational format
+      const isConversational = data.suggestions && 
+        data.suggestions.length > 0 && 
+        typeof data.suggestions[0] === 'object' && 
+        'text' in data.suggestions[0];
+
       // Add new topic message to conversation
       const newTopicMessage: Message = {
         role: "assistant",
         content: data.message,
         timestamp: new Date(),
-        inlineSuggestions: data.inlineSuggestions || []
+        inlineSuggestions: data.inlineSuggestions || [],
+        conversationalSuggestions: isConversational ? data.suggestions : []
       };
 
       setMessages(prev => [...prev, newTopicMessage]);
@@ -488,11 +517,11 @@ export function GraphChatInterface({
                   : "bg-slate-100 text-slate-900"
               }`}
             >
-              {/* Render mad-lib message if it has inline suggestions */}
-              {message.role === "assistant" && message.inlineSuggestions && message.inlineSuggestions.length > 0 ? (
-                <MadLibMessage
+              {/* Render conversational message if it has conversational suggestions */}
+              {message.role === "assistant" && message.conversationalSuggestions && message.conversationalSuggestions.length > 0 ? (
+                <ConversationalMessage
                   message={message.content}
-                  inlineSuggestions={message.inlineSuggestions}
+                  suggestions={message.conversationalSuggestions}
                   onSuggestionClick={handleInlineSuggestionClick}
                   onNewTopicClick={handleNewTopicClick}
                 />

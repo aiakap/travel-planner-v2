@@ -38,10 +38,12 @@ export async function POST(req: NextRequest) {
     // Process message with AI
     const aiResponse = await processProfileGraphChat(message, conversationHistory);
 
-    console.log("🤖 [Profile Graph API] AI extracted", aiResponse.items.length, "items");
+    console.log("🤖 [Profile Graph API] AI response type:", aiResponse.suggestions ? "Conversational" : "Legacy");
+    console.log("🤖 [Profile Graph API] AI extracted", aiResponse.items?.length || 0, "items");
+    console.log("💡 [Profile Graph API] Conversational suggestions:", aiResponse.suggestions?.length || 0);
 
     // Convert items to pending suggestions (don't auto-add to database)
-    const pendingSuggestions = aiResponse.items.map((item, index) => ({
+    const pendingSuggestions = (aiResponse.items || []).map((item, index) => ({
       id: `pending-${Date.now()}-${index}`,
       category: item.category,
       subcategory: item.metadata?.subcategory || "general",
@@ -64,13 +66,13 @@ export async function POST(req: NextRequest) {
     console.log("💡 [Profile Graph API] Returning", pendingSuggestions.length, "pending suggestions and", similarSuggestions.length, "similar suggestions");
     console.log("📊 [Profile Graph API] Similar suggestions:", similarSuggestions.map(s => s.value).join(", "));
 
-    // Return response with pending suggestions and inline suggestions
+    // Return response with conversational suggestions (new format) or inline suggestions (backward compatibility)
     return NextResponse.json({
       success: true,
       message: aiResponse.message,
       pendingSuggestions: pendingSuggestions,
       similarSuggestions: similarSuggestions,
-      suggestions: aiResponse.suggestions,
+      suggestions: aiResponse.suggestions || [],
       inlineSuggestions: aiResponse.inlineSuggestions || [],
       graphData: profileGraph.graphData,
       xmlData: profileGraph.xmlData
