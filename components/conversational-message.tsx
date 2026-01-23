@@ -27,6 +27,7 @@ export interface ConversationalMessageProps {
     metadata?: Record<string, string>;
   }) => void;
   onNewTopicClick: () => void;
+  existingProfileValues?: Set<string>;
   className?: string;
 }
 
@@ -83,6 +84,7 @@ export function ConversationalMessage({
   suggestions,
   onSuggestionClick,
   onNewTopicClick,
+  existingProfileValues,
   className = ""
 }: ConversationalMessageProps) {
   // Check if this is a conversational message with suggestions
@@ -132,6 +134,24 @@ export function ConversationalMessage({
                 if (segment.type === 'text') {
                   return <span key={`text-${segmentIndex}`}>{segment.content}</span>;
                 } else if (segment.type === 'suggestion' && segment.suggestion) {
+                  // Check if this item is already in the profile
+                  const isExisting = existingProfileValues?.has(
+                    segment.suggestion.text.toLowerCase()
+                  );
+                  
+                  if (isExisting) {
+                    // Render as plain text (not clickable)
+                    return (
+                      <span 
+                        key={`text-${segmentIndex}`}
+                        className="font-medium"
+                      >
+                        {segment.suggestion.text}
+                      </span>
+                    );
+                  }
+                  
+                  // Render as clickable bubble
                   return (
                     <SuggestionBubble
                       key={`suggestion-${segmentIndex}`}

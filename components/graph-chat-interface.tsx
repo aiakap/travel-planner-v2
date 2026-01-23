@@ -52,6 +52,7 @@ interface GraphChatInterfaceProps {
   }>;
   onSuggestionAccepted: (suggestion: PendingSuggestion) => Promise<void>;
   onNewTopicRequested?: () => Promise<void>;
+  currentProfileValues?: Set<string>;
   className?: string;
 }
 
@@ -59,6 +60,7 @@ export function GraphChatInterface({
   onMessageSent,
   onSuggestionAccepted,
   onNewTopicRequested,
+  currentProfileValues,
   className = ""
 }: GraphChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
@@ -72,6 +74,9 @@ export function GraphChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [smartSuggestions, setSmartSuggestions] = useState<SmartSuggestion[]>([]);
   const [fadingOutIds, setFadingOutIds] = useState<Set<string>>(new Set());
+  const [profileValues, setProfileValues] = useState<Set<string>>(
+    currentProfileValues || new Set()
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -118,6 +123,14 @@ export function GraphChatInterface({
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Update profile values with auto-added items
+      if (response.addedItems && response.addedItems.length > 0) {
+        response.addedItems.forEach(item => {
+          setProfileValues(prev => new Set(prev).add(item.value.toLowerCase()));
+        });
+        console.log("📊 [GraphChatInterface] Updated profile values with auto-added items");
+      }
       
       console.log("📨 [GraphChatInterface] Received response:", {
         pendingSuggestions: response.pendingSuggestions?.length || 0,
@@ -414,6 +427,9 @@ export function GraphChatInterface({
         value: suggestion.value,
         metadata: suggestion.metadata
       });
+      // Add to local tracking
+      setProfileValues(prev => new Set(prev).add(suggestion.value.toLowerCase()));
+      console.log("📊 [GraphChatInterface] Added to profile values:", suggestion.value);
     } catch (error) {
       console.error("Error accepting inline suggestion:", error);
     }
@@ -471,6 +487,7 @@ export function GraphChatInterface({
                   suggestions={message.conversationalSuggestions}
                   onSuggestionClick={handleInlineSuggestionClick}
                   onNewTopicClick={handleNewTopicClick}
+                  existingProfileValues={profileValues}
                 />
               ) : (
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>

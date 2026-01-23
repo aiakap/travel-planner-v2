@@ -10,10 +10,11 @@ import { useState } from "react";
 import { GraphData } from "@/lib/types/profile-graph";
 import { GraphChatInterface } from "@/components/graph-chat-interface";
 import { ProfileGraphCanvas } from "@/components/profile-graph-canvas";
+import { ProfileTextView } from "@/components/profile-text-view";
 import { DeleteNodeModal } from "@/components/delete-node-modal";
 import { ClearAllModal } from "@/components/clear-all-modal";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Trash2, MessageCircle, User, Network, FileText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -28,6 +29,8 @@ interface ProfileGraphClientProps {
   };
 }
 
+type ViewMode = "graph" | "text";
+
 export function ProfileGraphClient({
   initialGraphData,
   initialXmlData,
@@ -37,6 +40,7 @@ export function ProfileGraphClient({
   const [xmlData, setXmlData] = useState<string | null>(initialXmlData);
   const [colorScheme, setColorScheme] = useState<string>("default");
   const [customColors, setCustomColors] = useState<Record<string, string>>({});
+  const [viewMode, setViewMode] = useState<ViewMode>("graph");
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
     nodeId: string;
@@ -53,6 +57,17 @@ export function ProfileGraphClient({
   });
   const [clearAllModal, setClearAllModal] = useState(false);
   const router = useRouter();
+
+  // Extract all current profile item values
+  const getCurrentProfileValues = (): Set<string> => {
+    const values = new Set<string>();
+    graphData.nodes.forEach(node => {
+      if (node.type === 'item' && node.value) {
+        values.add(node.value.toLowerCase());
+      }
+    });
+    return values;
+  };
 
   // Handle message sent from chat
   const handleMessageSent = async (
@@ -270,75 +285,110 @@ export function ProfileGraphClient({
   };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-white border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+    <div className="h-screen flex bg-slate-50">
+      {/* Left Panel: Chat Interface */}
+      <div className="w-2/5 border-r border-slate-200 flex flex-col bg-white">
+        {/* Left Header */}
+        <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
+          <div className="flex items-center gap-3 w-full">
             <Link href="/profile">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="h-8">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Profile
+                Back
               </Button>
             </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">Profile Graph Builder</h1>
-              <p className="text-sm text-slate-600">
-                Build your personal profile through conversation
-              </p>
-            </div>
+            <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
+            <span className="text-sm font-medium text-slate-700">Chat:</span>
+            <span className="text-sm text-slate-600">Tell me anything, I'll update your profile</span>
+          </div>
+        </div>
+
+        {/* Chat Content */}
+        <div className="flex-1 overflow-hidden">
+          <GraphChatInterface 
+            onMessageSent={handleMessageSent}
+            onSuggestionAccepted={handleSuggestionAccepted}
+            onNewTopicRequested={handleNewTopicRequested}
+            currentProfileValues={getCurrentProfileValues()}
+          />
+        </div>
+      </div>
+
+      {/* Right Panel: Profile Visualization */}
+      <div className="flex-1 flex flex-col">
+        {/* Right Header */}
+        <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <User className="h-5 w-5 text-slate-700" />
+            <span className="text-sm font-medium text-slate-700">Traveler Briefing</span>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* View Toggle */}
+            <div className="flex gap-1 border rounded-lg p-0.5 bg-white">
+              <Button
+                variant={viewMode === "graph" ? "default" : "ghost"}
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setViewMode("graph")}
+                title="Graph View"
+              >
+                <Network className="h-3 w-3" />
+              </Button>
+              <Button
+                variant={viewMode === "text" ? "default" : "ghost"}
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setViewMode("text")}
+                title="Text View"
+              >
+                <FileText className="h-3 w-3" />
+              </Button>
+            </div>
+            
+            {/* Actions */}
             <Button
               variant="outline"
               size="sm"
               onClick={handleDownloadXml}
               disabled={!xmlData}
+              className="h-8"
             >
-              <Download className="w-4 h-4 mr-2" />
-              Export XML
+              <Download className="w-3 h-3 mr-1" />
+              Export
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleClearGraph}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="h-8 text-red-600 hover:text-red-700 hover:bg-red-50"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Clear Graph
+              <Trash2 className="w-3 h-3 mr-1" />
+              Clear
             </Button>
           </div>
         </div>
-      </header>
-
-      {/* Main Content - Split Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Chat Interface */}
-        <div className="w-2/5 border-r border-slate-200 flex flex-col">
-          <GraphChatInterface 
-            onMessageSent={handleMessageSent}
-            onSuggestionAccepted={handleSuggestionAccepted}
-            onNewTopicRequested={handleNewTopicRequested}
-          />
-        </div>
-
-        {/* Right: Graph Visualization */}
-        <div className="flex-1">
-          <ProfileGraphCanvas
-            key={`graph-${graphData.nodes.length}-${Date.now()}`}
-            graphData={graphData}
-            colorScheme={colorScheme}
-            customColors={customColors}
-            onNodeDelete={handleNodeDelete}
-            onNodesChange={handleNodesChange}
-            onColorSchemeChange={setColorScheme}
-            onCustomColorChange={(category, color) => {
-              setCustomColors(prev => ({ ...prev, [category]: color }));
-            }}
-            onClearAll={handleClearGraph}
-            className="h-full"
-          />
+        
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden">
+          {viewMode === "graph" ? (
+            <ProfileGraphCanvas
+              key={`graph-${graphData.nodes.length}-${Date.now()}`}
+              graphData={graphData}
+              colorScheme={colorScheme}
+              customColors={customColors}
+              onNodeDelete={handleNodeDelete}
+              onNodesChange={handleNodesChange}
+              onColorSchemeChange={setColorScheme}
+              onCustomColorChange={(category, color) => {
+                setCustomColors(prev => ({ ...prev, [category]: color }));
+              }}
+              onClearAll={handleClearGraph}
+              className="h-full"
+            />
+          ) : (
+            <ProfileTextView graphData={graphData} />
+          )}
         </div>
       </div>
 
