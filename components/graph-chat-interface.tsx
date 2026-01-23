@@ -60,8 +60,6 @@ export function GraphChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [smartSuggestions, setSmartSuggestions] = useState<SmartSuggestion[]>([]);
   const [fadingOutIds, setFadingOutIds] = useState<Set<string>>(new Set());
-  const [lastInteractionTime, setLastInteractionTime] = useState(Date.now());
-  const [idlePromptShown, setIdlePromptShown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -70,78 +68,10 @@ export function GraphChatInterface({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Idle timer - check every second for 10 seconds of inactivity
-  useEffect(() => {
-    const checkIdle = setInterval(() => {
-      const timeSinceLastInteraction = Date.now() - lastInteractionTime;
-      
-      if (timeSinceLastInteraction >= 10000 && !idlePromptShown && !isLoading && messages.length > 1) {
-        // Generate idle prompt
-        console.log("⏰ [Idle Timer] 10 seconds of inactivity detected");
-        handleIdlePrompt();
-        setIdlePromptShown(true);
-      }
-    }, 1000);
-    
-    return () => clearInterval(checkIdle);
-  }, [lastInteractionTime, idlePromptShown, isLoading, messages.length]);
-
-  // Reset idle timer
-  const resetIdleTimer = () => {
-    setLastInteractionTime(Date.now());
-    setIdlePromptShown(false);
-  };
-
-  // Handle idle prompt generation
-  const handleIdlePrompt = async () => {
-    try {
-      const response = await fetch("/api/profile-graph/suggest-new-topic", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          conversationHistory: messages.map(m => ({
-            role: m.role,
-            content: m.content
-          }))
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate idle prompt");
-      }
-
-      const data = await response.json();
-
-      // Determine if suggestions are conversational format
-      const isConversational = data.suggestions && 
-        data.suggestions.length > 0 && 
-        typeof data.suggestions[0] === 'object' && 
-        'text' in data.suggestions[0];
-
-      // Add idle prompt message
-      const idleMessage: Message = {
-        role: "assistant",
-        content: data.message,
-        timestamp: new Date(),
-        inlineSuggestions: data.inlineSuggestions || [],
-        conversationalSuggestions: isConversational ? data.suggestions : []
-      };
-
-      setMessages(prev => [...prev, idleMessage]);
-    } catch (error) {
-      console.error("Error generating idle prompt:", error);
-    }
-  };
-
   // Handle sending message
   const handleSend = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
     if (!textToSend || isLoading) return;
-
-    // Reset idle timer
-    resetIdleTimer();
 
     // Add user message
     const userMessage: Message = {
@@ -412,9 +342,6 @@ export function GraphChatInterface({
 
   // Handle new topic request
   const handleNewTopicClick = async () => {
-    // Reset idle timer
-    resetIdleTimer();
-    
     setIsLoading(true);
     try {
       const response = await fetch("/api/profile-graph/suggest-new-topic", {
@@ -466,9 +393,6 @@ export function GraphChatInterface({
     value: string;
     metadata?: Record<string, string>;
   }) => {
-    // Reset idle timer
-    resetIdleTimer();
-    
     try {
       await onSuggestionAccepted({
         id: `inline-${Date.now()}`,
@@ -558,10 +482,7 @@ export function GraphChatInterface({
           <Input
             ref={inputRef}
             value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              resetIdleTimer();
-            }}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Tell me about yourself..."
             disabled={isLoading}

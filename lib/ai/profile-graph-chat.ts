@@ -499,13 +499,13 @@ export async function processProfileGraphChat(
 }
 
 /**
- * Generate idle prompt - new angle suggestion when user is inactive
+ * Generate new topic prompt - new angle suggestion when user requests it
  */
 export async function generateIdlePrompt(
   currentGraphData: GraphData,
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<ProfileGraphChatResponse> {
-  console.log("🤖 [Profile Graph AI] Generating idle prompt");
+  console.log("🤖 [Profile Graph AI] Generating new topic prompt");
 
   // Analyze what's in the graph
   const existingCategories = new Set(
@@ -524,7 +524,7 @@ export async function generateIdlePrompt(
     ? missingCategories[Math.floor(Math.random() * missingCategories.length)]
     : GRAPH_CATEGORIES[Math.floor(Math.random() * GRAPH_CATEGORIES.length)].id;
 
-  const prompt = `The user has been idle for 10 seconds. Generate a natural conversational prompt to explore a new angle.
+  const prompt = `The user clicked "suggest a new topic". Generate a natural conversational prompt to explore a new angle.
 
 Current profile graph categories: ${Array.from(existingCategories).join(", ") || "none yet"}
 Target a different topic, focusing on: ${targetCategory}
@@ -571,7 +571,7 @@ Return JSON with "message" and "suggestions" array.`;
       inlineSuggestions: []
     };
   } catch (error) {
-    console.error("❌ [Profile Graph AI] Error generating idle prompt:", error);
+    console.error("❌ [Profile Graph AI] Error generating new topic prompt:", error);
     
     // Fallback
     return {
