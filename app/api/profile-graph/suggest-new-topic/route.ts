@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getUserProfileGraph } from "@/lib/actions/profile-graph-actions";
 import { generateNewTopicSuggestion } from "@/lib/ai/profile-graph-chat";
+import { extractItemsFromXml } from "@/lib/profile-graph-xml";
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,11 +30,13 @@ export async function POST(req: NextRequest) {
 
     // Get current profile graph
     const profileGraph = await getUserProfileGraph(session.user.id);
+    const profileItems = extractItemsFromXml(profileGraph.xmlData);
 
     // Generate new topic suggestion
     const response = await generateNewTopicSuggestion(
       profileGraph.graphData,
-      conversationHistory
+      conversationHistory,
+      profileItems
     );
 
     console.log("✅ [New Topic API] New topic generated");

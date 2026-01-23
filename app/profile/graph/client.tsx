@@ -77,17 +77,24 @@ export function ProfileGraphClient({
 
       const data = await response.json();
 
-      // Update graph data (without new items, just current state)
+      // Update graph data with auto-added items
       if (data.graphData) {
+        console.log("📊 [Client] Updating graph with", data.graphData.nodes.length, "nodes");
         setGraphData(data.graphData);
       }
       if (data.xmlData) {
         setXmlData(data.xmlData);
       }
 
+      // Log auto-added items
+      if (data.addedItems && data.addedItems.length > 0) {
+        console.log("✨ [Client] Auto-added items:", data.addedItems.map((i: any) => i.value).join(", "));
+      }
+
       return {
         message: data.message,
         suggestions: data.suggestions || [],
+        addedItems: data.addedItems || [],
         pendingSuggestions: data.pendingSuggestions || [],
         inlineSuggestions: data.inlineSuggestions || []
       };

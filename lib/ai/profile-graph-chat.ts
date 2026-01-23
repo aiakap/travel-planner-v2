@@ -9,6 +9,63 @@ import { generateText } from "ai";
 import { ProfileGraphChatResponse, ProfileGraphItem, GRAPH_CATEGORIES, GraphData } from "@/lib/types/profile-graph";
 import { generateInitialSimilarTags } from "./generate-similar-tags";
 
+const EXTRACTION_SYSTEM_PROMPT = `You are an expert at extracting explicit profile information from user messages.
+
+Extract ONLY items the user explicitly states. Do NOT infer or suggest related items.
+
+## Categories
+- travel-preferences: Airlines, hotels, travel class, loyalty programs, transportation, amenities
+- family: Spouse, children, parents, siblings, friends, travel companions
+- hobbies: Sports, arts, outdoor activities, culinary interests, entertainment
+- spending-priorities: Budget allocation, what they prioritize spending on
+- travel-style: Solo vs group, luxury vs budget, adventure vs relaxation
+- destinations: Places visited, wishlist, favorite destinations
+- other: Anything that doesn't fit the above categories
+
+## Subcategories
+- travel-preferences: airlines, hotels, travel-class, loyalty-programs, transportation, amenities
+- family: spouse, children, parents, siblings, friends
+- hobbies: sports, arts, outdoor, culinary, entertainment
+- spending-priorities: budget-allocation, priorities
+- travel-style: solo-vs-group, luxury-vs-budget, adventure-vs-relaxation
+- destinations: visited, wishlist, favorites
+- other: general
+
+## Examples
+
+Input: "I like to swim"
+Output: {"items": [{"value": "Swimming", "category": "hobbies", "subcategory": "sports", "metadata": {"context": "user explicitly stated interest"}}]}
+
+Input: "I like swimming, hiking, and photography"
+Output: {"items": [
+  {"value": "Swimming", "category": "hobbies", "subcategory": "sports", "metadata": {"context": "user explicitly stated interest"}},
+  {"value": "Hiking", "category": "hobbies", "subcategory": "outdoor", "metadata": {"context": "user explicitly stated interest"}},
+  {"value": "Photography", "category": "hobbies", "subcategory": "arts", "metadata": {"context": "user explicitly stated interest"}}
+]}
+
+Input: "I have a toddler and a baby"
+Output: {"items": [
+  {"value": "Toddler", "category": "family", "subcategory": "children", "metadata": {"context": "user has toddler"}},
+  {"value": "Baby", "category": "family", "subcategory": "children", "metadata": {"context": "user has baby"}}
+]}
+
+Input: "I prefer business class"
+Output: {"items": [{"value": "Business Class", "category": "travel-preferences", "subcategory": "travel-class", "metadata": {"context": "user prefers business class"}}]}
+
+Input: "Tell me more about that"
+Output: {"items": []}
+
+Input: "What should I consider?"
+Output: {"items": []}
+
+## Rules
+- Only extract explicitly mentioned items
+- Do NOT extract items already in their current profile
+- Return empty array if no explicit items found
+- Use appropriate categories and subcategories
+- Normalize values (e.g., "swim" → "Swimming", "hike" → "Hiking")
+- Return valid JSON array only`;
+
 const PROFILE_GRAPH_SYSTEM_PROMPT = `You are an expert travel concierge helping users build their personal profile graph.
 
 ## Your Goal
@@ -70,16 +127,81 @@ You MUST respond with valid JSON (no markdown, no code fences):
 - Use proper paragraph breaks (\\n\\n) between paragraphs
 - Suggestions should be specific and actionable (e.g., "Direct Flights", "High-Speed WiFi", "Family Friendly")
 - Include 5-10 suggestions per response, naturally woven into the text
+- ONLY include suggestions for items NOT in the user's current profile
+- Items already in profile should be mentioned naturally without brackets
+- Check the "Current Profile" section to see what they already have
+
+## Profile Context Awareness
+
+You have access to the user's current profile graph items. Use this information to:
+
+1. **Reference Previous Choices**: Explicitly mention items they've already added
+   - Example: "I see you've added [Open Ocean] and [Snorkeling] to your profile..."
+   - Example: "It's great to see you have anchored your profile around [Open Ocean] swimming and [Snorkeling]..."
+   
+2. **Build on Their Choices**: Provide deeper, related suggestions
+   - If they added "Swimming" → Suggest beach access, gear storage, after-swim amenities
+   - If they added "Remote Work" → Suggest specific workspace features, time zones, coworking
+   - If they added "Toddler" → Suggest specific safety features, meal options, entertainment
+
+3. **Infer Implications**: Understand what their choices mean
+   - "Open Ocean" + "Snorkeling" = They prefer salt water over pools
+   - "Business Class" + "Status Chaser" = They value comfort and loyalty programs
+   - "Photography" + "Mountains" = They want scenic locations with good lighting
+
+4. **Organize by Themes**: Group follow-up suggestions into logical categories
+   - For swimmers: "Access", "Recovery", "Safety", "Equipment"
+   - For families: "Logistics", "Entertainment", "Safety", "Dining"
+   - For remote workers: "Connectivity", "Workspace", "Time Management", "Community"
+
+5. **Progress from Broad to Specific**: Start with what they've established, then drill deeper
+   - First response: Broad activity (Swimming)
+   - Follow-up: Specific environment (Open Ocean vs Pool)
+   - Next: Logistics (Beach Access, Gear Storage)
+   - Then: Recovery (After-swim amenities, Skin care)
+
+## CRITICAL: Never Re-link Existing Items
+
+You will receive the user's current profile items. For items already in their profile:
+- DO NOT put them in [brackets]
+- DO NOT suggest them again in the suggestions array
+- Reference them naturally in your text without brackets
+
+Example:
+Current Profile:
+- hobbies/sports: Swimming, Snorkeling
+- destinations/wishlist: Hawaii
+
+User: "Tell me more about swimming"
+
+WRONG:
+"Since you love [Swimming] and [Snorkeling], let's explore [Hawaii] beaches..."
+
+CORRECT:
+"Since you love swimming and snorkeling, let's explore beach access options in Hawaii like [Direct Beach Access] and [Beachside Service]."
+
+Only use [brackets] for NEW items not yet in their profile.
+
+## Current Profile Items Format
+
+You will receive the user's current profile items in this format:
+
+Current Profile:
+- hobbies/sports: Swimming, Snorkeling
+- destinations/wishlist: Hawaii, Open Ocean
+- travel-preferences/amenities: Direct Beach Access
+
+Use this context to make your responses more relevant and build on their existing preferences.
 
 ## Response Structure Template
 
 Follow this structure for your responses:
 
 **Paragraph 1 (Empathetic Opening):**
-Acknowledge what the user said with understanding and context. Show you "get" their situation.
+Acknowledge what the user said with understanding and context. Show you "get" their situation. If they have profile items, reference them explicitly.
 
 **Paragraph 2-3 (Reasoning + Suggestions):**
-Explain the implications and reasoning behind your recommendations. Naturally weave in [Bracketed Suggestions] as you explain your thinking. Each paragraph should focus on a different aspect or category.
+Explain the implications and reasoning behind your recommendations. Naturally weave in [Bracketed Suggestions] as you explain your thinking. Each paragraph should focus on a different aspect or category. Build on their existing profile items.
 
 **Paragraph 4 (Follow-up Questions):**
 End with natural questions to gather more information or explore related topics.
@@ -282,7 +404,58 @@ Response:
   ]
 }
 
-**Example 4: Heavy Metal Music**
+**Example 4: Follow-up on Swimming (with Profile Context)**
+
+Current Profile:
+- hobbies/sports: Swimming, Snorkeling
+- destinations/wishlist: Hawaii, Open Ocean
+
+User: "Tell me more about what I need"
+
+Response:
+{
+  "message": "It is great to see you have anchored your profile around [Open Ocean] swimming and [Snorkeling]. Since you prefer being in the salt water over a pool, we should refine two key areas that often make or break a beach trip: Access and Recovery.\\n\\n1. The 'Door-to-Sand' Logistics\\nBecause you plan to be in the ocean frequently, the distance between your room and the water matters. I suggest we prioritize [Direct Beach Access] so you can walk barefoot from your room to the waves.\\n\\nIf you plan on bringing your own mask and fins, would you like us to look for properties that offer [Secure Gear Storage] near the beach, or perhaps a room with a [Private Lanai/Balcony] suitable for drying wet gear?\\n\\n2. The 'Apres-Swim' Experience\\nOcean swimming burns a lot of energy and exposes you to the elements. To keep you comfortable, should we look for resorts that offer [Beachside Service] for hydration and snacks?\\n\\nMany ocean lovers also prioritize their skin after a day in the salt and sun. Would you like to add a preference for [Aloe/After-Sun Treatments] in the spa, or hotels that provide [Complimentary Reef-Safe Sunscreen]?",
+  "suggestions": [
+    {
+      "text": "Direct Beach Access",
+      "category": "travel-preferences",
+      "subcategory": "amenities",
+      "metadata": {"context": "minimize distance from room to ocean for frequent swimming"}
+    },
+    {
+      "text": "Secure Gear Storage",
+      "category": "travel-preferences",
+      "subcategory": "amenities",
+      "metadata": {"context": "storage for snorkeling equipment near beach"}
+    },
+    {
+      "text": "Private Lanai/Balcony",
+      "category": "travel-preferences",
+      "subcategory": "amenities",
+      "metadata": {"context": "space for drying wet swimming gear"}
+    },
+    {
+      "text": "Beachside Service",
+      "category": "travel-preferences",
+      "subcategory": "amenities",
+      "metadata": {"context": "hydration and snacks after ocean swimming"}
+    },
+    {
+      "text": "Aloe/After-Sun Treatments",
+      "category": "travel-preferences",
+      "subcategory": "amenities",
+      "metadata": {"context": "skin care after sun and salt water exposure"}
+    },
+    {
+      "text": "Complimentary Reef-Safe Sunscreen",
+      "category": "travel-preferences",
+      "subcategory": "amenities",
+      "metadata": {"context": "sun protection for ocean activities"}
+    }
+  ]
+}
+
+**Example 5: Heavy Metal Music**
 
 User: "I love heavy metal music"
 
@@ -385,14 +558,137 @@ export interface ProfileGraphAIResponse {
 }
 
 /**
+ * Format profile items for AI context
+ */
+function formatProfileItemsForAI(items: ProfileGraphItem[]): string {
+  if (!items || items.length === 0) {
+    return "Current Profile: Empty (this is the user's first interaction)";
+  }
+  
+  // Group items by category and subcategory
+  const grouped: Record<string, Record<string, string[]>> = {};
+  
+  for (const item of items) {
+    if (!grouped[item.category]) {
+      grouped[item.category] = {};
+    }
+    const subcategory = item.metadata?.subcategory || 'general';
+    if (!grouped[item.category][subcategory]) {
+      grouped[item.category][subcategory] = [];
+    }
+    grouped[item.category][subcategory].push(item.value);
+  }
+  
+  // Format as readable text
+  let formatted = "Current Profile:\n";
+  for (const [category, subcategories] of Object.entries(grouped)) {
+    for (const [subcategory, values] of Object.entries(subcategories)) {
+      formatted += `- ${category}/${subcategory}: ${values.join(", ")}\n`;
+    }
+  }
+  
+  return formatted;
+}
+
+/**
+ * Extract explicit items from user message without generating conversational text
+ */
+export async function extractExplicitItems(
+  userMessage: string,
+  currentProfileItems: ProfileGraphItem[]
+): Promise<ExtractedItem[]> {
+  console.log("🔍 [Profile Graph AI] Extracting explicit items from:", userMessage);
+  
+  // Format profile context to avoid re-extracting existing items
+  const profileContext = formatProfileItemsForAI(currentProfileItems);
+  
+  const prompt = `Extract ONLY explicitly stated items from the user's message.
+
+${profileContext}
+
+User message: "${userMessage}"
+
+Rules:
+- Only extract items the user explicitly mentions
+- Do NOT infer or suggest related items
+- Do NOT extract items already in their profile
+- For "I like swimming, hiking, and photography" → extract all three
+- For "I like to swim" → extract "Swimming"
+- Normalize values (e.g., "swim" → "Swimming")
+- Return empty array if no explicit items found
+
+Return JSON object with "items" array:
+{
+  "items": [
+    {"value": "Swimming", "category": "hobbies", "subcategory": "sports", "metadata": {"context": "..."}}
+  ]
+}`;
+
+  try {
+    const result = await generateText({
+      model: openai("gpt-4o-2024-11-20"),
+      system: EXTRACTION_SYSTEM_PROMPT,
+      prompt: prompt,
+      temperature: 0.3, // Lower temperature for more deterministic extraction
+      maxTokens: 1000,
+      experimental_providerMetadata: {
+        openai: {
+          response_format: { type: "json_object" },
+        },
+      },
+    });
+
+    // Clean response
+    let cleanedText = result.text.trim();
+    console.log("🔍 [Profile Graph AI] Raw AI response:", cleanedText);
+    
+    if (cleanedText.startsWith('```json')) {
+      cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    cleanedText = cleanedText.trim();
+    console.log("🔍 [Profile Graph AI] Cleaned response:", cleanedText);
+
+    // Parse JSON response - handle both array and object wrapper
+    let parsed: ExtractedItem[] | { items: ExtractedItem[] };
+    try {
+      parsed = JSON.parse(cleanedText);
+      console.log("🔍 [Profile Graph AI] Parsed JSON:", JSON.stringify(parsed, null, 2));
+    } catch (e) {
+      console.error("❌ [Profile Graph AI] Failed to parse extraction response:", cleanedText);
+      console.error("❌ [Profile Graph AI] Parse error:", e);
+      return [];
+    }
+
+    // Handle both array format and object wrapper
+    const items = Array.isArray(parsed) ? parsed : (parsed as any).items || [];
+    console.log("🔍 [Profile Graph AI] Final items array:", JSON.stringify(items, null, 2));
+
+    console.log("✅ [Profile Graph AI] Extracted", items.length, "explicit items:", items.map(i => i.value).join(", "));
+    
+    return items;
+  } catch (error) {
+    console.error("❌ [Profile Graph AI] Error extracting items:", error);
+    return [];
+  }
+}
+
+/**
  * Process user input and extract profile information
  */
 export async function processProfileGraphChat(
   userMessage: string,
-  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>,
+  currentProfileItems?: ProfileGraphItem[]
 ): Promise<ProfileGraphChatResponse> {
   console.log("🤖 [Profile Graph AI] Processing message:", userMessage);
+  console.log("📊 [Profile Graph AI] Current profile items:", currentProfileItems?.length || 0);
 
+  // Format profile context
+  const profileContext = formatProfileItemsForAI(currentProfileItems || []);
+  
   // Build conversation context
   let prompt = userMessage;
   if (conversationHistory && conversationHistory.length > 0) {
@@ -400,7 +696,9 @@ export async function processProfileGraphChat(
       .slice(-6) // Last 3 exchanges
       .map(msg => `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`)
       .join("\n");
-    prompt = `${historyText}\n\nUser: ${userMessage}`;
+    prompt = `${profileContext}\n\n${historyText}\n\nUser: ${userMessage}`;
+  } else {
+    prompt = `${profileContext}\n\nUser: ${userMessage}`;
   }
 
   try {
@@ -503,9 +801,11 @@ export async function processProfileGraphChat(
  */
 export async function generateIdlePrompt(
   currentGraphData: GraphData,
-  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>,
+  currentProfileItems?: ProfileGraphItem[]
 ): Promise<ProfileGraphChatResponse> {
   console.log("🤖 [Profile Graph AI] Generating new topic prompt");
+  console.log("📊 [Profile Graph AI] Current profile items:", currentProfileItems?.length || 0);
 
   // Analyze what's in the graph
   const existingCategories = new Set(
@@ -524,14 +824,24 @@ export async function generateIdlePrompt(
     ? missingCategories[Math.floor(Math.random() * missingCategories.length)]
     : GRAPH_CATEGORIES[Math.floor(Math.random() * GRAPH_CATEGORIES.length)].id;
 
+  // Format profile context
+  const profileContext = formatProfileItemsForAI(currentProfileItems || []);
+
   const prompt = `The user clicked "suggest a new topic". Generate a natural conversational prompt to explore a new angle.
+
+${profileContext}
 
 Current profile graph categories: ${Array.from(existingCategories).join(", ") || "none yet"}
 Target a different topic, focusing on: ${targetCategory}
 
+IMPORTANT: Reference items from their current profile and build on them. For example:
+- If they have swimming/ocean items, suggest related beach logistics or water activities
+- If they have family items, suggest related travel accommodations or activities
+- If they have work items, suggest related productivity or lifestyle preferences
+
 Start with "Let's try something different" or similar brief transition.
 Create a multi-paragraph conversational response with [Bracketed Suggestions] inline.
-Provide 5-8 specific suggestions related to the target category.
+Provide 5-8 specific suggestions that BUILD ON their existing profile items.
 
 Return JSON with "message" and "suggestions" array.`;
 
@@ -613,10 +923,11 @@ Return JSON with "message" and "suggestions" array.`;
  */
 export async function generateNewTopicSuggestion(
   currentGraphData: GraphData,
-  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>,
+  currentProfileItems?: ProfileGraphItem[]
 ): Promise<ProfileGraphChatResponse> {
   console.log("🤖 [Profile Graph AI] Generating new topic suggestion");
 
   // Same logic as idle prompt
-  return generateIdlePrompt(currentGraphData, conversationHistory);
+  return generateIdlePrompt(currentGraphData, conversationHistory, currentProfileItems);
 }

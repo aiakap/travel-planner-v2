@@ -28,12 +28,24 @@ interface Message {
   pendingSuggestions?: PendingSuggestion[];
   inlineSuggestions?: InlineSuggestion[];
   conversationalSuggestions?: ConversationalSuggestion[];
+  addedItems?: Array<{
+    category: string;
+    subcategory: string;
+    value: string;
+    metadata?: Record<string, string>;
+  }>;
 }
 
 interface GraphChatInterfaceProps {
   onMessageSent: (message: string, history: Message[]) => Promise<{
     message: string;
     suggestions: string[] | ConversationalSuggestion[];
+    addedItems?: Array<{
+      category: string;
+      subcategory: string;
+      value: string;
+      metadata?: Record<string, string>;
+    }>;
     pendingSuggestions?: PendingSuggestion[];
     similarSuggestions?: PendingSuggestion[];
     inlineSuggestions?: InlineSuggestion[];
@@ -101,7 +113,8 @@ export function GraphChatInterface({
         timestamp: new Date(),
         pendingSuggestions: response.pendingSuggestions || [],
         inlineSuggestions: response.inlineSuggestions || [],
-        conversationalSuggestions: isConversational ? response.suggestions as ConversationalSuggestion[] : []
+        conversationalSuggestions: isConversational ? response.suggestions as ConversationalSuggestion[] : [],
+        addedItems: response.addedItems || []
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -441,6 +454,16 @@ export function GraphChatInterface({
                   : "bg-slate-100 text-slate-900"
               }`}
             >
+              {/* Show auto-added items badge */}
+              {message.role === "assistant" && message.addedItems && message.addedItems.length > 0 && (
+                <div className="mb-3 pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-2 py-1.5 rounded">
+                    <span className="font-medium">✓ Added to profile:</span>
+                    <span>{message.addedItems.map(item => item.value).join(", ")}</span>
+                  </div>
+                </div>
+              )}
+              
               {/* Render conversational message if it has conversational suggestions */}
               {message.role === "assistant" && message.conversationalSuggestions && message.conversationalSuggestions.length > 0 ? (
                 <ConversationalMessage
