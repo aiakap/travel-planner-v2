@@ -1,6 +1,6 @@
 "use client";
 
-import { User, UserCircle, Settings, LogOut } from "lucide-react";
+import { User, UserCircle, Settings, LogOut, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import {
@@ -31,6 +31,15 @@ export function UserMenu() {
           >
             <UserCircle className="w-4 h-4" />
             <span>Profile</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link
+            href="/profile/graph"
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Dossier</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

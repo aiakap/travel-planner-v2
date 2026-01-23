@@ -445,17 +445,6 @@ export function GraphChatInterface({
 
   return (
     <div className={`flex flex-col h-full bg-white ${className}`}>
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-slate-200 p-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-blue-500" />
-          <h2 className="text-lg font-semibold text-slate-900">Build Your Profile</h2>
-        </div>
-        <p className="text-sm text-slate-600 mt-1">
-          Chat with me to create your personal profile graph
-        </p>
-      </div>
-
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => (
