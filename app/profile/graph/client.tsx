@@ -748,7 +748,10 @@ export function ProfileGraphClient({
               className="h-full"
             />
           ) : viewMode === "text" ? (
-            <ProfileTextView graphData={graphData} />
+            <ProfileTextView 
+              graphData={graphData}
+              onNodeDelete={handleNodeDelete}
+            />
           ) : (
             <ProfileDossierView 
               content={dossierContent}

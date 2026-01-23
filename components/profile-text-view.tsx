@@ -1,9 +1,12 @@
 "use client";
 
 import { GraphData, GRAPH_CATEGORIES, GraphNode } from "@/lib/types/profile-graph";
+import { X } from "lucide-react";
+import { useState } from "react";
 
 interface ProfileTextViewProps {
   graphData: GraphData;
+  onNodeDelete?: (nodeId: string) => void;
 }
 
 interface GroupedCategory {
@@ -17,52 +20,86 @@ interface GroupedCategory {
   uncategorizedItems: GraphNode[];
 }
 
-export function ProfileTextView({ graphData }: ProfileTextViewProps) {
+export function ProfileTextView({ graphData, onNodeDelete }: ProfileTextViewProps) {
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  
   // Group items by category and subcategory
   const groupedData = groupProfileData(graphData);
   
+  const handleDelete = (item: GraphNode) => {
+    if (onNodeDelete) {
+      onNodeDelete(item.id);
+    }
+  };
+  
   return (
-    <div className="h-full overflow-y-auto p-6 bg-white">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Your Travel Profile</h2>
-          <p className="text-sm text-slate-600">
-            This is everything we know about your preferences, style, and interests.
+    <div className="h-full overflow-y-auto p-4 bg-white">
+      <div className="max-w-4xl mx-auto space-y-4">
+        <div className="mb-4">
+          <h2 className="text-xl font-bold text-slate-900 mb-1">Your Travel Profile</h2>
+          <p className="text-xs text-slate-600">
+            Hover over items to remove them
           </p>
         </div>
         
         {groupedData.map((category) => (
-          <div key={category.id} className="border-l-4 pl-4" style={{ borderColor: category.color }}>
-            <h3 className="text-lg font-semibold text-slate-900 mb-3">{category.label}</h3>
+          <div key={category.id} className="border-l-3 pl-3 py-1" style={{ borderColor: category.color }}>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">{category.label}</h3>
             
             {category.subcategories.map((subcat) => (
-              <div key={subcat.name} className="mb-3">
-                <h4 className="text-sm font-medium text-slate-700 mb-1.5">
+              <div key={subcat.name} className="mb-2">
+                <h4 className="text-xs font-medium text-slate-600 mb-1">
                   {formatSubcategoryName(subcat.name)}
                 </h4>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {subcat.items.map((item) => (
-                    <span
+                    <div
                       key={item.id}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-slate-100 text-slate-700"
+                      className="group relative inline-flex items-center"
+                      onMouseEnter={() => setHoveredItem(item.id)}
+                      onMouseLeave={() => setHoveredItem(null)}
                     >
-                      {item.value}
-                    </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-default">
+                        {item.value}
+                      </span>
+                      {hoveredItem === item.id && onNodeDelete && (
+                        <button
+                          onClick={() => handleDelete(item)}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors"
+                          title="Delete"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
             ))}
             
             {category.uncategorizedItems.length > 0 && (
-              <div className="mb-3">
-                <div className="flex flex-wrap gap-2">
+              <div className="mb-2">
+                <div className="flex flex-wrap gap-1.5">
                   {category.uncategorizedItems.map((item) => (
-                    <span
+                    <div
                       key={item.id}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-slate-100 text-slate-700"
+                      className="group relative inline-flex items-center"
+                      onMouseEnter={() => setHoveredItem(item.id)}
+                      onMouseLeave={() => setHoveredItem(null)}
                     >
-                      {item.value}
-                    </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-default">
+                        {item.value}
+                      </span>
+                      {hoveredItem === item.id && onNodeDelete && (
+                        <button
+                          onClick={() => handleDelete(item)}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors"
+                          title="Delete"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -72,7 +109,7 @@ export function ProfileTextView({ graphData }: ProfileTextViewProps) {
         
         {groupedData.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-slate-500">No profile data yet. Start chatting to build your profile!</p>
+            <p className="text-slate-500 text-sm">No profile data yet. Start chatting to build your profile!</p>
           </div>
         )}
       </div>
