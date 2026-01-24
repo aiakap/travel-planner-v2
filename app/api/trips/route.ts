@@ -17,6 +17,17 @@ export async function GET(req: NextRequest) {
         segments: {
           include: {
             segmentType: true,
+            reservations: {
+              include: {
+                reservationType: {
+                  include: {
+                    category: true,
+                  },
+                },
+                reservationStatus: true,
+              },
+              orderBy: { startTime: "asc" },
+            },
           },
           orderBy: {
             order: "asc",
@@ -63,6 +74,17 @@ export async function POST(req: NextRequest) {
         segments: {
           include: {
             segmentType: true,
+            reservations: {
+              include: {
+                reservationType: {
+                  include: {
+                    category: true,
+                  },
+                },
+                reservationStatus: true,
+              },
+              orderBy: { startTime: "asc" },
+            },
           },
           orderBy: {
             order: "asc",

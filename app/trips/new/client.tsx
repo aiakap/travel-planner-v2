@@ -282,7 +282,7 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
         });
         
         // Redirect to experience builder
-        router.push(`/test/experience-builder?tripId=${data.trip.id}`);
+        router.push(`/exp?tripId=${data.trip.id}`);
       } else {
         throw new Error(data.error || "Failed to create trip");
       }

@@ -98,11 +98,6 @@ export default async function ExpPage({
     console.error("Error loading profile data:", error)
   }
 
-  // Load segment types for editing
-  const segmentTypes = await prisma.segmentType.findMany({
-    orderBy: { name: "asc" },
-  })
-
   return (
     <ExpClient
       initialTrips={allTrips}
@@ -112,7 +107,6 @@ export default async function ExpPage({
       userId={session.user.id}
       profileData={profileData}
       quickActions={quickActions}
-      segmentTypes={segmentTypes}
     />
   )
 }

@@ -17,6 +17,8 @@ type DBSegment = {
   imageUrl: string | null
   startTime: Date | null
   endTime: Date | null
+  startTitle: string
+  endTitle: string
   segmentType: { name: string }
   reservations: DBReservation[]
   order: number
@@ -91,10 +93,13 @@ function transformSegment(segment: DBSegment, segmentIndex: number, tripStartDat
   
   return {
     id: segmentIndex + 1,
+    dbId: segment.id,
     name: segment.name,
     type: segmentType,
     startDate: formatShortDate(segment.startTime || tripStartDate),
     endDate: formatShortDate(segment.endTime || tripStartDate),
+    startLocation: segment.startTitle,
+    endLocation: segment.endTitle,
     image: segment.imageUrl || undefined,
     days
   }

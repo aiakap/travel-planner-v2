@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Badge } from "@/app/exp1/ui/badge"
+import { Button } from "@/app/exp1/ui/button"
 import { Plane, Hotel, Utensils, Train, Camera, Phone, Mail, Globe, Moon, MessageCircle, Edit, ChevronDown } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 
@@ -26,13 +26,10 @@ interface Reservation {
 interface TableViewProps {
   segments: Array<{
     id: number
-    dbId?: string
     name: string
     type: string
     startDate: string
     endDate: string
-    startLocation?: string
-    endLocation?: string
     days: Array<{
       day: number
       date: string
@@ -56,11 +53,10 @@ interface TableViewProps {
   }) => void
   onChatAboutItem?: (reservation: Reservation, itemTitle: string) => void
   onChatAboutSegment?: (segment: any) => void
-  onEditSegment?: (segmentId: string) => void
   onEditItem?: (reservation: Reservation) => void
 }
 
-export function TableView({ segments, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditSegment, onEditItem }: TableViewProps) {
+export function TableView({ segments, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TableViewProps) {
   // #region agent log
   fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'table-view.tsx:54',message:'TableView rendering',data:{segmentsCount:segments?.length,hasSegments:!!segments,firstSegment:segments?.[0],firstSegmentDays:segments?.[0]?.days?.length,firstSegmentFirstDay:segments?.[0]?.days?.[0]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2,H5'})}).catch(()=>{});
   // #endregion
@@ -138,37 +134,6 @@ export function TableView({ segments, onSelectReservation, onChatAboutItem, onCh
     }
   }
 
-  // Format segment date string with locations
-  const formatSegmentDateString = (segment: (typeof segments)[0]) => {
-    const dayCount = segment.days.length
-    const startDate = segment.startDate
-    const endDate = segment.endDate
-    
-    // Parse dates to get full format
-    const start = new Date(startDate + ", " + new Date().getFullYear())
-    const end = new Date(endDate + ", " + new Date().getFullYear())
-    
-    const monthName = start.toLocaleDateString('en-US', { month: 'long' })
-    const startDay = start.getDate()
-    const endDay = end.getDate()
-    const year = new Date().getFullYear()
-    
-    let dateStr = `${monthName} ${startDay}-${endDay}, ${year} (${dayCount} Days)`
-    
-    // Add locations if available
-    if (segment.startLocation && segment.endLocation) {
-      if (segment.startLocation === segment.endLocation) {
-        // Same location - only show once
-        dateStr += ` (${segment.startLocation})`
-      } else {
-        // Different locations - show with arrow
-        dateStr += ` (${segment.startLocation} → ${segment.endLocation})`
-      }
-    }
-    
-    return dateStr
-  }
-
   return (
     <div className="space-y-4">
       {segments.map((segment, segmentIndex) => {
@@ -182,27 +147,13 @@ export function TableView({ segments, onSelectReservation, onChatAboutItem, onCh
               className="p-2 flex items-center justify-between group/segment"
               style={{ backgroundColor: `${segmentColor}20`, borderLeft: `4px solid ${segmentColor}` }}
             >
-              <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm">{segment.name}</span>
                 <span className="text-xs text-muted-foreground">
-                  {formatSegmentDateString(segment)}
+                  {segment.startDate} - {segment.endDate}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {segment.dbId && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEditSegment?.(segment.dbId!);
-                    }}
-                    className="h-6 w-6 p-0 hover:bg-slate-200/50 opacity-0 group-hover/segment:opacity-100 transition-opacity"
-                    title="Edit this segment"
-                  >
-                    <Edit className="h-3.5 w-3.5" />
-                  </Button>
-                )}
                 <Button
                   variant="ghost"
                   size="sm"

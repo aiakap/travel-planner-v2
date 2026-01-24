@@ -46,10 +46,13 @@ export interface V0Day {
 
 export interface V0Segment {
   id: number
+  dbId?: string
   name: string
   type: "travel" | "destination"
   startDate: string
   endDate: string
+  startLocation?: string
+  endLocation?: string
   image?: string
   days: V0Day[]
 }

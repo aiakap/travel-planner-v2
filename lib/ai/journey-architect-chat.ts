@@ -5,7 +5,8 @@
  */
 
 import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
+import { generateText, tool } from "ai";
+import { z } from "zod";
 import { TRIP_STRUCTURE_SYSTEM_PROMPT } from "./prompts";
 
 interface InMemorySegment {
@@ -52,17 +53,14 @@ export async function processJourneyArchitectChat(
       segmentCount: currentTrip.segments.length
     });
 
-    // Build conversation context
-    const messages = [
-      ...conversationHistory.map(msg => ({
-        role: msg.role as "user" | "assistant",
-        content: msg.content
-      })),
-      {
-        role: "user" as const,
-        content: message
-      }
-    ];
+    // Build conversation prompt
+    const conversationPrompt = conversationHistory
+      .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+      .join('\n\n');
+    
+    const fullPrompt = conversationPrompt 
+      ? `${conversationPrompt}\n\nUser: ${message}`
+      : message;
 
     // Add current trip context to system prompt
     const contextualSystemPrompt = `${TRIP_STRUCTURE_SYSTEM_PROMPT}
@@ -81,122 +79,100 @@ ${currentTrip.segments.map((seg, idx) => `${idx + 1}. ${seg.name} (${seg.segment
 
 Remember: Use your tools (update_in_memory_trip and add_in_memory_segment) to update the journey structure as you discuss it with the user.`;
 
-    // Define tools for the AI
+    // Define tools for the AI (using Vercel AI SDK tool format with Zod schemas)
     const tools = {
-      update_in_memory_trip: {
+      update_in_memory_trip: tool({
         description: "Update the Journey metadata in memory (not database). Use this to populate Journey details from conversation.",
-        parameters: {
-          type: "object" as const,
-          properties: {
-            title: {
-              type: "string",
-              description: "Journey title (use aspirational names)"
-            },
-            description: {
-              type: "string",
-              description: "Journey description"
-            },
-            startDate: {
-              type: "string",
-              description: "Start date in YYYY-MM-DD format"
-            },
-            endDate: {
-              type: "string",
-              description: "End date in YYYY-MM-DD format"
-            }
-          }
-        }
-      },
-      add_in_memory_segment: {
+        inputSchema: z.object({
+          title: z.string().optional().describe("Journey title (use aspirational names)"),
+          description: z.string().optional().describe("Journey description"),
+          startDate: z.string().optional().describe("Start date in YYYY-MM-DD format"),
+          endDate: z.string().optional().describe("End date in YYYY-MM-DD format"),
+        }),
+        execute: async ({ title, description, startDate, endDate }) => {
+          return {
+            success: true,
+            updateType: "trip_metadata",
+            updates: { title, description, startDate, endDate },
+          };
+        },
+      }),
+      add_in_memory_segment: tool({
         description: "Add a Chapter to the in-memory Journey. Each Chapter represents a distinct phase like a destination stay or travel leg.",
-        parameters: {
-          type: "object" as const,
-          properties: {
-            name: {
-              type: "string",
-              description: "Chapter name - use aspirational, evocative names (e.g., 'Hokkaido Alpine Adventure', 'Journey to the East: SFO → Tokyo')"
+        inputSchema: z.object({
+          name: z.string().describe("Chapter name - use aspirational, evocative names (e.g., 'Hokkaido Alpine Adventure', 'Journey to the East: SFO → Tokyo')"),
+          segmentType: z.enum(["Travel", "Stay", "Tour", "Retreat", "Road Trip"]).describe("Type of Chapter"),
+          startLocation: z.string().describe("Starting location (city, country)"),
+          endLocation: z.string().describe("Ending location (city, country)"),
+          startTime: z.string().optional().describe("Start date/time in ISO format"),
+          endTime: z.string().optional().describe("End date/time in ISO format"),
+          notes: z.string().optional().describe("Additional notes about this Chapter"),
+        }),
+        execute: async ({ name, segmentType, startLocation, endLocation, startTime, endTime, notes }) => {
+          return {
+            success: true,
+            updateType: "add_segment",
+            segment: {
+              tempId: `temp-${Date.now()}-${Math.random()}`,
+              name,
+              segmentType,
+              startLocation,
+              endLocation,
+              startTime: startTime || null,
+              endTime: endTime || null,
+              notes: notes || null,
             },
-            segmentType: {
-              type: "string",
-              enum: ["Travel", "Stay", "Tour", "Retreat", "Road Trip"],
-              description: "Type of Chapter"
-            },
-            startLocation: {
-              type: "string",
-              description: "Starting location (city, country)"
-            },
-            endLocation: {
-              type: "string",
-              description: "Ending location (city, country)"
-            },
-            startTime: {
-              type: "string",
-              description: "Start date/time in ISO format"
-            },
-            endTime: {
-              type: "string",
-              description: "End date/time in ISO format"
-            },
-            notes: {
-              type: "string",
-              description: "Additional notes about this Chapter"
-            }
-          },
-          required: ["name", "segmentType", "startLocation", "endLocation"]
-        }
-      }
+          };
+        },
+      }),
     };
 
     // Call OpenAI with tools
     const response = await generateText({
       model: openai("gpt-4o-2024-11-20"),
       system: contextualSystemPrompt,
-      messages: messages,
+      prompt: fullPrompt,
       tools: tools,
-      toolChoice: "auto",
-      temperature: 0.7,
-      maxTokens: 2000
+      temperature: 0.7
     });
 
     console.log("🤖 [Journey Architect] AI response received");
     console.log("📝 [Journey Architect] Response text length:", response.text.length);
-    console.log("🔧 [Journey Architect] Tool calls:", response.toolCalls?.length || 0);
+    console.log("🔧 [Journey Architect] Steps:", response.steps?.length || 0);
 
-    // Process tool calls
+    // Process tool results (tools are auto-executed by Vercel AI SDK)
     const tripUpdates: Partial<InMemoryTrip> = {};
     const segmentsToAdd: InMemorySegment[] = [];
 
-    if (response.toolCalls && response.toolCalls.length > 0) {
-      for (const toolCall of response.toolCalls) {
-        console.log("🔧 [Journey Architect] Processing tool call:", toolCall.toolName);
-        
-        if (toolCall.toolName === "update_in_memory_trip") {
-          const args = toolCall.args as any;
-          console.log("📝 [Journey Architect] Updating trip metadata:", args);
-          
-          if (args.title) tripUpdates.title = args.title;
-          if (args.description) tripUpdates.description = args.description;
-          if (args.startDate) tripUpdates.startDate = args.startDate;
-          if (args.endDate) tripUpdates.endDate = args.endDate;
-        }
-        
-        if (toolCall.toolName === "add_in_memory_segment") {
-          const args = toolCall.args as any;
-          console.log("➕ [Journey Architect] Adding segment:", args.name);
-          
-          const newSegment: InMemorySegment = {
-            tempId: `temp-${Date.now()}-${Math.random()}`,
-            name: args.name,
-            segmentType: args.segmentType,
-            startLocation: args.startLocation,
-            endLocation: args.endLocation,
-            startTime: args.startTime || null,
-            endTime: args.endTime || null,
-            notes: args.notes || null,
-            order: currentTrip.segments.length + segmentsToAdd.length
-          };
-          
-          segmentsToAdd.push(newSegment);
+    if (response.steps) {
+      for (const step of response.steps) {
+        if (step.toolCalls) {
+          for (const toolCall of step.toolCalls) {
+            console.log("🔧 [Journey Architect] Processing tool call:", toolCall.toolName);
+            
+            // Access the result from the toolCall (cast to any to bypass TypeScript)
+            const result = (toolCall as any).result;
+            
+            if (toolCall.toolName === "update_in_memory_trip" && result?.success) {
+              console.log("📝 [Journey Architect] Updating trip metadata:", result.updates);
+              
+              if (result.updates.title) tripUpdates.title = result.updates.title;
+              if (result.updates.description) tripUpdates.description = result.updates.description;
+              if (result.updates.startDate) tripUpdates.startDate = result.updates.startDate;
+              if (result.updates.endDate) tripUpdates.endDate = result.updates.endDate;
+            }
+            
+            if (toolCall.toolName === "add_in_memory_segment" && result?.success) {
+              console.log("➕ [Journey Architect] Adding segment:", result.segment.name);
+              
+              const newSegment: InMemorySegment = {
+                ...result.segment,
+                order: currentTrip.segments.length + segmentsToAdd.length
+              };
+              
+              segmentsToAdd.push(newSegment);
+            }
+          }
         }
       }
     }

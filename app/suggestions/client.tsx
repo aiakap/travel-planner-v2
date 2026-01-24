@@ -62,7 +62,7 @@ const CATEGORY_CONFIG: Record<GraphCategory, { icon: any; label: string; color: 
 };
 
 export function SuggestionsClient({ user, userProfile, profileItems: initialProfileItems, xmlData: initialXmlData }: SuggestionsClientProps) {
-  const [profileOpen, setProfileOpen] = useState(true); // Open by default
+  const [profileOpen, setProfileOpen] = useState(false); // Closed by default
   
   // Profile state (local updates)
   const [profileItems, setProfileItems] = useState<ProfileGraphItem[]>(initialProfileItems);

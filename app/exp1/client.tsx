@@ -1,28 +1,27 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/app/exp1/ui/button"
 import { Send, Plus, GripVertical, Table2, GitBranch, Grid3X3, MessageCircle, Calendar, Loader2, MapPin } from "lucide-react"
-import { ChatWelcomeMessage } from "@/components/chat-welcome-message"
-import { ChatQuickActions } from "@/components/chat-quick-actions"
-import { ChatContextWelcome } from "@/components/chat-context-welcome"
-import { TripSelector } from "@/components/trip-selector"
-import { ChatNameDropdown } from "@/components/chat-name-dropdown"
-import { EditChatModal } from "@/components/edit-chat-modal"
-import { EditTripModal } from "@/components/edit-trip-modal"
-import { PersistedSegmentEditModal } from "@/components/persisted-segment-edit-modal"
-import { AILoadingAnimation } from "@/components/ai-loading-animation"
-import { ItineraryEmptyState } from "@/components/itinerary-empty-state"
-import { TimelineView } from "@/components/timeline-view"
-import { TableView } from "@/components/table-view"
-import { PhotosView } from "@/components/photos-view"
-import { ReservationDetailModal } from "@/components/reservation-detail-modal"
+import { ChatWelcomeMessage } from "@/app/exp1/components/chat-welcome-message"
+import { ChatQuickActions } from "@/app/exp1/components/chat-quick-actions"
+import { ChatContextWelcome } from "@/app/exp1/components/chat-context-welcome"
+import { TripSelector } from "@/app/exp1/components/trip-selector"
+import { ChatNameDropdown } from "@/app/exp1/components/chat-name-dropdown"
+import { EditChatModal } from "@/app/exp1/components/edit-chat-modal"
+import { EditTripModal } from "@/app/exp1/components/edit-trip-modal"
+import { AILoadingAnimation } from "@/app/exp1/components/ai-loading-animation"
+import { ItineraryEmptyState } from "@/app/exp1/components/itinerary-empty-state"
+import { TimelineView } from "@/app/exp1/components/timeline-view"
+import { TableView } from "@/app/exp1/components/table-view"
+import { PhotosView } from "@/app/exp1/components/photos-view"
+import { ReservationDetailModal } from "@/app/exp1/components/reservation-detail-modal"
 import { transformTripToV0Format } from "@/lib/v0-data-transform"
 import type { V0Itinerary } from "@/lib/v0-types"
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization"
 import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts"
-import { renameTripConversation, createTripConversation } from "@/lib/actions/chat-actions"
-import { MessageSegmentsRenderer } from "@/components/message-segments-renderer"
+import { renameTripConversation, createTripConversation, createConversation } from "@/lib/actions/chat-actions"
+import { MessageSegmentsRenderer } from "@/app/exp1/components/message-segments-renderer"
 import { MessageSegment } from "@/lib/types/place-pipeline"
 
 // Simple message type with segments
@@ -49,21 +48,8 @@ interface DBTrip {
     imageUrl: string | null
     startTime: Date | null
     endTime: Date | null
-    startTitle: string
-    endTitle: string
-    startLat: number
-    startLng: number
-    endLat: number
-    endLng: number
-    startTimeZoneId: string | null
-    startTimeZoneName: string | null
-    endTimeZoneId: string | null
-    endTimeZoneName: string | null
-    notes: string | null
     order: number
-    segmentType: { id: string; name: string }
-    segmentTypeId: string
-    tripId: string
+    segmentType: { name: string }
     reservations: Array<{
       id: string
       name: string
@@ -114,7 +100,6 @@ interface ExpClientProps {
   userId: string
   profileData?: UserPersonalizationData | null
   quickActions?: ChatQuickAction[]
-  segmentTypes: Array<{ id: string; name: string }>
 }
 
 type ViewMode = "table" | "timeline" | "photos"
@@ -128,7 +113,6 @@ export function ExpClient({
   userId,
   profileData = null,
   quickActions = [],
-  segmentTypes,
 }: ExpClientProps) {
   // State
   const [trips, setTrips] = useState<DBTrip[]>(initialTrips)
@@ -144,7 +128,6 @@ export function ExpClient({
   const [selectedReservation, setSelectedReservation] = useState<any>(null)
   const [isChatEditModalOpen, setIsChatEditModalOpen] = useState(false)
   const [isTripEditModalOpen, setIsTripEditModalOpen] = useState(false)
-  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null)
 
   // Refs
   const isDragging = useRef(false)
@@ -290,8 +273,8 @@ export function ExpClient({
           console.log("✅ [Refetch] Selected trip ID set to:", newestTrip.id)
           
           // Update URL without reload
-          window.history.pushState({}, '', `/exp?tripId=${newestTrip.id}`)
-          console.log("✅ [Refetch] URL updated to:", `/exp?tripId=${newestTrip.id}`)
+          window.history.pushState({}, '', `/exp1?tripId=${newestTrip.id}`)
+          console.log("✅ [Refetch] URL updated to:", `/exp1?tripId=${newestTrip.id}`)
           
           // Fetch conversations for the new trip
           console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)
@@ -373,7 +356,6 @@ export function ExpClient({
             } as any])
           } else {
             // Create standalone conversation for new trip planning
-            const { createConversation } = await import("@/lib/actions/chat-actions")
             const created = await createConversation("New Trip Planning", false)
             newConversation = {
               ...created,
@@ -448,11 +430,10 @@ What would you like to change about this plan, or should I create it as is?`;
   const handleTripSelect = async (tripId: string | null) => {
     if (tripId) {
       // Navigate to trip with URL parameter
-      window.location.href = `/exp?tripId=${tripId}`
+      window.location.href = `/exp1?tripId=${tripId}`
     } else {
       // Create a new conversation for a new trip
       try {
-        const { createConversation } = await import("@/lib/actions/chat-actions")
         const newConversation = await createConversation("New Conversation", false)
         
         // Update state - add messages field to match Conversation type
@@ -463,11 +444,11 @@ What would you like to change about this plan, or should I create it as is?`;
         setHasStartedPlanning(false)
         
         // Navigate to new conversation
-        window.location.href = `/exp`
+        window.location.href = `/exp1`
       } catch (error) {
         console.error("Error creating new conversation:", error)
         // Fallback to simple navigation
-        window.location.href = `/exp`
+        window.location.href = `/exp1`
       }
     }
   }
@@ -564,7 +545,10 @@ What would you like to change about this plan, or should I create it as is?`;
       const { actions } = await response.json();
       
       // Format dates for editing (YYYY-MM-DD)
-      const formatDateForInput = (date: Date) => {
+      const formatDateForInput = (date: Date | string) => {
+        if (typeof date === 'string') {
+          return date.split('T')[0];
+        }
         return date.toISOString().split('T')[0];
       };
       
@@ -658,11 +642,6 @@ What would you like to change about this plan, or should I create it as is?`;
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Handler for editing a segment
-  const handleEditSegment = (segmentId: string) => {
-    setEditingSegmentId(segmentId);
   };
 
   // Handler for chatting about an item (reservation)
@@ -1211,7 +1190,6 @@ What would you like to change about this plan, or should I create it as is?`;
                         onSelectReservation={setSelectedReservation}
                         onChatAboutItem={handleChatAboutItem}
                         onChatAboutSegment={handleChatAboutSegment}
-                        onEditSegment={handleEditSegment}
                         onEditItem={handleEditItem}
                       />
                     )}
@@ -1222,7 +1200,6 @@ What would you like to change about this plan, or should I create it as is?`;
                         onSelectReservation={setSelectedReservation}
                         onChatAboutItem={handleChatAboutItem}
                         onChatAboutSegment={handleChatAboutSegment}
-                        onEditSegment={handleEditSegment}
                         onEditItem={handleEditItem}
                       />
                     )}
@@ -1274,16 +1251,6 @@ What would you like to change about this plan, or should I create it as is?`;
           isOpen={isTripEditModalOpen}
           onClose={() => setIsTripEditModalOpen(false)}
           trip={selectedTrip}
-          onUpdate={handleTripUpdate}
-        />
-      )}
-
-      {editingSegmentId && selectedTrip && (
-        <PersistedSegmentEditModal
-          isOpen={!!editingSegmentId}
-          onClose={() => setEditingSegmentId(null)}
-          segment={selectedTrip.segments.find(s => s.id === editingSegmentId)!}
-          segmentNumber={selectedTrip.segments.findIndex(s => s.id === editingSegmentId) + 1}
           onUpdate={handleTripUpdate}
         />
       )}

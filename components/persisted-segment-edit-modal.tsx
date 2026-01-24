@@ -10,33 +10,15 @@ import { format, differenceInDays } from "date-fns";
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion";
 import { getTimeZoneForLocation } from "@/lib/actions/timezone";
 import { useAutoSave } from "@/hooks/use-auto-save";
+import { Segment, SegmentType } from "@/app/generated/prisma";
+import { updatePersistedSegment } from "@/lib/actions/update-persisted-segment";
 
-interface InMemorySegment {
-  tempId: string;
-  name: string;
-  segmentType: string;
-  startLocation: string;
-  endLocation: string;
-  startTime: string | null;
-  endTime: string | null;
-  notes: string | null;
-  order: number;
-  startLat?: number;
-  startLng?: number;
-  endLat?: number;
-  endLng?: number;
-  startTimeZoneId?: string;
-  startTimeZoneName?: string;
-  endTimeZoneId?: string;
-  endTimeZoneName?: string;
-}
-
-interface SegmentEditModalProps {
-  segment: InMemorySegment;
+interface PersistedSegmentEditModalProps {
+  segment: Segment & { segmentType: SegmentType };
   segmentNumber: number;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (updates: Partial<InMemorySegment>) => void;
+  onUpdate: () => void;
 }
 
 const segmentTypeIcons: Record<string, any> = {
@@ -55,37 +37,33 @@ const segmentTypeLabels: Record<string, string> = {
   "Road Trip": "Road Trip",
 };
 
-const calculateDays = (start: string | null, end: string | null): number => {
+const calculateDays = (start: Date | null, end: Date | null): number => {
   if (!start || !end) return 1;
-  const startDt = new Date(start);
-  const endDt = new Date(end);
-  const days = differenceInDays(endDt, startDt);
+  const days = differenceInDays(end, start);
   return Math.max(1, days);
 };
 
-const formatDateRange = (start: string | null, end: string | null): string => {
+const formatDateRange = (start: Date | null, end: Date | null): string => {
   if (!start || !end) return "";
-  const startDate = new Date(start);
-  const endDate = new Date(end);
-  return `${format(startDate, "MMM d")} - ${format(endDate, "MMM d")}`;
+  return `${format(start, "MMM d")} - ${format(end, "MMM d")}`;
 };
 
-export function SegmentEditModal({
+export function PersistedSegmentEditModal({
   segment,
   segmentNumber,
   isOpen,
   onClose,
   onUpdate,
-}: SegmentEditModalProps) {
+}: PersistedSegmentEditModalProps) {
   const [editName, setEditName] = useState(segment.name);
-  const [editSegmentType, setEditSegmentType] = useState(segment.segmentType);
-  const [editStartLocation, setEditStartLocation] = useState(segment.startLocation);
-  const [editEndLocation, setEditEndLocation] = useState(segment.endLocation);
+  const [editStartLocation, setEditStartLocation] = useState(segment.startTitle);
+  const [editEndLocation, setEditEndLocation] = useState(segment.endTitle);
   const [editNotes, setEditNotes] = useState(segment.notes || "");
-  const [editStartDate, setEditStartDate] = useState(segment.startTime || "");
-  const [editEndDate, setEditEndDate] = useState(segment.endTime || "");
+  const [editStartDate, setEditStartDate] = useState(segment.startTime ? segment.startTime.toISOString() : "");
+  const [editEndDate, setEditEndDate] = useState(segment.endTime ? segment.endTime.toISOString() : "");
+  const [editSegmentType, setEditSegmentType] = useState(segment.segmentType.name);
   const [useDifferentEndLocation, setUseDifferentEndLocation] = useState(
-    segment.startLocation !== segment.endLocation
+    segment.startTitle !== segment.endTitle
   );
   
   // Editing states for click-to-edit fields
@@ -93,21 +71,29 @@ export function SegmentEditModal({
   const [editingDates, setEditingDates] = useState(false);
 
   // Auto-save hook with debouncing
-  const { save, saveState } = useAutoSave(async (updates: Partial<InMemorySegment>) => {
-    onUpdate(updates);
+  const { save, saveState } = useAutoSave(async (updates: any) => {
+    try {
+      await updatePersistedSegment(segment.id, updates);
+      onUpdate();
+    } catch (error) {
+      console.error("Failed to save segment:", error);
+    }
   }, { delay: 500 });
 
-  const days = calculateDays(editStartDate, editEndDate);
+  const days = calculateDays(
+    editStartDate ? new Date(editStartDate) : null,
+    editEndDate ? new Date(editEndDate) : null
+  );
 
   useEffect(() => {
     setEditName(segment.name);
-    setEditSegmentType(segment.segmentType);
-    setEditStartLocation(segment.startLocation);
-    setEditEndLocation(segment.endLocation);
+    setEditStartLocation(segment.startTitle);
+    setEditEndLocation(segment.endTitle);
     setEditNotes(segment.notes || "");
-    setEditStartDate(segment.startTime || "");
-    setEditEndDate(segment.endTime || "");
-    setUseDifferentEndLocation(segment.startLocation !== segment.endLocation);
+    setEditStartDate(segment.startTime ? segment.startTime.toISOString() : "");
+    setEditEndDate(segment.endTime ? segment.endTime.toISOString() : "");
+    setEditSegmentType(segment.segmentType.name);
+    setUseDifferentEndLocation(segment.startTitle !== segment.endTitle);
   }, [segment]);
 
   if (!isOpen) return null;
@@ -131,7 +117,7 @@ export function SegmentEditModal({
   const handleStartLocationChange = async (location: string, details?: PlaceAutocompleteResult) => {
     setEditStartLocation(location);
     
-    const updates: Partial<InMemorySegment> = { startLocation: location };
+    const updates: any = { startTitle: location };
     
     if (details?.location) {
       updates.startLat = details.location.lat;
@@ -152,7 +138,7 @@ export function SegmentEditModal({
     }
     
     if (!useDifferentEndLocation) {
-      updates.endLocation = location;
+      updates.endTitle = location;
       if (details?.location) {
         updates.endLat = details.location.lat;
         updates.endLng = details.location.lng;
@@ -163,13 +149,18 @@ export function SegmentEditModal({
     }
     
     // Save immediately without debounce for location changes
-    onUpdate(updates);
+    try {
+      await updatePersistedSegment(segment.id, updates);
+      onUpdate();
+    } catch (error) {
+      console.error("Failed to save location:", error);
+    }
   };
 
   const handleEndLocationChange = async (location: string, details?: PlaceAutocompleteResult) => {
     setEditEndLocation(location);
     
-    const updates: Partial<InMemorySegment> = { endLocation: location };
+    const updates: any = { endTitle: location };
     
     if (details?.location) {
       updates.endLat = details.location.lat;
@@ -190,7 +181,12 @@ export function SegmentEditModal({
     }
     
     // Save immediately without debounce for location changes
-    onUpdate(updates);
+    try {
+      await updatePersistedSegment(segment.id, updates);
+      onUpdate();
+    } catch (error) {
+      console.error("Failed to save location:", error);
+    }
   };
 
   const handleStartDateChange = (date: string) => {
@@ -209,7 +205,7 @@ export function SegmentEditModal({
     if (!checked) {
       setEditEndLocation(editStartLocation);
       save({
-        endLocation: editStartLocation,
+        endTitle: editStartLocation,
         endLat: segment.startLat,
         endLng: segment.startLng,
         endTimeZoneId: segment.startTimeZoneId,
@@ -371,7 +367,7 @@ export function SegmentEditModal({
                   <span className="text-base text-slate-900">
                     {editStartDate && editEndDate ? (
                       <>
-                        {formatDateRange(editStartDate, editEndDate)} ({days} day{days !== 1 ? 's' : ''})
+                        {formatDateRange(new Date(editStartDate), new Date(editEndDate))} ({days} day{days !== 1 ? 's' : ''})
                       </>
                     ) : (
                       <span className="text-slate-400 italic">Add dates...</span>

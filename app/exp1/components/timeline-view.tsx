@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Badge } from "@/app/exp1/ui/badge"
+import { Button } from "@/app/exp1/ui/button"
 import { Plane, Hotel, Utensils, Train, Camera, ChevronDown, ChevronRight, Moon, Clock, MessageCircle, Edit, Phone, Mail, Globe, ChevronDown as ChevronDownIcon } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 
@@ -29,13 +29,10 @@ interface Reservation {
 interface TimelineViewProps {
   segments: Array<{
     id: number
-    dbId?: string
     name: string
     type: string
     startDate: string
     endDate: string
-    startLocation?: string
-    endLocation?: string
     image?: string
     days: Array<{
       day: number
@@ -61,11 +58,10 @@ interface TimelineViewProps {
   }) => void
   onChatAboutItem?: (reservation: Reservation, itemTitle: string) => void
   onChatAboutSegment?: (segment: any) => void
-  onEditSegment?: (segmentId: string) => void
   onEditItem?: (reservation: Reservation) => void
 }
 
-export function TimelineView({ segments, heroImage, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditSegment, onEditItem }: TimelineViewProps) {
+export function TimelineView({ segments, heroImage, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TimelineViewProps) {
   const [collapsedSegments, setCollapsedSegments] = useState<Set<number>>(new Set())
   const [openContactMenu, setOpenContactMenu] = useState<number | null>(null)
   const contactMenuRef = useRef<HTMLDivElement>(null)
@@ -139,37 +135,6 @@ export function TimelineView({ segments, heroImage, onSelectReservation, onChatA
     return { total }
   }
 
-  // Format segment date string with locations
-  const formatSegmentDateString = (segment: TimelineViewProps["segments"][0]) => {
-    const dayCount = segment.days.length
-    const startDate = segment.startDate
-    const endDate = segment.endDate
-    
-    // Parse dates to get full format
-    const start = new Date(startDate + ", " + new Date().getFullYear())
-    const end = new Date(endDate + ", " + new Date().getFullYear())
-    
-    const monthName = start.toLocaleDateString('en-US', { month: 'long' })
-    const startDay = start.getDate()
-    const endDay = end.getDate()
-    const year = new Date().getFullYear()
-    
-    let dateStr = `${monthName} ${startDay}-${endDay}, ${year} (${dayCount} Days)`
-    
-    // Add locations if available
-    if (segment.startLocation && segment.endLocation) {
-      if (segment.startLocation === segment.endLocation) {
-        // Same location - only show once
-        dateStr += ` (${segment.startLocation})`
-      } else {
-        // Different locations - show with arrow
-        dateStr += ` (${segment.startLocation} → ${segment.endLocation})`
-      }
-    }
-    
-    return dateStr
-  }
-
   return (
     <div className="h-full overflow-hidden rounded-lg bg-muted/30">
       {/* Content */}
@@ -209,10 +174,9 @@ export function TimelineView({ segments, heroImage, onSelectReservation, onChatA
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-xs text-muted-foreground">
-                      {formatSegmentDateString(segment)}
+                      {segment.startDate}
+                      {segment.startDate !== segment.endDate && ` — ${segment.endDate}`}
                     </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
                     <span className="text-xs font-medium">
                       ${segmentCosts.total.toLocaleString()}
                     </span>
@@ -229,35 +193,19 @@ export function TimelineView({ segments, heroImage, onSelectReservation, onChatA
                   </div>
                 </div>
                 
-                {/* Edit and Chat icons */}
-                <div className="absolute top-2 right-2 flex gap-1">
-                  {segment.dbId && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditSegment?.(segment.dbId!);
-                      }}
-                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20"
-                      title="Edit this segment"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onChatAboutSegment?.(segment);
-                    }}
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20"
-                    title="Chat about this segment"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                {/* Chat icon */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChatAboutSegment?.(segment);
+                  }}
+                  className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20"
+                  title="Chat about this segment"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </Button>
               </div>
 
               {/* Timeline content */}
