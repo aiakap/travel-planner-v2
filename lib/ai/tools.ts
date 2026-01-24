@@ -61,7 +61,7 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
       description: "Add a segment/part to the in-memory trip (not database). User can create segments immediately, even before trip metadata is complete. Each segment represents a destination or travel leg.",
       inputSchema: z.object({
         name: z.string().describe("Segment name (e.g., 'Stay in Tokyo', 'Train to Kyoto')"),
-        segmentType: z.enum(["Flight", "Drive", "Train", "Ferry", "Walk", "Other"]).describe("Type of segment"),
+        segmentType: z.enum(["Travel", "Stay", "Tour", "Retreat", "Road Trip"]).describe("Type of segment"),
         startLocation: z.string().describe("Starting location (city, country)"),
         endLocation: z.string().describe("Ending location (city, country)"),
         startTime: z.string().optional().describe("Start date/time in ISO format"),

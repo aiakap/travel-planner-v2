@@ -7,19 +7,18 @@ async function main() {
 
   // Seed SegmentTypes
   const segmentTypes = [
-    "Flight",
-    "Drive",
-    "Train",
-    "Ferry",
-    "Walk",
-    "Other",
+    { name: "Travel", description: "Flights, trains, ferries, and transfers" },
+    { name: "Stay", description: "Hotels and accommodation periods" },
+    { name: "Tour", description: "Guided experiences and sightseeing" },
+    { name: "Retreat", description: "Relaxation, wellness, and spa time" },
+    { name: "Road Trip", description: "Self-drive adventures and scenic routes" },
   ];
 
-  for (const name of segmentTypes) {
+  for (const type of segmentTypes) {
     await prisma.segmentType.upsert({
-      where: { name },
-      update: {},
-      create: { name },
+      where: { name: type.name },
+      update: { description: type.description },
+      create: type,
     });
   }
   console.log("✓ Segment types seeded");

@@ -52,3 +52,19 @@ export interface PlaceDetailModalData {
   suggestedEndTime?: string;
   estimatedCost?: number;
 }
+
+// Types for Google Places Autocomplete
+export interface PlaceAutocompleteSuggestion {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+  types: string[];
+}
+
+export interface PlaceAutocompleteResult {
+  name: string;
+  formattedAddress: string;
+  location: { lat: number; lng: number };
+  placeId: string;
+}

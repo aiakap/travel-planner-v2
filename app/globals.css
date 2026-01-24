@@ -232,4 +232,34 @@
     transform: scale(0.75);
     pointer-events: none;
   }
+  
+  /* Toast slide-up animation */
+  @keyframes slide-up {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  .animate-slide-up {
+    animation: slide-up 0.3s ease-out;
+  }
+  
+  /* Pulse scale animation for segments */
+  @keyframes pulse-scale {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+  
+  .animate-pulse-scale {
+    animation: pulse-scale 0.3s ease-in-out;
+  }
 }

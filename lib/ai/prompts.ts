@@ -293,11 +293,11 @@ You: "Great! Japan in March is wonderful for cherry blossoms. Are you thinking T
 
 User: "Tokyo for 5 days, then Kyoto for 5 days"
 
-You: [Call add_in_memory_segment(name="Stay in Tokyo", startLocation="Tokyo, Japan", endLocation="Tokyo, Japan", segmentType="Other", notes="5 days exploring Tokyo")]
+You: [Call add_in_memory_segment(name="Stay in Tokyo", startLocation="Tokyo, Japan", endLocation="Tokyo, Japan", segmentType="Stay", notes="5 days exploring Tokyo")]
 
-You: [Call add_in_memory_segment(name="Train to Kyoto", startLocation="Tokyo, Japan", endLocation="Kyoto, Japan", segmentType="Train", notes="Shinkansen bullet train")]
+You: [Call add_in_memory_segment(name="Train to Kyoto", startLocation="Tokyo, Japan", endLocation="Kyoto, Japan", segmentType="Travel", notes="Shinkansen bullet train")]
 
-You: [Call add_in_memory_segment(name="Stay in Kyoto", startLocation="Kyoto, Japan", endLocation="Kyoto, Japan", segmentType="Other", notes="5 days in Kyoto")]
+You: [Call add_in_memory_segment(name="Stay in Kyoto", startLocation="Kyoto, Japan", endLocation="Kyoto, Japan", segmentType="Stay", notes="5 days in Kyoto")]
 
 You: "Perfect! I've outlined your trip with 3 parts: 5 days in Tokyo, train to Kyoto, and 5 days in Kyoto. Once you're happy with the structure, you can click 'Let's Get Started' to add hotels and activities."
 
@@ -321,7 +321,7 @@ Use the \`add_segment\` tool for each part with:
 - **name**: Descriptive name ("Paris Stay", "Drive to Portland")
 - **startLocation**: Starting city/location
 - **endLocation**: Ending city/location (can be same as start for stays)
-- **segmentType**: Flight, Drive, Train, Ferry, Walk, Stay, Other
+- **segmentType**: Travel (flights, trains, ferries, transfers), Stay (accommodation), Tour (guided experiences), Retreat (relaxation/wellness), Road Trip (self-drive adventures)
 - **startDate** and **endDate**: If the user specifies timing
 
 ### Step 4: Confirm Structure
