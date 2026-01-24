@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useChat } from "@ai-sdk/react";
 import { GripVertical, MessageCircle, Send, Loader2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TripStructureWelcome } from "@/components/trip-structure-welcome";
@@ -45,15 +44,10 @@ interface TripStructureBuilderClientProps {
 
 type MobileTab = "chat" | "edit";
 
-// Helper to extract text content from message parts
-function getMessageText(message: any): string {
-  if (!message) return "";
-  return (
-    message.parts
-      ?.filter((part: any) => part.type === "text")
-      .map((part: any) => part.text)
-      .join("") || message.content || ""
-  );
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
 }
 
 export function TripStructureBuilderClient({ userId }: TripStructureBuilderClientProps) {
@@ -83,15 +77,10 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-  // Chat integration with structure-specific API endpoint
+  // Chat state
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const { messages, sendMessage, status } = useChat({
-    api: "/api/chat/structure",
-    body: { userId, mode: "structure" },
-    initialMessages: [],
-  } as any);
-
-  const isLoading = status === "in_progress";
+  const [isLoading, setIsLoading] = useState(false);
   
   // Check if metadata is complete
   useEffect(() => {
@@ -158,14 +147,96 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
     }));
   };
 
+  // Handle sending message
+  const handleSend = async (messageText?: string) => {
+    const textToSend = messageText || input.trim();
+    if (!textToSend || isLoading) return;
+
+    // Add user message
+    const userMessage: Message = {
+      role: "user",
+      content: textToSend,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+    if (!hasStartedChat) setHasStartedChat(true);
+
+    try {
+      // Send to API
+      const response = await fetch("/api/chat/structure", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: textToSend,
+          conversationHistory: messages.map(m => ({
+            role: m.role,
+            content: m.content
+          })),
+          currentTrip: inMemoryTrip
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        console.error("❌ [Client] API error:", response.status, errorData);
+        throw new Error(errorData.error || "Failed to send message");
+      }
+
+      const data = await response.json();
+
+      console.log("📊 [Client] Received response:", {
+        hasMessage: !!data.message,
+        hasTripUpdates: !!data.tripUpdates,
+        segmentsToAdd: data.segmentsToAdd?.length || 0
+      });
+
+      // Update in-memory trip with AI responses
+      if (data.tripUpdates) {
+        console.log("📝 [Client] Updating trip metadata:", data.tripUpdates);
+        setInMemoryTrip(prev => ({ ...prev, ...data.tripUpdates }));
+      }
+      
+      if (data.segmentsToAdd && data.segmentsToAdd.length > 0) {
+        console.log("➕ [Client] Adding segments:", data.segmentsToAdd.length);
+        setInMemoryTrip(prev => ({
+          ...prev,
+          segments: [...prev.segments, ...data.segmentsToAdd]
+        }));
+      }
+
+      // Add assistant response
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: data.message,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      
+      // Add error message
+      const errorMessage: Message = {
+        role: "assistant",
+        content: "Sorry, I had trouble processing that. Could you try again?",
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Handle chat submission
   const handleChatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && !isLoading) {
-      sendMessage({ text: input });
-      setInput("");
-      if (!hasStartedChat) setHasStartedChat(true);
-    }
+    handleSend();
   };
 
   // Handle start chat from welcome
@@ -180,41 +251,6 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
     chatInputRef.current?.focus();
     setInput("Add another part to my trip");
   };
-  
-  // Listen for tool invocations and update in-memory state
-  useEffect(() => {
-    if (messages.length === 0) return;
-    
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.role !== "assistant") return;
-    
-    const toolInvocations = (lastMessage as any)?.toolInvocations || [];
-    
-    toolInvocations.forEach((invocation: any) => {
-      if (invocation.state !== "result") return;
-      
-      const result = invocation.result;
-      
-      // Handle trip metadata updates
-      if (result.updateType === "trip_metadata") {
-        setInMemoryTrip((prev) => ({
-          ...prev,
-          ...result.updates,
-        }));
-      }
-      
-      // Handle segment additions
-      if (result.updateType === "add_segment") {
-        setInMemoryTrip((prev) => ({
-          ...prev,
-          segments: [...prev.segments, {
-            ...result.segment,
-            order: prev.segments.length,
-          }],
-        }));
-      }
-    });
-  }, [messages]);
 
   // Handle commit trip to database
   const handleCommitTrip = async () => {
@@ -298,12 +334,15 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
       <div className="md:hidden flex-1 pb-16 overflow-hidden">
         {mobileTab === "chat" && (
           <div className="flex flex-col h-full bg-white">
-            <div className="border-b border-slate-200 p-3 bg-white">
+          <div className="border-b border-slate-200 p-3 bg-slate-50">
+            <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 text-slate-700" />
-                <h2 className="text-sm font-semibold text-slate-900">Trip Planning Chat</h2>
+                <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
+                <span className="text-base font-semibold text-slate-900">Journey Architect</span>
               </div>
+              <span className="text-xs text-slate-600 ml-7">Build your trip structure conversationally</span>
             </div>
+          </div>
             <div className="flex-1 overflow-y-auto p-4">
               {!hasStartedChat && messages.length === 0 ? (
                 <TripStructureWelcome onStartChat={handleStartChat} />
@@ -324,7 +363,7 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
                         }`}
                       >
                         <div className="whitespace-pre-wrap leading-relaxed text-sm">
-                          {getMessageText(msg)}
+                          {msg.content}
                         </div>
                       </div>
                     </div>
@@ -340,7 +379,7 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
                   ref={chatInputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Describe your trip structure..."
+                  placeholder="Describe your journey..."
                   className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 text-slate-900 placeholder:text-slate-400"
                   disabled={isLoading}
                 />
@@ -381,10 +420,13 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
           style={{ width: `${leftPanelWidth}%` }}
         >
           {/* Chat Header */}
-          <div className="border-b border-slate-200 p-3 bg-slate-50">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="h-4 w-4 text-slate-700" />
-              <h2 className="text-sm font-semibold text-slate-900">Trip Planning Chat</h2>
+          <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
+            <div className="flex flex-col w-full">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
+                <span className="text-base font-semibold text-slate-900">Journey Architect</span>
+              </div>
+              <span className="text-xs text-slate-600 ml-7">Build your trip structure conversationally</span>
             </div>
           </div>
           
@@ -409,7 +451,7 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
                       }`}
                     >
                       <div className="whitespace-pre-wrap leading-relaxed text-sm">
-                        {getMessageText(msg)}
+                        {msg.content}
                       </div>
                     </div>
                   </div>
@@ -427,7 +469,7 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
                 ref={chatInputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Describe your trip structure..."
+                placeholder="Describe your journey..."
                 className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 text-slate-900 placeholder:text-slate-400"
                 disabled={isLoading}
               />
@@ -460,10 +502,13 @@ export function TripStructureBuilderClient({ userId }: TripStructureBuilderClien
           className="flex flex-col h-full bg-slate-50 overflow-hidden"
           style={{ width: `${100 - leftPanelWidth}%` }}
         >
-          <div className="border-b border-slate-200 p-4 bg-white h-16 flex items-center">
-            <div className="flex items-center gap-3">
-              <Layers className="h-5 w-5 text-slate-700" />
-              <span className="text-sm font-medium text-slate-700">Trip Builder</span>
+          <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-slate-700" />
+                <span className="text-base font-semibold text-slate-900">Journey Structure</span>
+              </div>
+              <span className="text-xs text-slate-600 ml-7">Your trip itinerary and timeline</span>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-6">

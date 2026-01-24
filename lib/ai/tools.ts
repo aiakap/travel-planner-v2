@@ -40,10 +40,10 @@ async function geocodeLocation(location: string): Promise<{
 export function createTripPlanningTools(userId: string, conversationId?: string) {
   return {
     update_in_memory_trip: tool({
-      description: "Update the trip metadata in memory (not database). Use this to populate trip details from conversation. This updates the UI immediately without creating database records.",
+      description: "Update the Journey metadata in memory (not database). Use this to populate Journey details from conversation. This updates the UI immediately without creating database records.",
       inputSchema: z.object({
-        title: z.string().optional().describe("Trip title"),
-        description: z.string().optional().describe("Trip description"),
+        title: z.string().optional().describe("Journey title (use aspirational names)"),
+        description: z.string().optional().describe("Journey description"),
         startDate: z.string().optional().describe("Start date in YYYY-MM-DD format"),
         endDate: z.string().optional().describe("End date in YYYY-MM-DD format"),
       }),
@@ -52,21 +52,21 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
           success: true,
           updateType: "trip_metadata",
           updates: { title, description, startDate, endDate },
-          message: "Trip metadata updated in memory",
+          message: "Journey metadata updated in memory",
         };
       },
     }),
 
     add_in_memory_segment: tool({
-      description: "Add a segment/part to the in-memory trip (not database). User can create segments immediately, even before trip metadata is complete. Each segment represents a destination or travel leg.",
+      description: "Add a Chapter to the in-memory Journey (not database). You can create Chapters immediately, even before Journey metadata is complete. Each Chapter represents a distinct phase like a destination stay or travel leg.",
       inputSchema: z.object({
-        name: z.string().describe("Segment name (e.g., 'Stay in Tokyo', 'Train to Kyoto')"),
-        segmentType: z.enum(["Travel", "Stay", "Tour", "Retreat", "Road Trip"]).describe("Type of segment"),
+        name: z.string().describe("Chapter name - use aspirational, evocative names (e.g., 'Hokkaido Alpine Adventure', 'Journey to the East: SFO → Tokyo')"),
+        segmentType: z.enum(["Travel", "Stay", "Tour", "Retreat", "Road Trip"]).describe("Type of Chapter"),
         startLocation: z.string().describe("Starting location (city, country)"),
         endLocation: z.string().describe("Ending location (city, country)"),
         startTime: z.string().optional().describe("Start date/time in ISO format"),
         endTime: z.string().optional().describe("End date/time in ISO format"),
-        notes: z.string().optional().describe("Additional notes"),
+        notes: z.string().optional().describe("Additional notes about this Chapter"),
       }),
       execute: async ({ name, segmentType, startLocation, endLocation, startTime, endTime, notes }) => {
         return {
@@ -82,7 +82,7 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
             endTime: endTime || null,
             notes: notes || null,
           },
-          message: `Added segment: ${name}`,
+          message: `Added Chapter: ${name}`,
         };
       },
     }),
