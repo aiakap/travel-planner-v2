@@ -13,6 +13,14 @@ interface InMemorySegment {
   endTime: string | null;
   notes: string | null;
   order: number;
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
+  startTimeZoneId?: string;
+  startTimeZoneName?: string;
+  endTimeZoneId?: string;
+  endTimeZoneName?: string;
 }
 
 interface HorizontalSegmentBlockProps {
@@ -21,6 +29,9 @@ interface HorizontalSegmentBlockProps {
   segmentNumber: number;
   onUpdate: (updates: Partial<InMemorySegment>) => void;
   onContentClick: () => void;
+  isHovered?: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 const segmentTypeColors: Record<string, { bgColor: string; borderColor: string }> = {
@@ -60,6 +71,9 @@ export function HorizontalSegmentBlock({
   segmentNumber,
   onUpdate,
   onContentClick,
+  isHovered = false,
+  onMouseEnter,
+  onMouseLeave,
 }: HorizontalSegmentBlockProps) {
   const colors = segmentTypeColors[segment.segmentType] || segmentTypeColors.Stay;
   const Icon = segmentTypeIcons[segment.segmentType] || Home;
@@ -72,8 +86,12 @@ export function HorizontalSegmentBlock({
     >
       {/* Segment Content */}
       <div 
-        className={`${colors.bgColor} border-2 ${colors.borderColor} rounded-lg p-2 flex flex-col h-24 cursor-pointer hover:shadow-md transition-all duration-300`}
+        className={`${colors.bgColor} border-2 ${colors.borderColor} rounded-lg p-2 flex flex-col h-24 cursor-pointer transition-all duration-300 ${
+          isHovered ? "shadow-lg scale-105 ring-2 ring-offset-1 ring-blue-400" : "hover:shadow-md"
+        }`}
         onClick={onContentClick}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
       >
         {/* Top Row: Icon and Duration Badge */}
         <div className="flex items-start justify-between mb-1">

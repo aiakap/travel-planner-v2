@@ -16,12 +16,23 @@ interface InMemorySegment {
   endTime: string | null;
   notes: string | null;
   order: number;
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
+  startTimeZoneId?: string;
+  startTimeZoneName?: string;
+  endTimeZoneId?: string;
+  endTimeZoneName?: string;
 }
 
 interface PartTileProps {
   part: InMemorySegment;
   partNumber: number;
   onUpdate: (updates: Partial<InMemorySegment>) => void;
+  isHovered?: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 const segmentTypeColors: Record<string, { bgColor: string; borderColor: string }> = {
@@ -47,7 +58,14 @@ const calculateEndDate = (start: string, days: number): string => {
   return endDt.toISOString().split("T")[0];
 };
 
-export function PartTile({ part, partNumber, onUpdate }: PartTileProps) {
+export function PartTile({ 
+  part, 
+  partNumber, 
+  onUpdate,
+  isHovered = false,
+  onMouseEnter,
+  onMouseLeave,
+}: PartTileProps) {
   const [editingStartLocation, setEditingStartLocation] = useState(false);
   const [editingEndLocation, setEditingEndLocation] = useState(false);
   const [editStartLocation, setEditStartLocation] = useState(part.startLocation);
@@ -138,7 +156,11 @@ export function PartTile({ part, partNumber, onUpdate }: PartTileProps) {
     <div
       className={`relative border-2 rounded-lg p-4 transition-all ${colors.bgColor} ${colors.borderColor} ${
         isComplete ? "shadow-sm" : "border-dashed"
-      }`}
+      } ${isHovered ? "shadow-lg ring-2 ring-offset-1 ring-blue-400" : ""}`}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onTouchStart={onMouseEnter}
+      onTouchEnd={onMouseLeave}
     >
       {/* Part Number Badge */}
       <div className="absolute -top-2 -left-2 w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-semibold shadow-sm">

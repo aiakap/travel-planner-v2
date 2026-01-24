@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { updateUserProfile } from "@/lib/actions/profile-actions";
-import { User } from "lucide-react";
+import { User, Pencil, Check, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface PersonalInfoSectionProps {
   userName: string;
@@ -15,14 +15,18 @@ interface PersonalInfoSectionProps {
   initialProfile: any;
 }
 
+type EditingField = "firstName" | "lastName" | "dateOfBirth" | "address" | "city" | "country" | null;
+
 export function PersonalInfoSection({
   userName,
   userEmail,
   userImage,
   initialProfile,
 }: PersonalInfoSectionProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [editingField, setEditingField] = useState<EditingField>(null);
   const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  
   const [formData, setFormData] = useState({
     firstName: initialProfile?.firstName || "",
     lastName: initialProfile?.lastName || "",
@@ -32,37 +36,116 @@ export function PersonalInfoSection({
     country: initialProfile?.country || "",
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const [tempValue, setTempValue] = useState("");
 
+  const startEditing = (field: EditingField) => {
+    if (field) {
+      setTempValue(formData[field]);
+      setEditingField(field);
+    }
+  };
+
+  const cancelEditing = () => {
+    setEditingField(null);
+    setTempValue("");
+  };
+
+  const saveField = async (field: EditingField) => {
+    if (!field) return;
+    
+    setLoading(true);
     try {
-      await updateUserProfile({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined,
-        address: formData.address,
-        city: formData.city,
-        country: formData.country,
+      const updateData: any = {};
+      
+      if (field === "dateOfBirth") {
+        updateData[field] = tempValue ? new Date(tempValue) : undefined;
+      } else {
+        updateData[field] = tempValue;
+      }
+
+      await updateUserProfile(updateData);
+      setFormData({ ...formData, [field]: tempValue });
+      setEditingField(null);
+      setTempValue("");
+      
+      toast({
+        title: "Profile updated",
+        description: "Your information has been saved",
       });
-      setIsEditing(false);
     } catch (error) {
       console.error("Error updating profile:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update profile",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Personal Information</h2>
-        {!isEditing && (
-          <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
-            Edit
-          </Button>
+  const renderField = (
+    field: EditingField,
+    label: string,
+    value: string,
+    type: string = "text",
+    fullWidth: boolean = false
+  ) => {
+    const isEditing = editingField === field;
+    
+    return (
+      <div className={`space-y-2 ${fullWidth ? "" : ""}`}>
+        <Label className="text-sm text-gray-600">{label}</Label>
+        {isEditing ? (
+          <div className="flex items-center gap-2">
+            <Input
+              type={type}
+              value={tempValue}
+              onChange={(e) => setTempValue(e.target.value)}
+              disabled={loading}
+              className="flex-1"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveField(field);
+                if (e.key === "Escape") cancelEditing();
+              }}
+            />
+            <Button
+              onClick={() => saveField(field)}
+              disabled={loading}
+              size="sm"
+              className="h-9"
+            >
+              <Check className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={cancelEditing}
+              disabled={loading}
+              size="sm"
+              variant="ghost"
+              className="h-9"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        ) : (
+          <div
+            onClick={() => startEditing(field)}
+            className="group flex items-center justify-between px-3 py-2 border rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
+          >
+            <span className={value ? "text-gray-900" : "text-gray-400"}>
+              {value || `Add ${label.toLowerCase()}`}
+            </span>
+            <Pencil className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
         )}
       </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-semibold">Personal Information</h2>
 
       <div className="flex items-center gap-3 pb-3 border-b">
         {userImage ? (
@@ -78,98 +161,20 @@ export function PersonalInfoSection({
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="space-y-3">
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="firstName">First Name</Label>
-            <Input
-              id="firstName"
-              value={formData.firstName}
-              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              disabled={!isEditing}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="lastName">Last Name</Label>
-            <Input
-              id="lastName"
-              value={formData.lastName}
-              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              disabled={!isEditing}
-            />
-          </div>
+          {renderField("firstName", "First Name", formData.firstName)}
+          {renderField("lastName", "Last Name", formData.lastName)}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="dateOfBirth">Date of Birth</Label>
-          <Input
-            id="dateOfBirth"
-            type="date"
-            value={formData.dateOfBirth}
-            onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-            disabled={!isEditing}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="address">Address</Label>
-          <Input
-            id="address"
-            value={formData.address}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-            disabled={!isEditing}
-          />
-        </div>
+        {renderField("dateOfBirth", "Date of Birth", formData.dateOfBirth, "date", true)}
+        {renderField("address", "Address", formData.address, "text", true)}
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="city">City</Label>
-            <Input
-              id="city"
-              value={formData.city}
-              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-              disabled={!isEditing}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="country">Country</Label>
-            <Input
-              id="country"
-              value={formData.country}
-              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-              disabled={!isEditing}
-            />
-          </div>
+          {renderField("city", "City", formData.city)}
+          {renderField("country", "Country", formData.country)}
         </div>
-
-        {isEditing && (
-          <div className="flex gap-2 pt-2">
-            <Button type="submit" disabled={loading} size="sm">
-              {loading ? "Saving..." : "Save"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsEditing(false);
-                setFormData({
-                  firstName: initialProfile?.firstName || "",
-                  lastName: initialProfile?.lastName || "",
-                  dateOfBirth: initialProfile?.dateOfBirth ? new Date(initialProfile.dateOfBirth).toISOString().split('T')[0] : "",
-                  address: initialProfile?.address || "",
-                  city: initialProfile?.city || "",
-                  country: initialProfile?.country || "",
-                });
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
-      </form>
+      </div>
     </div>
   );
 }

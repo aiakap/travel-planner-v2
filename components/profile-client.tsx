@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { PersonalInfoSection } from "@/components/profile/personal-info-section";
 import { ContactsSection } from "@/components/profile/contacts-section";
+import { AirportPreferencesSection } from "@/components/profile/airport-preferences-section";
 
 interface ProfileClientProps {
   userId: string;
@@ -28,6 +29,9 @@ export function ProfileClient({
   initialContacts,
   contactTypes,
 }: ProfileClientProps) {
+  const homeAirports = (initialProfile?.homeAirports as any[]) || [];
+  const preferredAirports = (initialProfile?.preferredAirports as any[]) || [];
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card className="p-4">
@@ -43,6 +47,13 @@ export function ProfileClient({
         <ContactsSection
           initialContacts={initialContacts}
           contactTypes={contactTypes}
+        />
+      </Card>
+
+      <Card className="p-4 lg:col-span-2">
+        <AirportPreferencesSection
+          initialHomeAirports={homeAirports}
+          initialPreferredAirports={preferredAirports}
         />
       </Card>
     </div>

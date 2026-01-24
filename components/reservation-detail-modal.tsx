@@ -4,6 +4,9 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { SaveIndicator } from "@/components/ui/save-indicator"
+import { useAutoSave } from "@/hooks/use-auto-save"
+import { ClickToEditField } from "@/components/ui/click-to-edit-field"
 import {
   X,
   Calendar,
@@ -82,6 +85,14 @@ export function ReservationDetailModal({
   const [isEditingReservation, setIsEditingReservation] = useState(false)
   const [editedReservation, setEditedReservation] = useState<Reservation | null>(null)
 
+  // Auto-save hook for edit mode
+  const { save, saveState } = useAutoSave(async (updates: Partial<Reservation>) => {
+    if (editedReservation && onSave) {
+      const updatedReservation = { ...editedReservation, ...updates };
+      onSave(updatedReservation);
+    }
+  }, { delay: 500 });
+
   if (!selectedReservation) return null
 
   const handleStartEdit = () => {
@@ -101,6 +112,14 @@ export function ReservationDetailModal({
     setIsEditingReservation(false)
     setEditedReservation(null)
     onClose()
+  }
+
+  // Helper to update field and trigger auto-save
+  const updateField = (field: keyof Reservation, value: any) => {
+    if (!editedReservation) return;
+    const updated = { ...editedReservation, [field]: value };
+    setEditedReservation(updated);
+    save({ [field]: value });
   }
 
   const getStatusBadge = (status: ReservationStatus, confirmationNumber?: string) => {
@@ -199,35 +218,27 @@ export function ReservationDetailModal({
           >
             <X className="h-4 w-4" />
           </Button>
-          {isEditingReservation && (
-            <div className="absolute top-2 left-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-medium">
-              Editing
-            </div>
-          )}
+          {/* Save indicator moved to bottom-right */}
         </div>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {isEditingReservation && editedReservation ? (
-            // Edit Mode
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Vendor Name</label>
-                <Input
-                  value={editedReservation.vendor}
-                  onChange={(e) => setEditedReservation({ ...editedReservation, vendor: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
+            // Edit Mode - Click to Edit
+            <div className="space-y-1">
+              <ClickToEditField
+                label="Vendor"
+                value={editedReservation.vendor}
+                onChange={(value) => updateField('vendor', value)}
+                placeholder="Add vendor name..."
+              />
 
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Description</label>
-                <Input
-                  value={editedReservation.text}
-                  onChange={(e) => setEditedReservation({ ...editedReservation, text: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
+              <ClickToEditField
+                label="Description"
+                value={editedReservation.text}
+                onChange={(value) => updateField('text', value)}
+                placeholder="Add description..."
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -542,9 +553,8 @@ export function ReservationDetailModal({
               <Button variant="outline" size="sm" onClick={handleCancelEdit}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleSaveEdit}>
-                <Save className="h-3 w-3 mr-1" />
-                Save Changes
+              <Button size="sm" onClick={onClose}>
+                Done
               </Button>
             </>
           ) : (
@@ -599,6 +609,11 @@ export function ReservationDetailModal({
           )}
         </div>
       </div>
+
+      {/* Floating Save Indicator - Bottom Right (only in edit mode) */}
+      {isEditingReservation && (
+        <SaveIndicator state={saveState} position="floating-bottom" />
+      )}
     </div>
   )
 }

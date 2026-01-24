@@ -270,6 +270,10 @@ model UserProfile {
   // Loyalty Programs (stored as JSON for flexibility)
   loyaltyPrograms Json?   // Array of { program, memberNumber, tier }
   
+  // Airport Preferences (stored as JSON for flexibility)
+  homeAirports      Json?   // Array of { iataCode, name, city, country }
+  preferredAirports Json?   // Array of { iataCode, name, city, country }
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

@@ -9,6 +9,7 @@ import { SegmentEditModal } from "./segment-edit-modal";
 import { Toast } from "./ui/toast";
 import { TripDayDashes } from "./trip-day-dashes";
 import { SegmentDivider } from "./segment-divider";
+import { TripStructureMap } from "./trip-structure-map";
 import { addDays, startOfDay, format } from "date-fns";
 
 interface InMemorySegment {
@@ -21,6 +22,14 @@ interface InMemorySegment {
   endTime: string | null;
   notes: string | null;
   order: number;
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
+  startTimeZoneId?: string;
+  startTimeZoneName?: string;
+  endTimeZoneId?: string;
+  endTimeZoneName?: string;
 }
 
 interface TripMetadataCardProps {
@@ -147,6 +156,9 @@ export function TripMetadataCard({
 
   // Toast notifications
   const [toasts, setToasts] = useState<Array<{id: string; message: string; type: "success" | "error" | "warning" | "info"}>>([]);
+
+  // Hover state for map synchronization
+  const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
 
   // Ref for timeline container to measure width
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -482,6 +494,7 @@ export function TripMetadataCard({
     // - If first segment has both startLocation and endLocation set
     // - Middle segment(s) start where first ends, and end in same location
     // - Last segment starts where middle ends, returns to first segment's start
+    // IMPORTANT: Also copy coordinates (lat/lng) along with location names
     if (segments.length >= 3) {
       const firstSegment = index === 0 ? updatedSegments[0] : segments[0];
       
@@ -492,12 +505,27 @@ export function TripMetadataCard({
           // Middle segments start where previous segment ends
           if (i === 1) {
             updatedSegments[i].startLocation = firstSegment.endLocation;
+            // Copy coordinates from first segment's end
+            updatedSegments[i].startLat = firstSegment.endLat;
+            updatedSegments[i].startLng = firstSegment.endLng;
+            updatedSegments[i].startTimeZoneId = firstSegment.endTimeZoneId;
+            updatedSegments[i].startTimeZoneName = firstSegment.endTimeZoneName;
           } else {
             updatedSegments[i].startLocation = updatedSegments[i - 1].endLocation;
+            // Copy coordinates from previous segment's end
+            updatedSegments[i].startLat = updatedSegments[i - 1].endLat;
+            updatedSegments[i].startLng = updatedSegments[i - 1].endLng;
+            updatedSegments[i].startTimeZoneId = updatedSegments[i - 1].endTimeZoneId;
+            updatedSegments[i].startTimeZoneName = updatedSegments[i - 1].endTimeZoneName;
           }
           // Middle segments end in the same location they start (unless manually set)
           if (!updatedSegments[i].endLocation || index === 0 || index === i - 1) {
             updatedSegments[i].endLocation = updatedSegments[i].startLocation;
+            // Copy coordinates for end location
+            updatedSegments[i].endLat = updatedSegments[i].startLat;
+            updatedSegments[i].endLng = updatedSegments[i].startLng;
+            updatedSegments[i].endTimeZoneId = updatedSegments[i].startTimeZoneId;
+            updatedSegments[i].endTimeZoneName = updatedSegments[i].startTimeZoneName;
           }
         }
         
@@ -505,15 +533,37 @@ export function TripMetadataCard({
         const lastIndex = updatedSegments.length - 1;
         const secondToLastSegment = updatedSegments[lastIndex - 1];
         updatedSegments[lastIndex].startLocation = secondToLastSegment.endLocation;
+        // Copy coordinates from second-to-last segment's end
+        updatedSegments[lastIndex].startLat = secondToLastSegment.endLat;
+        updatedSegments[lastIndex].startLng = secondToLastSegment.endLng;
+        updatedSegments[lastIndex].startTimeZoneId = secondToLastSegment.endTimeZoneId;
+        updatedSegments[lastIndex].startTimeZoneName = secondToLastSegment.endTimeZoneName;
+        
         updatedSegments[lastIndex].endLocation = firstSegment.startLocation;
+        // Copy coordinates from first segment's start
+        updatedSegments[lastIndex].endLat = firstSegment.startLat;
+        updatedSegments[lastIndex].endLng = firstSegment.startLng;
+        updatedSegments[lastIndex].endTimeZoneId = firstSegment.startTimeZoneId;
+        updatedSegments[lastIndex].endTimeZoneName = firstSegment.startTimeZoneName;
       }
     } else if (segments.length === 2) {
       // For 2 segments: second segment starts where first ends
       if (index === 0 && updatedSegments[0].endLocation) {
         updatedSegments[1].startLocation = updatedSegments[0].endLocation;
+        // Copy coordinates from first segment's end
+        updatedSegments[1].startLat = updatedSegments[0].endLat;
+        updatedSegments[1].startLng = updatedSegments[0].endLng;
+        updatedSegments[1].startTimeZoneId = updatedSegments[0].endTimeZoneId;
+        updatedSegments[1].startTimeZoneName = updatedSegments[0].endTimeZoneName;
+        
         // Second segment returns to start
         if (updatedSegments[0].startLocation) {
           updatedSegments[1].endLocation = updatedSegments[0].startLocation;
+          // Copy coordinates from first segment's start
+          updatedSegments[1].endLat = updatedSegments[0].startLat;
+          updatedSegments[1].endLng = updatedSegments[0].startLng;
+          updatedSegments[1].endTimeZoneId = updatedSegments[0].startTimeZoneId;
+          updatedSegments[1].endTimeZoneName = updatedSegments[0].startTimeZoneName;
         }
       }
     }
@@ -968,6 +1018,9 @@ export function TripMetadataCard({
                               segmentNumber={index + 1}
                               onUpdate={(updates) => handlePartUpdate(index, updates)}
                               onContentClick={() => setEditingSegmentId(segment.tempId)}
+                              isHovered={hoveredSegmentId === segment.tempId}
+                              onMouseEnter={() => setHoveredSegmentId(segment.tempId)}
+                              onMouseLeave={() => setHoveredSegmentId(null)}
                             />
                             {index < segments.length - 1 && (
                               <SegmentDivider
@@ -1014,8 +1067,21 @@ export function TripMetadataCard({
                   part={segment}
                   partNumber={index + 1}
                   onUpdate={(updates) => handlePartUpdate(index, updates)}
+                  isHovered={hoveredSegmentId === segment.tempId}
+                  onMouseEnter={() => setHoveredSegmentId(segment.tempId)}
+                  onMouseLeave={() => setHoveredSegmentId(null)}
                 />
               ))}
+            </div>
+
+            {/* Interactive Map */}
+            <div className="mt-4">
+              <TripStructureMap
+                segments={segments}
+                hoveredSegmentId={hoveredSegmentId}
+                onSegmentHover={setHoveredSegmentId}
+                height="400px"
+              />
             </div>
           </div>
         )}

@@ -13,6 +13,14 @@ interface InMemorySegment {
   endTime: string | null;
   notes: string | null;
   order: number;
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
+  startTimeZoneId?: string;
+  startTimeZoneName?: string;
+  endTimeZoneId?: string;
+  endTimeZoneName?: string;
 }
 
 interface TripDayDashesProps {

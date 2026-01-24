@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
-import { SegmentTypeSelect } from "./ui/segment-type-select";
+import { X, Home, Plane, Map, Palmtree, Car } from "lucide-react";
+import { ClickToEditField } from "./ui/click-to-edit-field";
+import { SaveIndicator } from "./ui/save-indicator";
 import { LocationAutocompleteInput } from "./ui/location-autocomplete-input";
-import { format } from "date-fns";
+import { DatePopover } from "./ui/date-popover";
+import { format, differenceInDays } from "date-fns";
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion";
+import { getTimeZoneForLocation } from "@/lib/actions/timezone";
+import { useAutoSave } from "@/hooks/use-auto-save";
 
 interface InMemorySegment {
   tempId: string;
@@ -17,6 +21,14 @@ interface InMemorySegment {
   endTime: string | null;
   notes: string | null;
   order: number;
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
+  startTimeZoneId?: string;
+  startTimeZoneName?: string;
+  endTimeZoneId?: string;
+  endTimeZoneName?: string;
 }
 
 interface SegmentEditModalProps {
@@ -27,11 +39,27 @@ interface SegmentEditModalProps {
   onUpdate: (updates: Partial<InMemorySegment>) => void;
 }
 
+const segmentTypeIcons: Record<string, any> = {
+  Travel: Plane,
+  Stay: Home,
+  Tour: Map,
+  Retreat: Palmtree,
+  "Road Trip": Car,
+};
+
+const segmentTypeLabels: Record<string, string> = {
+  Travel: "Travel",
+  Stay: "Stay",
+  Tour: "Tour",
+  Retreat: "Retreat",
+  "Road Trip": "Road Trip",
+};
+
 const calculateDays = (start: string | null, end: string | null): number => {
   if (!start || !end) return 1;
   const startDt = new Date(start);
   const endDt = new Date(end);
-  const days = Math.ceil((endDt.getTime() - startDt.getTime()) / (1000 * 60 * 60 * 24));
+  const days = differenceInDays(endDt, startDt);
   return Math.max(1, days);
 };
 
@@ -53,37 +81,144 @@ export function SegmentEditModal({
   const [editStartLocation, setEditStartLocation] = useState(segment.startLocation);
   const [editEndLocation, setEditEndLocation] = useState(segment.endLocation);
   const [editNotes, setEditNotes] = useState(segment.notes || "");
+  const [editStartDate, setEditStartDate] = useState(segment.startTime || "");
+  const [editEndDate, setEditEndDate] = useState(segment.endTime || "");
+  const [useDifferentEndLocation, setUseDifferentEndLocation] = useState(
+    segment.startLocation !== segment.endLocation
+  );
+  
+  // Editing states for click-to-edit fields
+  const [editingType, setEditingType] = useState(false);
+  const [editingDates, setEditingDates] = useState(false);
 
-  const days = calculateDays(segment.startTime, segment.endTime);
+  // Auto-save hook with debouncing
+  const { save, saveState } = useAutoSave(async (updates: Partial<InMemorySegment>) => {
+    onUpdate(updates);
+  }, { delay: 500 });
+
+  const days = calculateDays(editStartDate, editEndDate);
 
   useEffect(() => {
     setEditName(segment.name);
     setEditStartLocation(segment.startLocation);
     setEditEndLocation(segment.endLocation);
     setEditNotes(segment.notes || "");
+    setEditStartDate(segment.startTime || "");
+    setEditEndDate(segment.endTime || "");
+    setUseDifferentEndLocation(segment.startLocation !== segment.endLocation);
   }, [segment]);
 
   if (!isOpen) return null;
 
   const handleNameChange = (newName: string) => {
     setEditName(newName);
-    onUpdate({ name: newName });
+    save({ name: newName });
   };
 
-  const handleStartLocationChange = (location: string, details?: PlaceAutocompleteResult) => {
+  const handleNotesChange = (newNotes: string) => {
+    setEditNotes(newNotes);
+    save({ notes: newNotes });
+  };
+
+  const handleTypeChange = (newType: string) => {
+    save({ segmentType: newType });
+    setEditingType(false);
+  };
+
+  const handleStartLocationChange = async (location: string, details?: PlaceAutocompleteResult) => {
     setEditStartLocation(location);
-    onUpdate({ startLocation: location });
+    
+    const updates: Partial<InMemorySegment> = { startLocation: location };
+    
+    if (details?.location) {
+      updates.startLat = details.location.lat;
+      updates.startLng = details.location.lng;
+      
+      try {
+        const timezone = await getTimeZoneForLocation(
+          details.location.lat,
+          details.location.lng
+        );
+        if (timezone) {
+          updates.startTimeZoneId = timezone.timeZoneId;
+          updates.startTimeZoneName = timezone.timeZoneName;
+        }
+      } catch (error) {
+        console.error("Error fetching timezone:", error);
+      }
+    }
+    
+    if (!useDifferentEndLocation) {
+      updates.endLocation = location;
+      if (details?.location) {
+        updates.endLat = details.location.lat;
+        updates.endLng = details.location.lng;
+        updates.endTimeZoneId = updates.startTimeZoneId;
+        updates.endTimeZoneName = updates.startTimeZoneName;
+      }
+      setEditEndLocation(location);
+    }
+    
+    // Save immediately without debounce for location changes
+    onUpdate(updates);
   };
 
-  const handleEndLocationChange = (location: string, details?: PlaceAutocompleteResult) => {
+  const handleEndLocationChange = async (location: string, details?: PlaceAutocompleteResult) => {
     setEditEndLocation(location);
-    onUpdate({ endLocation: location });
+    
+    const updates: Partial<InMemorySegment> = { endLocation: location };
+    
+    if (details?.location) {
+      updates.endLat = details.location.lat;
+      updates.endLng = details.location.lng;
+      
+      try {
+        const timezone = await getTimeZoneForLocation(
+          details.location.lat,
+          details.location.lng
+        );
+        if (timezone) {
+          updates.endTimeZoneId = timezone.timeZoneId;
+          updates.endTimeZoneName = timezone.timeZoneName;
+        }
+      } catch (error) {
+        console.error("Error fetching timezone:", error);
+      }
+    }
+    
+    // Save immediately without debounce for location changes
+    onUpdate(updates);
   };
 
-  const handleNotesChange = (notes: string) => {
-    setEditNotes(notes);
-    onUpdate({ notes });
+  const handleStartDateChange = (date: string) => {
+    setEditStartDate(date);
+    save({ startTime: date });
   };
+
+  const handleEndDateChange = (date: string) => {
+    setEditEndDate(date);
+    save({ endTime: date });
+  };
+
+  const handleToggleDifferentEndLocation = (checked: boolean) => {
+    setUseDifferentEndLocation(checked);
+    
+    if (!checked) {
+      setEditEndLocation(editStartLocation);
+      save({
+        endLocation: editStartLocation,
+        endLat: segment.startLat,
+        endLng: segment.startLng,
+        endTimeZoneId: segment.startTimeZoneId,
+        endTimeZoneName: segment.startTimeZoneName,
+      });
+    }
+  };
+
+  const showTimezones = segment.startTimeZoneId && segment.endTimeZoneId && 
+    segment.startTimeZoneId !== segment.endTimeZoneId;
+
+  const TypeIcon = segmentTypeIcons[segment.segmentType] || Home;
 
   return (
     <>
@@ -96,11 +231,11 @@ export function SegmentEditModal({
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div 
-          className="bg-white rounded-lg shadow-xl max-w-md w-full pointer-events-auto max-h-[90vh] overflow-y-auto"
+          className="bg-white rounded-lg shadow-xl max-w-md w-full pointer-events-auto max-h-[90vh] flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div className="flex items-center justify-between p-4 border-b border-slate-200 flex-shrink-0">
             <h2 className="text-lg font-semibold text-slate-900">
               Edit Part {segmentNumber}
             </h2>
@@ -113,80 +248,151 @@ export function SegmentEditModal({
           </div>
           
           {/* Content */}
-          <div className="p-4 space-y-4">
-            {/* Name */}
-            <div>
-              <label className="text-sm text-slate-700 font-medium block mb-1">
-                Name
-              </label>
-              <input
-                value={editName}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Part name"
-                className="w-full text-sm border border-slate-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-            
-            {/* Type */}
-            <div>
-              <label className="text-sm text-slate-700 font-medium block mb-1">
-                Type
-              </label>
-              <SegmentTypeSelect 
-                value={segment.segmentType} 
-                onChange={(type) => onUpdate({ segmentType: type })} 
-              />
-            </div>
-            
-            {/* Start Location */}
-            <div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-1">
+            {/* Name - Click to Edit */}
+            <ClickToEditField
+              label="Name"
+              value={editName}
+              onChange={handleNameChange}
+              placeholder="Add a name..."
+            />
+
+            {/* Type - Click to Edit */}
+            {editingType ? (
+              <div className="px-3 py-2">
+                <span className="text-sm text-slate-500 block mb-1">Type</span>
+                <select
+                  value={segment.segmentType}
+                  onChange={(e) => handleTypeChange(e.target.value)}
+                  onBlur={() => setEditingType(false)}
+                  className="w-full border-b-2 border-blue-400 focus:outline-none focus:border-blue-600 pb-1 bg-transparent text-base"
+                  autoFocus
+                >
+                  <option value="Travel">✈️ Travel</option>
+                  <option value="Stay">🏠 Stay</option>
+                  <option value="Tour">🗺️ Tour</option>
+                  <option value="Retreat">🌴 Retreat</option>
+                  <option value="Road Trip">🚗 Road Trip</option>
+                </select>
+              </div>
+            ) : (
+              <div
+                onClick={() => setEditingType(true)}
+                className="cursor-pointer hover:bg-slate-50 rounded px-3 py-2 transition-colors group"
+              >
+                <span className="text-sm text-slate-500 block mb-1">Type</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TypeIcon className="h-4 w-4 text-slate-600" />
+                    <span className="text-base text-slate-900">
+                      {segmentTypeLabels[segment.segmentType] || segment.segmentType}
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    click to edit
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Location(s) - Always Visible */}
+            <div className="px-3 py-2 space-y-3">
+              <span className="text-sm text-slate-500 block mb-2">Location</span>
+              
               <LocationAutocompleteInput
-                label="Start Location"
+                label={`${useDifferentEndLocation ? 'Start' : ''}${showTimezones && segment.startTimeZoneName ? ` (${segment.startTimeZoneName})` : ''}`}
                 value={editStartLocation}
                 onChange={handleStartLocationChange}
-                placeholder="Where does this part start?"
+                placeholder={useDifferentEndLocation ? "Where does this part start?" : "Where is this part?"}
               />
-            </div>
-            
-            {/* End Location */}
-            <div>
-              <LocationAutocompleteInput
-                label="End Location"
-                value={editEndLocation}
-                onChange={handleEndLocationChange}
-                placeholder="Where does this part end?"
-              />
-            </div>
-            
-            {/* Dates (read-only) */}
-            <div>
-              <label className="text-sm text-slate-700 font-medium block mb-1">
-                Dates
+              
+              {useDifferentEndLocation && (
+                <LocationAutocompleteInput
+                  label={`End${showTimezones && segment.endTimeZoneName ? ` (${segment.endTimeZoneName})` : ''}`}
+                  value={editEndLocation}
+                  onChange={handleEndLocationChange}
+                  placeholder="Where does this part end?"
+                />
+              )}
+              
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useDifferentEndLocation}
+                  onChange={(e) => handleToggleDifferentEndLocation(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-slate-600">Different end location</span>
               </label>
-              <div className="text-sm text-slate-900 bg-slate-50 rounded px-3 py-2 border border-slate-200">
-                {formatDateRange(segment.startTime, segment.endTime)} ({days} day{days !== 1 ? 's' : ''})
+            </div>
+
+            {/* Dates - Click to Edit */}
+            {editingDates ? (
+              <div className="px-3 py-2">
+                <span className="text-sm text-slate-500 block mb-2">Dates</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-600 block mb-1">Start Date</label>
+                    <DatePopover
+                      value={editStartDate}
+                      onChange={handleStartDateChange}
+                      label="Select start date"
+                      className="w-full justify-start text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-600 block mb-1">End Date</label>
+                    <DatePopover
+                      value={editEndDate}
+                      onChange={handleEndDateChange}
+                      label="Select end date"
+                      minDate={editStartDate ? new Date(editStartDate) : undefined}
+                      className="w-full justify-start text-sm"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEditingDates(false)}
+                  className="mt-2 text-xs text-blue-600 hover:text-blue-700"
+                >
+                  Done
+                </button>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Adjust dates by dragging the edges of the segment
-              </p>
-            </div>
-            
-            {/* Notes */}
-            <div>
-              <label className="text-sm text-slate-700 font-medium block mb-1">
-                Notes <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
-              <textarea
-                value={editNotes}
-                onChange={(e) => handleNotesChange(e.target.value)}
-                placeholder="Add notes about this part of the trip..."
-                className="w-full text-sm border border-slate-300 rounded px-3 py-2 min-h-[100px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
+            ) : (
+              <div
+                onClick={() => setEditingDates(true)}
+                className="cursor-pointer hover:bg-slate-50 rounded px-3 py-2 transition-colors group"
+              >
+                <span className="text-sm text-slate-500 block mb-1">Dates</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-base text-slate-900">
+                    {editStartDate && editEndDate ? (
+                      <>
+                        {formatDateRange(editStartDate, editEndDate)} ({days} day{days !== 1 ? 's' : ''})
+                      </>
+                    ) : (
+                      <span className="text-slate-400 italic">Add dates...</span>
+                    )}
+                  </span>
+                  <span className="text-xs text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    click to edit
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Notes - Click to Edit */}
+            <ClickToEditField
+              label="Notes"
+              value={editNotes}
+              onChange={handleNotesChange}
+              type="textarea"
+              placeholder="Add notes..."
+            />
           </div>
           
           {/* Footer */}
-          <div className="flex justify-end gap-2 p-4 border-t border-slate-200">
+          <div className="flex justify-end gap-2 p-4 border-t border-slate-200 flex-shrink-0">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors"
@@ -196,6 +402,9 @@ export function SegmentEditModal({
           </div>
         </div>
       </div>
+
+      {/* Floating Save Indicator - Bottom Right */}
+      <SaveIndicator state={saveState} position="floating-bottom" />
     </>
   );
 }

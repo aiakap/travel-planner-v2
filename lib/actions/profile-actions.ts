@@ -84,6 +84,8 @@ export async function updateUserProfile(data: {
   city?: string;
   country?: string;
   loyaltyPrograms?: any;
+  homeAirports?: any;
+  preferredAirports?: any;
 }) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -433,4 +435,125 @@ export async function getTravelPreferenceTypes() {
     },
     orderBy: { sortOrder: 'asc' },
   });
+}
+
+// Airport Preferences actions
+export async function addHomeAirport(airportData: {
+  iataCode: string;
+  name: string;
+  city: string;
+  country: string;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Not authenticated");
+  }
+
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+
+  const currentAirports = (profile?.homeAirports as any[]) || [];
+  
+  // Check for duplicates
+  if (currentAirports.some((a: any) => a.iataCode === airportData.iataCode)) {
+    throw new Error("Airport already added");
+  }
+
+  const updatedAirports = [...currentAirports, airportData];
+
+  const updated = await prisma.userProfile.upsert({
+    where: { userId: session.user.id },
+    update: { homeAirports: updatedAirports },
+    create: {
+      userId: session.user.id,
+      homeAirports: updatedAirports,
+    },
+  });
+
+  revalidateTag(`user-profile-${session.user.id}`);
+  revalidatePath("/profile");
+  return updated;
+}
+
+export async function removeHomeAirport(iataCode: string) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Not authenticated");
+  }
+
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+
+  const currentAirports = (profile?.homeAirports as any[]) || [];
+  const updatedAirports = currentAirports.filter((a: any) => a.iataCode !== iataCode);
+
+  await prisma.userProfile.update({
+    where: { userId: session.user.id },
+    data: { homeAirports: updatedAirports },
+  });
+
+  revalidateTag(`user-profile-${session.user.id}`);
+  revalidatePath("/profile");
+}
+
+export async function addPreferredAirport(airportData: {
+  iataCode: string;
+  name: string;
+  city: string;
+  country: string;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Not authenticated");
+  }
+
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+
+  const currentAirports = (profile?.preferredAirports as any[]) || [];
+  
+  // Check for duplicates
+  if (currentAirports.some((a: any) => a.iataCode === airportData.iataCode)) {
+    throw new Error("Airport already added");
+  }
+
+  const updatedAirports = [...currentAirports, airportData];
+
+  const updated = await prisma.userProfile.upsert({
+    where: { userId: session.user.id },
+    update: { preferredAirports: updatedAirports },
+    create: {
+      userId: session.user.id,
+      preferredAirports: updatedAirports,
+    },
+  });
+
+  revalidateTag(`user-profile-${session.user.id}`);
+  revalidatePath("/profile");
+  return updated;
+}
+
+export async function removePreferredAirport(iataCode: string) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Not authenticated");
+  }
+
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+
+  const currentAirports = (profile?.preferredAirports as any[]) || [];
+  const updatedAirports = currentAirports.filter((a: any) => a.iataCode !== iataCode);
+
+  await prisma.userProfile.update({
+    where: { userId: session.user.id },
+    data: { preferredAirports: updatedAirports },
+  });
+
+  revalidateTag(`user-profile-${session.user.id}`);
+  revalidatePath("/profile");
 }
