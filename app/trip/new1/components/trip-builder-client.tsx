@@ -346,6 +346,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
   };
   
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    setHasUserInteracted(true);
     const sourceIdx = parseInt(e.dataTransfer.getData("segmentIdx"));
     if (isNaN(sourceIdx) || sourceIdx === targetIndex) return;
     const newSegs = [...segments];
@@ -407,6 +408,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
   };
   
   const handleInsertSegment = (indexBefore: number) => {
+    setHasUserInteracted(true);
     const prevSeg = indexBefore >= 0 ? segments[indexBefore] : null;
     let startLoc = "", endLoc = "", startImg: string | null = null, endImg: string | null = null;
     if (prevSeg) {
@@ -439,6 +441,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
   };
   
   const handleDeleteSegment = (index: number) => {
+    setHasUserInteracted(true);
     if (segments.length <= 1) return;
     const segmentToRemove = segments[index];
     const newSegments = segments.filter((_, i) => i !== index);
@@ -448,6 +451,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
   };
   
   const handleTypeSelect = (index: number, typeKey: string) => {
+    setHasUserInteracted(true);
     const newSegs = [...segments];
     newSegs[index].type = typeKey;
     const typeConfig = SEGMENT_TYPES[typeKey.toUpperCase()];
