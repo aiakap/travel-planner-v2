@@ -757,7 +757,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
                         <input
                           type="text"
                           value={segment.name}
-                          onChange={(e) => { const newSegs = [...segments]; newSegs[index].name = e.target.value; setSegments(newSegs); }}
+                          onChange={(e) => { setHasUserInteracted(true); const newSegs = [...segments]; newSegs[index].name = e.target.value; setSegments(newSegs); }}
                           className={`w-full bg-transparent border-none p-0 font-bold text-base focus:ring-0 my-1 ${bgImage ? 'placeholder-white/50 text-white drop-shadow-md' : 'placeholder-black/20'}`}
                           placeholder="Chapter Name"
                         />
