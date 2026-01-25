@@ -67,6 +67,32 @@ export function parseCardsFromText(text: string): {
     cleanText = cleanText.replace(match[0], '');
   }
   
+  // Parse HOTEL_RESERVATION_CARD
+  // Format: [HOTEL_RESERVATION_CARD: hotelName, confirmationNumber, checkInDate, checkInTime, checkOutDate, checkOutTime, nights, guests, rooms, roomType, address, totalCost, currency, contactPhone, cancellationPolicy]
+  const hotelCardRegex = /\[HOTEL_RESERVATION_CARD: ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^\]]+)\]/g;
+  
+  while ((match = hotelCardRegex.exec(text)) !== null) {
+    segments.push({
+      type: "hotel_reservation_card",
+      hotelName: match[1].trim(),
+      confirmationNumber: match[2].trim() || undefined,
+      checkInDate: match[3].trim(),
+      checkInTime: match[4].trim() || undefined,
+      checkOutDate: match[5].trim(),
+      checkOutTime: match[6].trim() || undefined,
+      nights: match[7] ? parseInt(match[7].trim()) : undefined,
+      guests: match[8] ? parseInt(match[8].trim()) : undefined,
+      rooms: match[9] ? parseInt(match[9].trim()) : undefined,
+      roomType: match[10].trim() || undefined,
+      address: match[11].trim() || undefined,
+      totalCost: match[12] ? parseFloat(match[12].trim()) : undefined,
+      currency: match[13].trim() || undefined,
+      contactPhone: match[14].trim() || undefined,
+      cancellationPolicy: match[15].trim() || undefined,
+    });
+    cleanText = cleanText.replace(match[0], '');
+  }
+  
   // Clean up extra whitespace
   cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
   

@@ -7,7 +7,8 @@ import { MessageSegment } from "@/lib/types/place-pipeline";
 import { prisma } from "@/lib/prisma";
 import { parseIntentFromResponse } from "@/lib/ai/parse-intent";
 import { createFullItinerary } from "@/lib/actions/create-full-itinerary";
-import { parseCardsFromText } from "@/app/exp/lib/parse-card-syntax";
+import { parseCardsFromText } from "@/app/exp1/lib/parse-card-syntax";
+import { validateAIResponse, formatValidationErrors } from "@/lib/ai/validate-ai-response";
 
 export const maxDuration = 60;
 
@@ -186,7 +187,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { message, conversationId } = await req.json();
+    const { message, conversationId, useExpPrompt } = await req.json();
     const userId = session.user.id;
 
     if (!message || !conversationId) {
@@ -225,9 +226,39 @@ export async function POST(req: Request) {
         ? `${message}\n\n${tripContext}`
         : message;
       
-      stage1Output = await generatePlaceSuggestions(fullQuery);
+      // Use exp1 prompt if requested
+      let customPrompt: string | undefined;
+      if (useExpPrompt) {
+        const { EXP_BUILDER_SYSTEM_PROMPT } = await import("@/app/exp1/lib/exp-prompts");
+        customPrompt = EXP_BUILDER_SYSTEM_PROMPT;
+        console.log("🤖 [AI] Using EXP1 custom prompt");
+      } else {
+        console.log("🤖 [AI] Using default prompt");
+      }
+      
+      stage1Output = await generatePlaceSuggestions(fullQuery, undefined, undefined, customPrompt);
       console.log(`✅ Stage 1 complete (${Date.now() - stage1Start}ms)`);
-      // console.log(`   Generated ${stage1Output.places.length} place suggestions`);
+      console.log(`   Generated ${stage1Output.places.length} place suggestions`);
+      console.log(`   Text length: ${stage1Output.text.length} chars`);
+      
+      // Validate AI response structure
+      const validation = validateAIResponse(stage1Output);
+      if (!validation.valid) {
+        console.error("❌ [AI] Response validation failed:", formatValidationErrors(validation));
+        console.error("   Response structure:", Object.keys(stage1Output));
+        throw new Error(`Invalid AI response: ${validation.errors.join(", ")}`);
+      }
+      if (validation.warnings.length > 0) {
+        console.warn("⚠️  [AI] Response warnings:", formatValidationErrors(validation));
+      }
+      
+      // Check if response looks like hotel info but missing card syntax
+      if (useExpPrompt && stage1Output.text.toLowerCase().includes('hotel') && 
+          stage1Output.text.toLowerCase().includes('confirmation') &&
+          !stage1Output.text.includes('[HOTEL_RESERVATION_CARD:')) {
+        console.warn("⚠️  [AI] Response mentions hotel confirmation but missing HOTEL_RESERVATION_CARD syntax");
+        console.warn("   Text preview:", stage1Output.text.substring(0, 300));
+      }
     } catch (error) {
       console.error("❌ Stage 1 failed:", error);
       return NextResponse.json(
@@ -296,6 +327,9 @@ export async function POST(req: Request) {
     // Stage 2.5: Parse card syntax from AI response
     const { segments: cardSegments, cleanText } = parseCardsFromText(stage1Output.text);
     console.log(`   Parsed ${cardSegments.length} card segments from AI response`);
+    if (cardSegments.length > 0) {
+      console.log("   Card types:", cardSegments.map(s => s.type).join(", "));
+    }
     
     // Update text to remove card syntax
     stage1Output.text = cleanText;

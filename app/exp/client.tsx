@@ -1253,10 +1253,26 @@ What would you like to change about this plan, or should I create it as is?`;
           // TODO: Implement delete reservation
           console.log("Delete reservation:", id)
         }}
-        onSave={(reservation) => {
-          // TODO: Implement save reservation
-          console.log("Save reservation:", reservation)
-        }}
+          onSave={async (reservation) => {
+            try {
+              const { updateReservationSimple } = await import("@/lib/actions/update-reservation-simple");
+              await updateReservationSimple(reservation.id.toString(), {
+                vendor: reservation.vendor,
+                confirmationNumber: reservation.confirmationNumber,
+                contactPhone: reservation.contactPhone,
+                contactEmail: reservation.contactEmail,
+                website: reservation.website,
+                address: reservation.address,
+                cost: reservation.cost,
+                notes: reservation.notes,
+                cancellationPolicy: reservation.cancellationPolicy,
+              });
+              router.refresh();
+            } catch (error) {
+              console.error("Error saving reservation:", error);
+              alert("Failed to save reservation. Please try again.");
+            }
+          }}
       />
 
       {/* Edit Modals */}

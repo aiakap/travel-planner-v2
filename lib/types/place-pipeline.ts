@@ -94,6 +94,28 @@ export type MessageSegment =
         prompt: string;
       }>;
       onSaved?: () => void;
+    }
+  | {
+      type: "hotel_reservation_card";
+      reservationId?: string;
+      hotelName: string;
+      confirmationNumber?: string;
+      checkInDate: string;
+      checkInTime?: string;
+      checkOutDate: string;
+      checkOutTime?: string;
+      nights?: number;
+      guests?: number;
+      rooms?: number;
+      roomType?: string;
+      address?: string;
+      totalCost?: number;
+      currency?: string;
+      contactPhone?: string;
+      contactEmail?: string;
+      cancellationPolicy?: string;
+      imageUrl?: string;
+      url?: string;
     };
 
 // Stage outputs

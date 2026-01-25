@@ -279,6 +279,7 @@ export function SuggestionDetailModal({
       onClose();
     } catch (error) {
       console.error("Error adding to itinerary:", error);
+      alert(`Failed to add to itinerary: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsAdding(false);
     }

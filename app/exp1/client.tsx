@@ -23,6 +23,17 @@ import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts"
 import { renameTripConversation, createTripConversation, createConversation } from "@/lib/actions/chat-actions"
 import { MessageSegmentsRenderer } from "@/app/exp1/components/message-segments-renderer"
 import { MessageSegment } from "@/lib/types/place-pipeline"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useRouter } from "next/navigation"
 
 // Simple message type with segments
 interface ChatMessage {
@@ -128,11 +139,33 @@ export function ExpClient({
   const [selectedReservation, setSelectedReservation] = useState<any>(null)
   const [isChatEditModalOpen, setIsChatEditModalOpen] = useState(false)
   const [isTripEditModalOpen, setIsTripEditModalOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [reservationToDelete, setReservationToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Refs
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  
+  // Router for page refresh
+  const router = useRouter()
+
+  // Helper function to format dates
+  const formatDate = (date: Date) => {
+    const d = new Date(date)
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    
+    if (diffMins < 1) return "Just now"
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString()
+  }
 
   // Chat integration - Simple non-streaming version
   const [input, setInput] = useState("")
@@ -165,11 +198,14 @@ export function ExpClient({
         body: JSON.stringify({
           message: text,
           conversationId: currentConversationId,
+          useExpPrompt: true, // Use exp1 builder prompt
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
+        const errorText = await response.text();
+        console.error("❌ [Client] API error:", response.status, errorText);
+        throw new Error(`API returned ${response.status}: ${errorText.substring(0, 200)}`);
       }
 
       const data = await response.json();
@@ -196,11 +232,25 @@ export function ExpClient({
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error("❌ [sendMessage] Error:", error);
+      
+      // Determine error message based on error type
+      let errorContent = "Sorry, I encountered an error processing your request.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("500")) {
+          errorContent = "I encountered an error generating a response. This might be due to an unexpected format issue. Please try rephrasing your message or try again.";
+        } else if (error.message.includes("401") || error.message.includes("403")) {
+          errorContent = "Authentication error. Please refresh the page and try again.";
+        } else if (error.message.includes("timeout")) {
+          errorContent = "The request timed out. Please try again.";
+        }
+      }
+      
       // Add error message
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         role: "assistant",
-        content: "Sorry, I encountered an error processing your request. Please try again.",
+        content: errorContent,
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -382,8 +432,8 @@ export function ExpClient({
   }, [messages, isLoading])
 
   // Handle conversation selection
-  const handleConversationSelect = (conversationId: string) => {
-    const conversation = conversations.find(c => c.id === conversationId)
+  const handleConversationSelect = (conversationId: string, conversationOverride?: Conversation) => {
+    const conversation = conversationOverride || conversations.find(c => c.id === conversationId)
     if (conversation) {
       setCurrentConversationId(conversationId)
       setMessages(conversation.messages?.map(m => ({
@@ -724,6 +774,29 @@ What would you like to change about this plan, or should I create it as is?`;
     })
   }
 
+  // Handler for deleting a reservation
+  const handleDeleteReservation = async (reservationId: string) => {
+    setIsDeleting(true)
+    try {
+      const { deleteReservation } = await import("@/lib/actions/delete-reservation");
+      await deleteReservation(reservationId);
+
+      // Close the modals
+      setIsDeleteDialogOpen(false)
+      setSelectedReservation(null)
+      setReservationToDelete(null)
+
+      // Refresh the page to reload data
+      router.refresh()
+    } catch (error) {
+      console.error('Error deleting reservation:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to delete reservation: ${errorMessage}`);
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div ref={containerRef} className="bg-slate-50 flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 80px)' }}>
       {/* Mobile Bottom Tabs */}
@@ -947,20 +1020,30 @@ What would you like to change about this plan, or should I create it as is?`;
             <div className="flex items-center justify-between gap-3 w-full">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
-                <span className="text-sm font-medium text-slate-700">Chat:</span>
-                
-                {/* Chat dropdown */}
-                {!selectedTripId || conversations.length === 0 ? (
-                  <span className="text-sm text-slate-600">Initial Chat</span>
-                ) : (
-                  <ChatNameDropdown
-                    conversations={conversations}
-                    currentConversationId={currentConversationId}
-                    onSelectConversation={handleConversationSelect}
-                    tripId={selectedTripId}
-                    onConversationsChange={(newConversations) => setConversations(newConversations)}
-                  />
-                )}
+                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-700">Chat:</span>
+                    
+                    {/* Chat dropdown */}
+                    {!selectedTripId || conversations.length === 0 ? (
+                      <span className="text-sm text-slate-600">Initial Chat</span>
+                    ) : (
+                      <ChatNameDropdown
+                        conversations={conversations}
+                        currentConversationId={currentConversationId}
+                        onSelectConversation={handleConversationSelect}
+                        tripId={selectedTripId}
+                        onConversationsChange={(newConversations) => setConversations(newConversations)}
+                        onMessagesReset={() => setMessages([])}
+                      />
+                    )}
+                  </div>
+                  {currentConversationId && conversations.find(c => c.id === currentConversationId) && (
+                    <span className="text-xs text-slate-500">
+                      Updated: {formatDate(conversations.find(c => c.id === currentConversationId)!.updatedAt)}
+                    </span>
+                  )}
+                </div>
               </div>
               
               {/* Edit button for chat (only when conversation exists) */}
@@ -1227,13 +1310,29 @@ What would you like to change about this plan, or should I create it as is?`;
           console.log("Confirm reservation:", id)
         }}
         onDelete={(id) => {
-          // TODO: Implement delete reservation
-          console.log("Delete reservation:", id)
+          setReservationToDelete(id)
+          setIsDeleteDialogOpen(true)
         }}
-        onSave={(reservation) => {
-          // TODO: Implement save reservation
-          console.log("Save reservation:", reservation)
-        }}
+          onSave={async (reservation) => {
+            try {
+              const { updateReservationSimple } = await import("@/lib/actions/update-reservation-simple");
+              await updateReservationSimple(reservation.id.toString(), {
+                vendor: reservation.vendor,
+                confirmationNumber: reservation.confirmationNumber,
+                contactPhone: reservation.contactPhone,
+                contactEmail: reservation.contactEmail,
+                website: reservation.website,
+                address: reservation.address,
+                cost: reservation.cost,
+                notes: reservation.notes,
+                cancellationPolicy: reservation.cancellationPolicy,
+              });
+              router.refresh();
+            } catch (error) {
+              console.error("Error saving reservation:", error);
+              alert("Failed to save reservation. Please try again.");
+            }
+          }}
       />
 
       {/* Edit Modals */}
@@ -1254,6 +1353,32 @@ What would you like to change about this plan, or should I create it as is?`;
           onUpdate={handleTripUpdate}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Reservation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this reservation? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (reservationToDelete) {
+                  handleDeleteReservation(reservationToDelete)
+                }
+              }}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

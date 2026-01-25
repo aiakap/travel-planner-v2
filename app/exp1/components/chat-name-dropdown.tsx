@@ -22,9 +22,10 @@ interface Conversation {
 interface ChatNameDropdownProps {
   conversations: Conversation[]
   currentConversationId: string | null
-  onSelectConversation: (conversationId: string) => void
+  onSelectConversation: (conversationId: string, conversationOverride?: Conversation) => void
   tripId: string
   onConversationsChange: (conversations: Conversation[]) => void
+  onMessagesReset: () => void
 }
 
 export function ChatNameDropdown({ 
@@ -32,7 +33,8 @@ export function ChatNameDropdown({
   currentConversationId, 
   onSelectConversation,
   tripId,
-  onConversationsChange 
+  onConversationsChange,
+  onMessagesReset
 }: ChatNameDropdownProps) {
   const [isCreating, setIsCreating] = useState(false)
   const currentConversation = conversations.find(c => c.id === currentConversationId)
@@ -41,12 +43,28 @@ export function ChatNameDropdown({
     return name.length > maxLength ? name.substring(0, maxLength) + "..." : name
   }
 
+  const formatDate = (date: Date) => {
+    const d = new Date(date)
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    
+    if (diffMins < 1) return "Just now"
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString()
+  }
+
   const handleNewChat = async () => {
     setIsCreating(true)
     try {
       const newConversation = await createTripConversation(tripId)
       onConversationsChange([newConversation, ...conversations])
-      onSelectConversation(newConversation.id)
+      onMessagesReset() // Clear messages when switching to new chat
+      onSelectConversation(newConversation.id, newConversation) // Pass the conversation directly
     } catch (error) {
       console.error("Error creating conversation:", error)
     } finally {
@@ -75,9 +93,14 @@ export function ChatNameDropdown({
       <SelectContent>
         {conversations.map((conv) => (
           <SelectItem key={conv.id} value={conv.id}>
-            <div className="flex items-center gap-2">
-              <MessageCircle className="h-3 w-3" />
-              <span>{conv.title}</span>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-3 w-3" />
+                <span>{conv.title}</span>
+              </div>
+              <div className="text-xs text-slate-500">
+                Updated: {formatDate(conv.updatedAt)}
+              </div>
             </div>
           </SelectItem>
         ))}

@@ -155,7 +155,8 @@ export async function generatePlaceSuggestions(
   suggestionContext?: {
     destination?: string;
     profileData?: any;
-  }
+  },
+  customSystemPrompt?: string
 ): Promise<Stage1Output> {
   // If destination provided, use trip suggestion generator
   if (suggestionContext?.destination) {
@@ -190,7 +191,7 @@ export async function generatePlaceSuggestions(
   try {
     result = await generateText({
       model: openai("gpt-4o-2024-11-20"),
-      system: SYSTEM_PROMPT,
+      system: customSystemPrompt || SYSTEM_PROMPT,
       prompt: userPrompt,
       temperature: 0.7,
       maxTokens: 2000,

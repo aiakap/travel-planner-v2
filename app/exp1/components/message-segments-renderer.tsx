@@ -7,6 +7,7 @@ import { TripCard } from "@/app/exp1/components/trip-card";
 import { SegmentCard } from "@/app/exp1/components/segment-card";
 import { ReservationCard } from "@/app/exp1/components/reservation-card";
 import { ContextCard } from "@/app/exp1/components/context-card";
+import { HotelReservationCard } from "@/app/exp1/components/hotel-reservation-card";
 
 interface MessageSegmentsRendererProps {
   segments: MessageSegment[];
@@ -94,6 +95,35 @@ export function MessageSegmentsRenderer({
                   onActionClick?.(prompt);
                 }}
                 onSaved={segment.onSaved}
+              />
+            </div>
+          );
+        } else if (segment.type === "hotel_reservation_card") {
+          return (
+            <div key={idx} className="my-3">
+              <HotelReservationCard
+                reservationId={segment.reservationId}
+                hotelName={segment.hotelName}
+                confirmationNumber={segment.confirmationNumber}
+                checkInDate={segment.checkInDate}
+                checkInTime={segment.checkInTime}
+                checkOutDate={segment.checkOutDate}
+                checkOutTime={segment.checkOutTime}
+                nights={segment.nights}
+                guests={segment.guests}
+                rooms={segment.rooms}
+                roomType={segment.roomType}
+                address={segment.address}
+                totalCost={segment.totalCost}
+                currency={segment.currency}
+                contactPhone={segment.contactPhone}
+                contactEmail={segment.contactEmail}
+                cancellationPolicy={segment.cancellationPolicy}
+                imageUrl={segment.imageUrl}
+                url={segment.url}
+                tripId={tripId}
+                onSaved={onReservationAdded}
+                onDeleted={onReservationAdded}
               />
             </div>
           );
