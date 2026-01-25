@@ -51,10 +51,19 @@ export function ChatLayout({
 
   // Refetch data when refresh is triggered
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-layout.tsx:53',message:'useEffect triggered',data:{refreshTrigger,willRefetch:refreshTrigger>0},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
     if (refreshTrigger > 0) {
       const refetchData = async () => {
         try {
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-layout.tsx:58',message:'Starting refetch',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+          // #endregion
           const newData = await config.dataSource.fetch(userId, params);
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-layout.tsx:62',message:'Refetch complete',data:{hasGraphData:!!newData?.graphData,nodeCount:newData?.graphData?.nodes?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+          // #endregion
           setData(newData);
         } catch (error) {
           console.error("Error refetching data:", error);
@@ -62,7 +71,8 @@ export function ChatLayout({
       };
       refetchData();
     }
-  }, [refreshTrigger, config, userId, params]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
 
   // Calculate actual widths based on collapse state
   const actualLeftWidth = panelState.isLeftCollapsed 
@@ -158,6 +168,9 @@ export function ChatLayout({
             params={params}
             xmlData={xmlData}
             onDataUpdate={(update) => {
+              // #region agent log
+              fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-layout.tsx:169',message:'onDataUpdate received',data:{type:typeof update,hasAction:update&&'action' in update,action:update?.action,hasGraphData:!!update?.graphData},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+              // #endregion
               console.log('🟣 [CHAT LAYOUT] onDataUpdate received:', {
                 type: typeof update,
                 hasAction: update && 'action' in update,
@@ -173,6 +186,9 @@ export function ChatLayout({
                 // Handle action-based updates
                 console.log('🟣 [CHAT LAYOUT] Handling action:', update.action);
                 if (update.action === 'refresh_profile' || update.action === 'reload_data') {
+                  // #region agent log
+                  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-layout.tsx:186',message:'Incrementing refreshTrigger',data:{currentTrigger:refreshTrigger},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+                  // #endregion
                   console.log('🔄 [CHAT LAYOUT] Reloading data from database...');
                   setRefreshTrigger(prev => prev + 1);
                 }

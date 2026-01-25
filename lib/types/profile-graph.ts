@@ -139,6 +139,54 @@ export const GRAPH_CATEGORIES: CategoryConfig[] = [
     subcategories: ["sports", "arts", "outdoor", "culinary", "entertainment"]
   },
   {
+    id: "activities",
+    label: "Activities & Interests",
+    color: "#14b8a6", // teal
+    subcategories: ["outdoor", "cultural", "culinary", "wellness", "adventure", "sports", "nightlife", "shopping", "outdoor-preferences"]
+  },
+  {
+    id: "accommodations",
+    label: "Accommodations",
+    color: "#f97316", // orange
+    subcategories: ["types", "brands", "amenities"]
+  },
+  {
+    id: "transportation",
+    label: "Transportation",
+    color: "#0ea5e9", // sky
+    subcategories: ["airlines", "travel-class", "loyalty-programs", "ground-transport"]
+  },
+  {
+    id: "dining",
+    label: "Dining & Cuisine",
+    color: "#ef4444", // red
+    subcategories: ["cuisines", "dietary", "dining-style", "beverages"]
+  },
+  {
+    id: "culinary-preferences",
+    label: "Culinary Preferences",
+    color: "#f43f5e", // rose
+    subcategories: ["cuisines", "dietary", "dining-style", "beverages"]
+  },
+  {
+    id: "budget",
+    label: "Budget & Spending",
+    color: "#84cc16", // lime
+    subcategories: ["daily-budget", "splurge-categories", "savings-priorities", "loyalty-programs", "credit-cards"]
+  },
+  {
+    id: "companions",
+    label: "Travel Companions",
+    color: "#a855f7", // purple
+    subcategories: ["solo", "partner", "family", "friends", "organized-groups", "special-needs"]
+  },
+  {
+    id: "timing",
+    label: "Travel Timing",
+    color: "#06b6d4", // cyan
+    subcategories: ["seasons", "holidays", "peak-vs-offpeak", "trip-length"]
+  },
+  {
     id: "spending-priorities",
     label: "Spending Priorities",
     color: "#f59e0b", // amber
