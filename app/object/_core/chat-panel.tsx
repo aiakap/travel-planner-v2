@@ -8,11 +8,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ChatPanelProps, Message, MessageCard } from "./types";
+import { addItemToXml, parseXmlToGraph, createEmptyProfileXml } from "@/lib/profile-graph-xml";
 
 export function ChatPanel({
   config,
   userId,
   params,
+  xmlData,
   onDataUpdate,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -87,6 +89,44 @@ export function ChatPanel({
 
       setMessages((prev) => [...prev, assistantMessage]);
 
+      // Handle auto-actions - call config's onAutoAction with update callback
+      if (data.cards && config.autoActions?.autoActionCards) {
+        const autoActionCards = data.cards.filter((card: any) =>
+          config.autoActions!.autoActionCards!.includes(card.type)
+        );
+        
+        if (autoActionCards.length > 0 && config.autoActions.onAutoAction) {
+          try {
+            console.log('🔄 Processing auto-action cards:', autoActionCards.length);
+            
+            // Call config's onAutoAction with callback to update data
+            await config.autoActions.onAutoAction(autoActionCards, (updatedData) => {
+              console.log('📊 Received data update from onAutoAction:', {
+                hasGraphData: !!updatedData.graphData,
+                hasXmlData: !!updatedData.xmlData
+              });
+              
+              // Trigger parent update with new data
+              if (updatedData.graphData || updatedData.xmlData) {
+                onDataUpdate(updatedData);
+              }
+            });
+            
+            console.log('✅ Auto-action processing complete');
+          } catch (error) {
+            console.error("❌ Auto-action failed:", error);
+            // Show error message to user
+            const errorMessage: Message = {
+              id: `error-${Date.now()}`,
+              role: "assistant",
+              content: "Failed to add items. Please try again.",
+              timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, errorMessage]);
+          }
+        }
+      }
+
       // Trigger data update if needed
       if (data.updatedData) {
         onDataUpdate(data.updatedData);
@@ -114,11 +154,12 @@ export function ChatPanel({
 
   const handleCardAction = (action: string, cardData: any) => {
     // Card actions can trigger data updates
-    console.log("Card action:", action, cardData);
+    console.log("🎬 Card action:", action, cardData);
     
     // Refresh data from server
-    if (action === "refresh") {
-      onDataUpdate({ ...cardData, _refresh: Date.now() });
+    if (action === "refresh" || action === "reload") {
+      console.log("🔄 Triggering data reload via action");
+      onDataUpdate({ action: 'reload_data', _refresh: Date.now() });
     }
   };
 

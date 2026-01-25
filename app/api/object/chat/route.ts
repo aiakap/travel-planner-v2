@@ -8,6 +8,7 @@ import { loadConfig } from "@/app/object/_configs/loader";
 import "@/app/object/_configs/registry"; // Register configs
 import { callAI, injectVariables } from "@/lib/object/ai-client";
 import { parseAIResponse } from "@/lib/object/response-parser";
+import { getUserProfileGraph } from "@/lib/actions/profile-graph-actions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,10 +32,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build system prompt with variables
-    const systemPrompt = config.promptVariables
+    // For profile_attribute, get current XML to pass to AI
+    let currentXml = "";
+    if (objectType === "profile_attribute") {
+      try {
+        const profileGraph = await getUserProfileGraph(userId);
+        currentXml = profileGraph.xmlData || "";
+        console.log("📋 [Object Chat API] Fetched current XML for AI analysis");
+      } catch (error) {
+        console.error("Error fetching profile XML:", error);
+      }
+    }
+
+    // Build system prompt with variables and XML context
+    let systemPrompt = config.promptVariables
       ? injectVariables(config.systemPrompt, config.promptVariables)
       : config.systemPrompt;
+    
+    // Append current XML for profile_attribute
+    if (objectType === "profile_attribute" && currentXml) {
+      systemPrompt += `\n\nCURRENT USER PROFILE XML:\n${currentXml}`;
+    }
 
     // Call AI
     const aiResponse = await callAI({

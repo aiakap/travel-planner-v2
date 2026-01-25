@@ -24,7 +24,10 @@ export function ChatLayout({
   params 
 }: ChatLayoutProps) {
   const [data, setData] = useState(initialData);
+  const [xmlData, setXmlData] = useState<string>(initialData?.xmlData || '');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [panelState, setPanelState] = useState<PanelState>(DEFAULT_PANEL_STATE);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Load panel state from localStorage
   useEffect(() => {
@@ -45,6 +48,21 @@ export function ChatLayout({
       JSON.stringify(panelState)
     );
   }, [panelState, config.id]);
+
+  // Refetch data when refresh is triggered
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      const refetchData = async () => {
+        try {
+          const newData = await config.dataSource.fetch(userId, params);
+          setData(newData);
+        } catch (error) {
+          console.error("Error refetching data:", error);
+        }
+      };
+      refetchData();
+    }
+  }, [refreshTrigger, config, userId, params]);
 
   // Calculate actual widths based on collapse state
   const actualLeftWidth = panelState.isLeftCollapsed 
@@ -71,6 +89,38 @@ export function ChatLayout({
     setPanelState(prev => ({ ...prev, isRightCollapsed: !prev.isRightCollapsed }));
   };
 
+  // Save handler - writes XML to DB and refreshes
+  const handleSave = async () => {
+    try {
+      console.log('💾 Saving XML to database...');
+      
+      // Save XML to database
+      const response = await fetch("/api/profile-graph/save-xml", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ xmlData })
+      });
+
+      if (!response.ok) throw new Error("Save failed");
+
+      const result = await response.json();
+      
+      // Update with fresh data from DB
+      setXmlData(result.xmlData);
+      
+      // Parse and update graph data
+      const { parseXmlToGraph } = await import("@/lib/profile-graph-xml");
+      const graphData = parseXmlToGraph(result.xmlData, userId);
+      setData({ graphData, xmlData: result.xmlData });
+      setHasUnsavedChanges(false);
+      
+      console.log("✅ Saved to database successfully");
+    } catch (error) {
+      console.error("❌ Save failed:", error);
+      alert("Failed to save. Please try again.");
+    }
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -91,7 +141,7 @@ export function ChatLayout({
   }, []);
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "calc(100vh - 76px)", overflow: "hidden" }}>
       {/* Left Panel - Chat */}
       {!panelState.isLeftCollapsed && (
         <div
@@ -106,7 +156,47 @@ export function ChatLayout({
             config={config}
             userId={userId}
             params={params}
-            onDataUpdate={setData}
+            xmlData={xmlData}
+            onDataUpdate={(update) => {
+              console.log('🟣 ChatLayout: onDataUpdate received', {
+                type: typeof update, 
+                hasGraphData: !!update?.graphData,
+                nodeCount: update?.graphData?.nodes?.length,
+                timestamp: Date.now()
+              });
+              
+              if (typeof update === 'function') {
+                console.log('🟣 ChatLayout: Calling setData with function updater');
+                setData(update);
+              } else if (update && typeof update === 'object' && 'action' in update) {
+                // Handle action-based updates
+                console.log('🟣 ChatLayout: Handling action:', update.action);
+                if (update.action === 'refresh_profile' || update.action === 'reload_data') {
+                  console.log('🔄 Reloading data from database...');
+                  setRefreshTrigger(prev => prev + 1);
+                }
+              } else if (update && update.graphData) {
+                // Wrap the graphData to match expected structure
+                console.log('🟣 ChatLayout: Wrapping graphData with', update.graphData.nodes?.length, 'nodes');
+                
+                // Keep the same structure as fetchProfileData returns
+                setData({
+                  graphData: update.graphData,
+                  hasData: update.graphData.nodes?.length > 1
+                });
+                
+                // Update XML data and mark as unsaved if XML is provided
+                if (update.xmlData) {
+                  setXmlData(update.xmlData);
+                  setHasUnsavedChanges(true);
+                  console.log('🟣 ChatLayout: XML updated, marked as unsaved');
+                }
+              } else {
+                // Fallback for other update types
+                console.log('🟣 ChatLayout: Setting data directly');
+                setData(update);
+              }
+            }}
           />
           
           {/* Collapse button */}
@@ -169,7 +259,30 @@ export function ChatLayout({
             transition: "width 0.3s ease-in-out",
           }}
         >
-          <DataPanel config={config} data={data} params={params} />
+          <DataPanel 
+            config={config} 
+            data={data} 
+            params={params}
+            hasUnsavedChanges={hasUnsavedChanges}
+            onSave={handleSave}
+            onDataUpdate={(update) => {
+              console.log('📊 DataPanel triggered update:', {
+                hasGraphData: !!update?.graphData,
+                nodeCount: update?.graphData?.nodes?.length
+              });
+              // Use the same logic as ChatPanel's onDataUpdate
+              if (update && update.graphData) {
+                setData({
+                  graphData: update.graphData,
+                  hasData: update.graphData.nodes?.length > 1
+                });
+                if (update.xmlData) {
+                  setXmlData(update.xmlData);
+                  setHasUnsavedChanges(true);
+                }
+              }
+            }}
+          />
           
           {/* Collapse button */}
           <button
