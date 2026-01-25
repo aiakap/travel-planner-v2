@@ -158,26 +158,27 @@ export function ChatLayout({
             params={params}
             xmlData={xmlData}
             onDataUpdate={(update) => {
-              console.log('🟣 ChatLayout: onDataUpdate received', {
-                type: typeof update, 
+              console.log('🟣 [CHAT LAYOUT] onDataUpdate received:', {
+                type: typeof update,
+                hasAction: update && 'action' in update,
+                action: update?.action,
                 hasGraphData: !!update?.graphData,
-                nodeCount: update?.graphData?.nodes?.length,
-                timestamp: Date.now()
+                timestamp: new Date().toISOString()
               });
               
               if (typeof update === 'function') {
-                console.log('🟣 ChatLayout: Calling setData with function updater');
+                console.log('🟣 [CHAT LAYOUT] Calling setData with function updater');
                 setData(update);
               } else if (update && typeof update === 'object' && 'action' in update) {
                 // Handle action-based updates
-                console.log('🟣 ChatLayout: Handling action:', update.action);
+                console.log('🟣 [CHAT LAYOUT] Handling action:', update.action);
                 if (update.action === 'refresh_profile' || update.action === 'reload_data') {
-                  console.log('🔄 Reloading data from database...');
+                  console.log('🔄 [CHAT LAYOUT] Reloading data from database...');
                   setRefreshTrigger(prev => prev + 1);
                 }
               } else if (update && update.graphData) {
                 // Wrap the graphData to match expected structure
-                console.log('🟣 ChatLayout: Wrapping graphData with', update.graphData.nodes?.length, 'nodes');
+                console.log('🟣 [CHAT LAYOUT] Wrapping graphData with', update.graphData.nodes?.length, 'nodes');
                 
                 // Keep the same structure as fetchProfileData returns
                 setData({
@@ -189,11 +190,11 @@ export function ChatLayout({
                 if (update.xmlData) {
                   setXmlData(update.xmlData);
                   setHasUnsavedChanges(true);
-                  console.log('🟣 ChatLayout: XML updated, marked as unsaved');
+                  console.log('🟣 [CHAT LAYOUT] XML updated, marked as unsaved');
                 }
               } else {
                 // Fallback for other update types
-                console.log('🟣 ChatLayout: Setting data directly');
+                console.log('🟣 [CHAT LAYOUT] Setting data directly');
                 setData(update);
               }
             }}

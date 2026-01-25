@@ -69,6 +69,55 @@ export function parseAIResponse(response: string): ParsedResponse {
     }
   }
 
+  // Extract auto-add cards
+  const autoAddRegex = /\[AUTO_ADD:\s*(\{[\s\S]*?\})\]/g;
+  while ((match = autoAddRegex.exec(response)) !== null) {
+    try {
+      const data = JSON.parse(match[1]);
+      console.log('🔍 [RESPONSE PARSER] Parsed AUTO_ADD card:', data);
+      cards.push({
+        id: `auto-add-${Date.now()}-${Math.random()}`,
+        type: "auto_add",
+        data,
+      });
+      text = text.replace(match[0], "");
+    } catch (e) {
+      console.error("❌ [RESPONSE PARSER] Failed to parse auto-add card:", e);
+    }
+  }
+
+  // Extract related suggestions cards
+  const relatedSuggestionsRegex = /\[RELATED_SUGGESTIONS:\s*(\{[\s\S]*?\})\]/g;
+  while ((match = relatedSuggestionsRegex.exec(response)) !== null) {
+    try {
+      const data = JSON.parse(match[1]);
+      cards.push({
+        id: `related-suggestions-${Date.now()}-${Math.random()}`,
+        type: "related_suggestions",
+        data,
+      });
+      text = text.replace(match[0], "");
+    } catch (e) {
+      console.error("Failed to parse related suggestions card:", e);
+    }
+  }
+
+  // Extract topic choice cards
+  const topicChoiceRegex = /\[TOPIC_CHOICE:\s*(\{[\s\S]*?\})\]/g;
+  while ((match = topicChoiceRegex.exec(response)) !== null) {
+    try {
+      const data = JSON.parse(match[1]);
+      cards.push({
+        id: `topic-choice-${Date.now()}-${Math.random()}`,
+        type: "topic_choice",
+        data,
+      });
+      text = text.replace(match[0], "");
+    } catch (e) {
+      console.error("Failed to parse topic choice card:", e);
+    }
+  }
+
   // Clean up text
   text = text.trim();
 

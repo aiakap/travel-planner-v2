@@ -153,12 +153,15 @@ export function ChatPanel({
   };
 
   const handleCardAction = (action: string, cardData: any) => {
-    // Card actions can trigger data updates
-    console.log("🎬 Card action:", action, cardData);
+    console.log("🎬 [CHAT PANEL] Card action received:", {
+      action,
+      cardData,
+      hasOnDataUpdate: !!onDataUpdate,
+      timestamp: new Date().toISOString()
+    });
     
-    // Refresh data from server
     if (action === "refresh" || action === "reload") {
-      console.log("🔄 Triggering data reload via action");
+      console.log("🔄 [CHAT PANEL] Triggering data reload");
       onDataUpdate({ action: 'reload_data', _refresh: Date.now() });
     }
   };

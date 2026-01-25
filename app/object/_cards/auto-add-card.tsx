@@ -23,7 +23,12 @@ export function AutoAddCard({ data, onAction }: CardProps<AutoAddData>) {
     setIsAccepting(true);
     
     try {
-      console.log('✅ Accepting item:', data);
+      console.log('🎯 [AUTO_ADD CARD] Starting accept flow:', {
+        category: data.category,
+        subcategory: data.subcategory,
+        value: data.value,
+        timestamp: new Date().toISOString()
+      });
       
       const response = await fetch("/api/object/profile/upsert", {
         method: "POST",
@@ -39,22 +44,39 @@ export function AutoAddCard({ data, onAction }: CardProps<AutoAddData>) {
         })
       });
 
+      console.log('🎯 [AUTO_ADD CARD] API response received:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText
+      });
+
       if (response.ok) {
         const result = await response.json();
-        setIsAccepted(true);
-        console.log('✅ Item accepted and saved to DB');
+        console.log('🎯 [AUTO_ADD CARD] Parse result:', {
+          success: result.success,
+          hasGraphData: !!result.graphData,
+          nodeCount: result.graphData?.nodes?.length,
+          hasXmlData: !!result.xmlData
+        });
         
-        // Trigger parent to reload from DB
+        setIsAccepted(true);
+        
         if (onAction) {
-          console.log('🔄 Triggering reload action');
+          console.log('🎯 [AUTO_ADD CARD] Triggering reload action');
           onAction('reload', {});
+        } else {
+          console.warn('⚠️ [AUTO_ADD CARD] onAction is not defined!');
         }
       } else {
-        console.error('❌ Failed to accept item:', response.status);
+        const errorText = await response.text();
+        console.error('❌ [AUTO_ADD CARD] API error:', {
+          status: response.status,
+          error: errorText
+        });
         alert('Failed to add item. Please try again.');
       }
     } catch (error) {
-      console.error('❌ Error accepting item:', error);
+      console.error('❌ [AUTO_ADD CARD] Exception:', error);
       alert('Error adding item. Please try again.');
     } finally {
       setIsAccepting(false);
