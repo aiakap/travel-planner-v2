@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { MapPin, Calendar, Plane, Hotel, Utensils, Ticket, DollarSign, Check } from "lucide-react";
 import { Button } from "@/app/exp/ui/button";
-import { updateTripSimple } from "@/app/exp/lib/actions/update-trip-simple";
-import { updateSegmentSimple } from "@/app/exp/lib/actions/update-segment-simple";
-import { updateReservationSimple } from "@/app/exp/lib/actions/update-reservation-simple";
+import { updateTripSimple } from "@/lib/actions/update-trip-simple";
+import { updateSegmentSimple } from "@/lib/actions/update-segment-simple";
+import { updateReservationSimple } from "@/lib/actions/update-reservation-simple";
 
 interface ContextAction {
   id: string;
@@ -110,13 +110,24 @@ export function ContextCard({ type, data, actions, onActionClick, onSaved }: Con
         .then(res => res.json())
         .then(statuses => {
           setAvailableStatuses(statuses);
-          // Case-insensitive match for status
-          const current = statuses.find((s: {id: string, name: string}) => 
-            s.name.toLowerCase() === data.status.toLowerCase()
-          );
-          if (current) {
-            setResStatusId(current.id);
-            setResStatus(current.name); // Use the DB name (correct case)
+          // Case-insensitive match for status (handle undefined)
+          if (data.status) {
+            const current = statuses.find((s: {id: string, name: string}) => 
+              s.name.toLowerCase() === data.status.toLowerCase()
+            );
+            if (current) {
+              setResStatusId(current.id);
+              setResStatus(current.name); // Use the DB name (correct case)
+            }
+          } else {
+            // Set default status if none provided
+            const defaultStatus = statuses.find((s: {id: string, name: string}) => 
+              s.name.toLowerCase() === 'pending'
+            ) || statuses[0];
+            if (defaultStatus) {
+              setResStatusId(defaultStatus.id);
+              setResStatus(defaultStatus.name);
+            }
           }
           setStatusesLoading(false);
         })

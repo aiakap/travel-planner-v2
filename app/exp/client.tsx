@@ -16,11 +16,12 @@ import { TimelineView } from "@/app/exp/components/timeline-view"
 import { TableView } from "@/app/exp/components/table-view"
 import { PhotosView } from "@/app/exp/components/photos-view"
 import { ReservationDetailModal } from "@/app/exp/components/reservation-detail-modal"
+import { ExistingChatDialog } from "@/app/exp/components/existing-chat-dialog"
 import { transformTripToV0Format } from "@/lib/v0-data-transform"
 import type { V0Itinerary } from "@/lib/v0-types"
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization"
 import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts"
-import { renameTripConversation, createTripConversation, createConversation } from "@/lib/actions/chat-actions"
+import { renameTripConversation, createTripConversation, createConversation, createSegmentConversation, createReservationConversation, findEntityConversations } from "@/lib/actions/chat-actions"
 import { MessageSegmentsRenderer } from "@/app/exp/components/message-segments-renderer"
 import { MessageSegment } from "@/lib/types/place-pipeline"
 import {
@@ -59,11 +60,14 @@ interface DBTrip {
     imageUrl: string | null
     startTime: Date | null
     endTime: Date | null
+    startTitle: string
+    endTitle: string
     order: number
     segmentType: { name: string }
     reservations: Array<{
       id: string
       name: string
+      segmentId: string
       confirmationNumber: string | null
       notes: string | null
       startTime: Date | null
@@ -99,6 +103,9 @@ interface Conversation {
   id: string
   title: string
   tripId: string | null
+  chatType?: 'TRIP' | 'SEGMENT' | 'RESERVATION'
+  segmentId?: string | null
+  reservationId?: string | null
   createdAt: Date
   updatedAt: Date
   messages: Array<{
@@ -148,6 +155,13 @@ export function ExpClient({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [reservationToDelete, setReservationToDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [existingChatsDialog, setExistingChatsDialog] = useState<{
+    open: boolean;
+    entityType: 'segment' | 'reservation';
+    entityId: string;
+    entityName: string;
+    existingChats: any[];
+  } | null>(null)
 
   // Refs
   const isDragging = useRef(false)
@@ -424,15 +438,28 @@ export function ExpClient({
 
   // Handle conversation selection
   const handleConversationSelect = (conversationId: string, conversationOverride?: Conversation) => {
-    const conversation = conversationOverride || conversations.find(c => c.id === conversationId)
+    console.log('[handleConversationSelect] Selecting conversation:', conversationId);
+    
+    const conversation = conversationOverride || conversations.find(c => c.id === conversationId);
+    
     if (conversation) {
-      setCurrentConversationId(conversationId)
+      console.log('[handleConversationSelect] Conversation found:', {
+        id: conversation.id,
+        chatType: conversation.chatType,
+        messageCount: conversation.messages?.length || 0,
+        title: conversation.title
+      });
+      
+      setCurrentConversationId(conversationId);
       setMessages(conversation.messages?.map(m => ({
         id: m.id,
         role: m.role as any,
         content: m.content,
         parts: [{ type: "text" as const, text: m.content }],
-      })) || [])
+      })) || []);
+    } else {
+      console.warn('[handleConversationSelect] Conversation not found:', conversationId);
+      console.warn('[handleConversationSelect] Available conversations:', conversations.map(c => ({ id: c.id, title: c.title })));
     }
   }
 
@@ -559,6 +586,254 @@ What would you like to change about this plan, or should I create it as is?`;
     }
   };
 
+  // Helper function to append context card for any conversation type
+  const appendContextCardForConversation = async (conversation: Conversation) => {
+    const chatType = conversation.chatType;
+    
+    try {
+      if (chatType === 'SEGMENT' && conversation.segmentId) {
+        // Find the segment from selectedTrip
+        const dbSegment = selectedTrip?.segments.find(s => s.id === conversation.segmentId);
+        if (!dbSegment) {
+          console.error('Segment not found:', conversation.segmentId);
+          return;
+        }
+        
+        // Transform to V0 format for display
+        const transformedTrip = selectedTrip ? transformTripToV0Format(selectedTrip) : null;
+        const v0Segment = transformedTrip?.segments.find(s => s.dbId === conversation.segmentId);
+        if (!v0Segment) return;
+        
+        // Generate context card
+        const response = await fetch('/api/chat/context', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'segment',
+            data: {
+              name: v0Segment.name,
+              type: v0Segment.type,
+              startLocation: v0Segment.startLocation || v0Segment.startDate,
+              endLocation: v0Segment.endLocation || v0Segment.endDate,
+              startDate: v0Segment.startDate,
+              endDate: v0Segment.endDate,
+              reservationsCount: v0Segment.days?.reduce((acc: number, d: any) => 
+                acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0
+            },
+            fullTripContext: selectedTrip
+          })
+        });
+        
+        const { actions } = await response.json();
+        
+        const greetingMessage: ChatMessage = {
+          id: `greeting-${Date.now()}`,
+          role: 'assistant',
+          content: `I'm here to help with the ${v0Segment.name} segment of your ${selectedTrip?.title || 'trip'}. I can help you adjust dates, add reservations, or make other changes. What would you like to do?`,
+        };
+        
+        const contextMessage: ChatMessage = {
+          id: `context-${Date.now()}`,
+          role: 'assistant',
+          content: '',
+          segments: [{
+            type: 'context_card',
+            contextType: 'segment',
+            data: {
+              segmentId: conversation.segmentId,
+              name: v0Segment.name,
+              type: v0Segment.type,
+              startLocation: v0Segment.startLocation || 'N/A',
+              endLocation: v0Segment.endLocation || 'N/A',
+              startDate: v0Segment.startDate,
+              endDate: v0Segment.endDate,
+              reservationsCount: v0Segment.days?.reduce((acc: number, d: any) => 
+                acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0
+            },
+            actions,
+            onSaved: refetchTrip
+          }]
+        };
+        
+        setMessages(prev => [...prev, greetingMessage, contextMessage]);
+        
+      } else if (chatType === 'RESERVATION' && conversation.reservationId) {
+        // Find the reservation from selectedTrip
+        const dbReservation = selectedTrip?.segments
+          .flatMap(s => s.reservations)
+          .find(r => r.id === conversation.reservationId);
+        
+        if (!dbReservation) {
+          console.error('Reservation not found:', conversation.reservationId);
+          return;
+        }
+        
+        // Transform to V0 format
+        const transformedTrip = selectedTrip ? transformTripToV0Format(selectedTrip) : null;
+        let v0Reservation: any = null;
+        let itemTitle = '';
+        
+        // Find reservation in V0 format
+        for (const segment of transformedTrip?.segments || []) {
+          for (const day of segment.days || []) {
+            for (const item of day.items || []) {
+              const res = item.reservations.find(r => r.id === conversation.reservationId);
+              if (res) {
+                v0Reservation = res;
+                itemTitle = item.title;
+                break;
+              }
+            }
+            if (v0Reservation) break;
+          }
+          if (v0Reservation) break;
+        }
+        
+        if (!v0Reservation) return;
+        
+        // Generate context card
+        const response = await fetch('/api/chat/context', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'reservation',
+            data: {
+              vendor: v0Reservation.vendor,
+              name: v0Reservation.vendor,
+              category: itemTitle,
+              status: v0Reservation.status,
+              confirmationNumber: v0Reservation.confirmationNumber,
+              cost: v0Reservation.cost,
+              startTime: dbReservation?.startTime instanceof Date 
+                ? dbReservation.startTime.toISOString() 
+                : dbReservation?.startTime,
+              endTime: dbReservation?.endTime instanceof Date 
+                ? dbReservation.endTime.toISOString() 
+                : dbReservation?.endTime,
+              text: v0Reservation.text,
+              contactPhone: v0Reservation.contactPhone,
+              contactEmail: v0Reservation.contactEmail,
+              website: v0Reservation.website
+            },
+            fullTripContext: selectedTrip
+          })
+        });
+        
+        const { actions } = await response.json();
+        
+        const greetingMessage: ChatMessage = {
+          id: `greeting-${Date.now()}`,
+          role: 'assistant',
+          content: `I'm here to help with your ${v0Reservation.name || itemTitle} reservation. I can help you update details, change dates, add a confirmation number, or answer any questions. What would you like to do?`,
+        };
+        
+        const contextMessage: ChatMessage = {
+          id: `context-${Date.now()}`,
+          role: 'assistant',
+          content: '',
+          segments: [{
+            type: 'context_card',
+            contextType: 'reservation',
+            data: {
+              reservationId: v0Reservation.id,
+              vendor: v0Reservation.vendor,
+              name: v0Reservation.vendor,
+              category: itemTitle,
+              status: v0Reservation.status,
+              confirmationNumber: v0Reservation.confirmationNumber,
+              cost: v0Reservation.cost,
+              startTime: dbReservation?.startTime instanceof Date 
+                ? dbReservation.startTime.toISOString() 
+                : dbReservation?.startTime,
+              endTime: dbReservation?.endTime instanceof Date 
+                ? dbReservation.endTime.toISOString() 
+                : dbReservation?.endTime,
+              text: v0Reservation.text
+            },
+            actions,
+            onSaved: refetchTrip
+          }]
+        };
+        
+        setMessages(prev => [...prev, greetingMessage, contextMessage]);
+        
+      } else if (chatType === 'TRIP') {
+        // Find the trip and transform
+        const rawTrip = selectedTrip;
+        if (!rawTrip) return;
+        
+        const transformedTrip = transformTripToV0Format(rawTrip);
+        
+        // Fetch AI-generated actions
+        const response = await fetch('/api/chat/context', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'trip',
+            data: {
+              title: transformedTrip.title,
+              dates: transformedTrip.dates,
+              totalCost: tripTotals.total,
+              segmentsCount: transformedTrip.segments.length,
+              totalReservations: transformedTrip.segments.reduce((acc, s) => 
+                acc + (s.days?.reduce((a, d) => 
+                  a + (d.items?.reduce((b, i) => b + (i.reservations?.length || 0), 0) || 0), 0) || 0), 0),
+              description: rawTrip.description
+            },
+            fullTripContext: rawTrip
+          })
+        });
+        
+        const { actions } = await response.json();
+        
+        // Format dates for editing (YYYY-MM-DD)
+        const formatDateForInput = (date: Date | string) => {
+          if (typeof date === 'string') {
+            return date.split('T')[0];
+          }
+          return date.toISOString().split('T')[0];
+        };
+        
+        const totalReservations = transformedTrip.segments.reduce((acc, s) => 
+          acc + (s.days?.reduce((a, d) => 
+            a + (d.items?.reduce((b, i) => b + (i.reservations?.length || 0), 0) || 0), 0) || 0), 0);
+        
+        const greetingMessage: ChatMessage = {
+          id: `greeting-${Date.now()}`,
+          role: 'assistant',
+          content: `I'm here to help with your ${transformedTrip.title} trip. I can see you have ${transformedTrip.segments.length} segment${transformedTrip.segments.length !== 1 ? 's' : ''} and ${totalReservations} reservation${totalReservations !== 1 ? 's' : ''} planned. What would you like to work on?`,
+        };
+        
+        const contextMessage: ChatMessage = {
+          id: `context-${Date.now()}`,
+          role: 'assistant',
+          content: '',
+          segments: [{
+            type: 'context_card',
+            contextType: 'trip',
+            data: {
+              tripId: rawTrip.id,
+              title: transformedTrip.title,
+              startDate: formatDateForInput(rawTrip.startDate),
+              endDate: formatDateForInput(rawTrip.endDate),
+              dates: transformedTrip.dates,
+              totalCost: tripTotals.total,
+              segmentsCount: transformedTrip.segments.length,
+              totalReservations: totalReservations,
+              description: rawTrip.description
+            },
+            actions,
+            onSaved: refetchTrip
+          }]
+        };
+        
+        setMessages(prev => [...prev, greetingMessage, contextMessage]);
+      }
+    } catch (error) {
+      console.error('Error appending context card:', error);
+    }
+  };
+
   // Handler for chatting about the trip
   const handleChatAboutTrip = async (rawTrip: DBTrip, transformedTrip: V0Itinerary) => {
     setIsLoading(true);
@@ -595,6 +870,18 @@ What would you like to change about this plan, or should I create it as is?`;
         return date.toISOString().split('T')[0];
       };
       
+      // Calculate reservation count
+      const totalReservations = transformedTrip.segments.reduce((acc, s) => 
+        acc + (s.days?.reduce((a, d) => 
+          a + (d.items?.reduce((b, i) => b + (i.reservations?.length || 0), 0) || 0), 0) || 0), 0);
+      
+      // Create initial greeting message
+      const greetingMessage: ChatMessage = {
+        id: `greeting-${Date.now()}`,
+        role: 'assistant',
+        content: `I'm here to help with your ${transformedTrip.title} trip. I can see you have ${transformedTrip.segments.length} segment${transformedTrip.segments.length !== 1 ? 's' : ''} and ${totalReservations} reservation${totalReservations !== 1 ? 's' : ''} planned. What would you like to work on?`,
+      };
+      
       // Create context card message
       const contextMessage: ChatMessage = {
         id: `context-${Date.now()}`,
@@ -611,9 +898,7 @@ What would you like to change about this plan, or should I create it as is?`;
             dates: transformedTrip.dates,
             totalCost: tripTotals.total,
             segmentsCount: transformedTrip.segments.length,
-            totalReservations: transformedTrip.segments.reduce((acc, s) => 
-              acc + (s.days?.reduce((a, d) => 
-                a + (d.items?.reduce((b, i) => b + (i.reservations?.length || 0), 0) || 0), 0) || 0), 0),
+            totalReservations: totalReservations,
             description: rawTrip.description
           },
           actions,
@@ -621,7 +906,7 @@ What would you like to change about this plan, or should I create it as is?`;
         }]
       };
       
-      setMessages(prev => [...prev, contextMessage]);
+      setMessages(prev => [...prev, greetingMessage, contextMessage]);
     } catch (error) {
       console.error('Error generating trip context:', error);
     } finally {
@@ -631,135 +916,203 @@ What would you like to change about this plan, or should I create it as is?`;
 
   // Handler for chatting about a segment
   const handleChatAboutSegment = async (segment: any) => {
+    // Use dbId (string UUID) instead of id (numeric index)
+    const segmentDbId = segment.dbId || segment.id;
+    
+    // 1. Check for existing chats
+    const existing = await findEntityConversations('SEGMENT', segmentDbId);
+    
+    // 2. If existing chats found, show dialog
+    if (existing.length > 0) {
+      setExistingChatsDialog({
+        open: true,
+        entityType: 'segment',
+        entityId: segmentDbId,
+        entityName: segment.name,
+        existingChats: existing,
+      });
+      return;
+    }
+    
+    // 3. Create new chat
+    await createNewSegmentChat(segment);
+  };
+
+  // Handler for chatting about an item (reservation)
+  const handleChatAboutItem = async (reservation: any, itemTitle: string) => {
+    // 1. Check for existing chats
+    const existing = await findEntityConversations('RESERVATION', reservation.id);
+    
+    // 2. If existing chats found, show dialog
+    if (existing.length > 0) {
+      setExistingChatsDialog({
+        open: true,
+        entityType: 'reservation',
+        entityId: reservation.id,
+        entityName: reservation.name || itemTitle,
+        existingChats: existing,
+      });
+      return;
+    }
+    
+    // 3. Create new chat
+    await createNewReservationChat(reservation, itemTitle);
+  };
+
+  // Helper function to create a new segment chat
+  const createNewSegmentChat = async (segment: any) => {
     setIsLoading(true);
     setHasStartedPlanning(true);
     
     try {
-      const response = await fetch('/api/chat/context', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'segment',
-          data: {
-            name: segment.name,
-            type: segment.type,
-            startLocation: segment.startLocation || segment.startDate,
-            endLocation: segment.endLocation || segment.endDate,
-            startDate: segment.startDate,
-            endDate: segment.endDate,
-            reservationsCount: segment.days?.reduce((acc: number, d: any) => 
-              acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0
-          },
-          fullTripContext: selectedTrip
-        })
-      });
+      // Use dbId (string UUID) instead of id (numeric index)
+      const segmentDbId = segment.dbId || segment.id;
       
-      const { actions } = await response.json();
+      console.log('[createNewSegmentChat] Creating conversation for segment:', segmentDbId);
       
-      const contextMessage: ChatMessage = {
-        id: `context-${Date.now()}`,
-        role: 'assistant',
-        content: '',
-        segments: [{
-          type: 'context_card',
-          contextType: 'segment',
-          data: {
-            segmentId: segment.id,
-            name: segment.name,
-            type: segment.type,
-            startLocation: segment.startLocation || 'N/A',
-            endLocation: segment.endLocation || 'N/A',
-            startDate: segment.startDate,
-            endDate: segment.endDate,
-            reservationsCount: segment.days?.reduce((acc: number, d: any) => 
-              acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0
-          },
-          actions,
-          onSaved: refetchTrip
-        }]
-      };
+      // 1. Create the conversation
+      const conversation = await createSegmentConversation(
+        segmentDbId,
+        segment.name,
+        selectedTripId!
+      );
       
-      setMessages(prev => [...prev, contextMessage]);
+      console.log('[createNewSegmentChat] Conversation created:', conversation.id);
+      
+      // 2. Add to state and switch to it (empty initially)
+      const fullConversation = { ...conversation, messages: [], chatType: 'SEGMENT' as const };
+      setConversations(prev => [fullConversation, ...prev]);
+      setCurrentConversationId(conversation.id);
+      setMessages([]); // Start empty
+      
+      // 3. Append context card after brief delay
+      setTimeout(() => {
+        console.log('[createNewSegmentChat] Appending context card');
+        appendContextCardForConversation(fullConversation);
+      }, 100);
+      
     } catch (error) {
-      console.error('Error generating segment context:', error);
+      console.error('Error creating segment chat:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handler for chatting about an item (reservation)
-  const handleChatAboutItem = async (reservation: any, itemTitle: string) => {
+  // Helper function to create a new reservation chat
+  const createNewReservationChat = async (reservation: any, itemTitle: string) => {
     setIsLoading(true);
     setHasStartedPlanning(true);
     
     try {
-      // Find the actual DB reservation from selectedTrip to get raw dates
+      // Find the actual DB reservation from selectedTrip
       const dbReservation = selectedTrip?.segments
         .flatMap(s => s.reservations)
         .find(r => r.id === reservation.id);
       
-      const response = await fetch('/api/chat/context', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'reservation',
-          data: {
-            vendor: reservation.vendor,
-            name: reservation.vendor,
-            category: itemTitle,
-            status: reservation.status,
-            confirmationNumber: reservation.confirmationNumber,
-            cost: reservation.cost,
-            startTime: dbReservation?.startTime instanceof Date 
-              ? dbReservation.startTime.toISOString() 
-              : dbReservation?.startTime,
-            endTime: dbReservation?.endTime instanceof Date 
-              ? dbReservation.endTime.toISOString() 
-              : dbReservation?.endTime,
-            text: reservation.text,
-            contactPhone: reservation.contactPhone,
-            contactEmail: reservation.contactEmail,
-            website: reservation.website
-          },
-          fullTripContext: selectedTrip
-        })
-      });
+      if (!dbReservation) {
+        console.error("Could not find database reservation with ID:", reservation.id);
+        return;
+      }
       
-      const { actions } = await response.json();
+      console.log('[createNewReservationChat] Creating conversation for reservation:', reservation.id);
       
-      const contextMessage: ChatMessage = {
-        id: `context-${Date.now()}`,
-        role: 'assistant',
-        content: '',
-        segments: [{
-          type: 'context_card',
-          contextType: 'reservation',
-          data: {
-            reservationId: reservation.id,
-            vendor: reservation.vendor,
-            name: reservation.vendor,
-            category: itemTitle,
-            status: reservation.status,
-            confirmationNumber: reservation.confirmationNumber,
-            cost: reservation.cost,
-            startTime: dbReservation?.startTime instanceof Date 
-              ? dbReservation.startTime.toISOString() 
-              : dbReservation?.startTime,
-            endTime: dbReservation?.endTime instanceof Date 
-              ? dbReservation.endTime.toISOString() 
-              : dbReservation?.endTime,
-            text: reservation.text
-          },
-          actions,
-          onSaved: refetchTrip
-        }]
-      };
+      // 1. Create the conversation
+      const conversation = await createReservationConversation(
+        reservation.id,
+        reservation.name || itemTitle,
+        dbReservation.segmentId,
+        selectedTripId!
+      );
       
-      setMessages(prev => [...prev, contextMessage]);
+      console.log('[createNewReservationChat] Conversation created:', conversation.id);
+      
+      // 2. Add to state and switch to it (empty initially)
+      const fullConversation = { ...conversation, messages: [], chatType: 'RESERVATION' as const, reservationId: reservation.id, segmentId: dbReservation.segmentId };
+      setConversations(prev => [fullConversation, ...prev]);
+      setCurrentConversationId(conversation.id);
+      setMessages([]); // Start empty
+      
+      // 3. Append context card after brief delay
+      setTimeout(() => {
+        console.log('[createNewReservationChat] Appending context card');
+        appendContextCardForConversation(fullConversation);
+      }, 100);
+      
     } catch (error) {
-      console.error('Error generating reservation context:', error);
+      console.error('Error creating reservation chat:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Handler for opening an existing chat
+  const handleOpenExistingChat = async (conversationId: string) => {
+    setIsLoading(true);
+    setExistingChatsDialog(null);
+    
+    try {
+      // Find conversation in local state first
+      const localConv = conversations.find(c => c.id === conversationId);
+      let fullConversation: Conversation;
+      
+      if (localConv && localConv.messages && localConv.messages.length > 0) {
+        // Use cached messages
+        fullConversation = localConv;
+        console.log('[handleOpenExistingChat] Using cached conversation with', localConv.messages.length, 'messages');
+      } else {
+        // Fetch full conversation with messages from server
+        console.log('[handleOpenExistingChat] Fetching conversation from API:', conversationId);
+        const response = await fetch(`/api/conversations/${conversationId}`);
+        fullConversation = await response.json() as Conversation;
+        console.log('[handleOpenExistingChat] Loaded conversation with', fullConversation.messages?.length || 0, 'messages');
+        
+        // Update conversations array with full data
+        setConversations(prev => 
+          prev.map(c => c.id === conversationId ? fullConversation : c)
+        );
+      }
+      
+      // 1. Switch to conversation and load existing messages
+      setCurrentConversationId(conversationId);
+      setMessages(fullConversation.messages?.map((m: any) => ({
+        id: m.id,
+        role: m.role as any,
+        content: m.content,
+      })) || []);
+      
+      // 2. THEN append context card (after a brief delay to show history first)
+      setTimeout(() => {
+        console.log('[handleOpenExistingChat] Appending context card for chatType:', fullConversation.chatType);
+        appendContextCardForConversation(fullConversation);
+      }, 100);
+      
+    } catch (error) {
+      console.error('[handleOpenExistingChat] Error loading existing chat:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handler for creating a new chat from dialog
+  const handleCreateNewFromDialog = async () => {
+    if (!existingChatsDialog) return;
+    
+    const { entityType, entityId } = existingChatsDialog;
+    setExistingChatsDialog(null);
+    
+    if (entityType === 'segment') {
+      const segment = selectedTrip?.segments.find(s => s.id === entityId);
+      if (segment) {
+        // Transform segment to V0 format for createNewSegmentChat
+        const transformedTrip = selectedTrip ? transformTripToV0Format(selectedTrip) : null;
+        const v0Segment = transformedTrip?.segments.find(s => String(s.id) === entityId);
+        if (v0Segment) await createNewSegmentChat(v0Segment);
+      }
+    } else {
+      const reservation = selectedTrip?.segments
+        .flatMap(s => s.reservations)
+        .find(r => r.id === entityId);
+      if (reservation) await createNewReservationChat(reservation, reservation.name);
     }
   };
 
@@ -1377,7 +1730,7 @@ What would you like to change about this plan, or should I create it as is?`;
       />
 
       {/* Edit Modals */}
-      {currentConversationId && (
+      {currentConversationId && conversations.find(c => c.id === currentConversationId) && (
         <EditChatModal
           isOpen={isChatEditModalOpen}
           onClose={() => setIsChatEditModalOpen(false)}
@@ -1420,6 +1773,19 @@ What would you like to change about this plan, or should I create it as is?`;
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Existing Chat Dialog */}
+      {existingChatsDialog && (
+        <ExistingChatDialog
+          open={existingChatsDialog.open}
+          entityType={existingChatsDialog.entityType}
+          entityName={existingChatsDialog.entityName}
+          existingChats={existingChatsDialog.existingChats}
+          onOpenExisting={handleOpenExistingChat}
+          onCreateNew={handleCreateNewFromDialog}
+          onCancel={() => setExistingChatsDialog(null)}
+        />
+      )}
     </div>
   )
 }

@@ -94,7 +94,7 @@ model Trip {
 }
 
 model Segment {
-  id                String        @id @default(cuid())
+  id                String             @id @default(cuid())
   startTitle        String
   startLat          Float
   startLng          Float
@@ -105,19 +105,20 @@ model Segment {
   startTime         DateTime?
   endTime           DateTime?
   tripId            String
-  order             Int           @default(0)
-  createdAt         DateTime      @default(now())
+  order             Int                @default(0)
+  createdAt         DateTime           @default(now())
   imageUrl          String?
   name              String
   segmentTypeId     String
-  imageIsCustom     Boolean       @default(false)
+  imageIsCustom     Boolean            @default(false)
   endTimeZoneId     String?
   endTimeZoneName   String?
   startTimeZoneId   String?
   startTimeZoneName String?
+  conversations     ChatConversation[]
   reservations      Reservation[]
-  segmentType       SegmentType   @relation(fields: [segmentTypeId], references: [id])
-  trip              Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  segmentType       SegmentType        @relation(fields: [segmentTypeId], references: [id])
+  trip              Trip               @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
 model SegmentType {
@@ -154,7 +155,7 @@ model ReservationStatus {
 }
 
 model Reservation {
-  id                  String            @id @default(cuid())
+  id                  String             @id @default(cuid())
   name                String
   confirmationNumber  String?
   notes               String?
@@ -168,13 +169,13 @@ model Reservation {
   location            String?
   url                 String?
   imageUrl            String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
   arrivalLocation     String?
   arrivalTimezone     String?
   departureLocation   String?
   departureTimezone   String?
-  imageIsCustom       Boolean           @default(false)
+  imageIsCustom       Boolean            @default(false)
   cancellationPolicy  String?
   contactEmail        String?
   contactPhone        String?
@@ -183,21 +184,27 @@ model Reservation {
   timeZoneId          String?
   timeZoneName        String?
   vendor              String?
-  reservationStatus   ReservationStatus @relation(fields: [reservationStatusId], references: [id])
-  reservationType     ReservationType   @relation(fields: [reservationTypeId], references: [id])
-  segment             Segment           @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  conversations       ChatConversation[]
+  reservationStatus   ReservationStatus  @relation(fields: [reservationStatusId], references: [id])
+  reservationType     ReservationType    @relation(fields: [reservationTypeId], references: [id])
+  segment             Segment            @relation(fields: [segmentId], references: [id], onDelete: Cascade)
 }
 
 model ChatConversation {
-  id        String        @id @default(cuid())
-  userId    String
-  title     String
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  tripId    String?
-  trip      Trip?         @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  ChatMessage[]
+  id            String       @id @default(cuid())
+  userId        String
+  title         String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  tripId        String?
+  chatType      ChatType     @default(TRIP)
+  segmentId     String?
+  reservationId String?
+  trip          Trip?        @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  segment       Segment?     @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      ChatMessage[]
 }
 
 model ChatMessage {
@@ -439,4 +446,10 @@ enum TripPermission {
   FRIENDS
   LINK
   ANYONE
+}
+
+enum ChatType {
+  TRIP
+  SEGMENT
+  RESERVATION
 }

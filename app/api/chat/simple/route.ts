@@ -15,7 +15,7 @@ export const maxDuration = 60;
 // Helper to get trip context for the conversation
 async function getTripContext(conversationId: string, userId: string): Promise<string | null> {
   try {
-    // Get conversation with trip info
+    // Get conversation with trip info, segment info, and reservation info
     const conversation = await prisma.chatConversation.findFirst({
       where: {
         id: conversationId,
@@ -47,6 +47,39 @@ async function getTripContext(conversationId: string, userId: string): Promise<s
             },
           },
         },
+        segment: {
+          include: {
+            segmentType: true,
+            reservations: {
+              include: {
+                reservationType: {
+                  include: {
+                    category: true,
+                  },
+                },
+                reservationStatus: true,
+              },
+              orderBy: {
+                startTime: 'asc',
+              },
+            },
+          },
+        },
+        reservation: {
+          include: {
+            reservationType: {
+              include: {
+                category: true,
+              },
+            },
+            reservationStatus: true,
+            segment: {
+              include: {
+                segmentType: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -55,19 +88,151 @@ async function getTripContext(conversationId: string, userId: string): Promise<s
     }
 
     const trip = conversation.trip;
+    const chatType = conversation.chatType;
+    const focusedSegment = conversation.segment;
+    const focusedReservation = conversation.reservation;
 
-    // Format trip data as context
-    let context = `\n\n## CURRENT TRIP CONTEXT\n\n`;
-    context += `You are currently discussing the trip: "${trip.title}"\n`;
+    let context = '';
+
+    // Add conversation context header to specify what entity is being discussed
+    context += `\n\n## CONVERSATION CONTEXT\n\n`;
+    
+    if (chatType === 'SEGMENT' && focusedSegment) {
+      context += `You are discussing: [SEGMENT] "${focusedSegment.name}" in trip "${trip.title}"\n`;
+      context += `Focus: This conversation is specifically about the "${focusedSegment.name}" segment.\n\n`;
+      
+      // Detailed segment information
+      context += `## FOCUSED SEGMENT DETAILS\n\n`;
+      context += `**Segment: ${focusedSegment.name}**\n`;
+      context += `- Type: ${focusedSegment.segmentType.name}\n`;
+      context += `- From: ${focusedSegment.startTitle}\n`;
+      context += `- To: ${focusedSegment.endTitle}\n`;
+      if (focusedSegment.startTime) {
+        context += `- Start: ${new Date(focusedSegment.startTime).toLocaleString()}\n`;
+      }
+      if (focusedSegment.endTime) {
+        context += `- End: ${new Date(focusedSegment.endTime).toLocaleString()}\n`;
+      }
+      if (focusedSegment.notes) {
+        context += `- Notes: ${focusedSegment.notes}\n`;
+      }
+      context += `- Segment ID: ${focusedSegment.id}\n`;
+
+      if (focusedSegment.reservations.length > 0) {
+        context += `\n**Reservations in this segment (${focusedSegment.reservations.length}):**\n`;
+        focusedSegment.reservations.forEach((res, resIdx) => {
+          context += `${resIdx + 1}. ${res.name}\n`;
+          context += `   - Category: ${res.reservationType.category.name}\n`;
+          context += `   - Type: ${res.reservationType.name}\n`;
+          context += `   - Status: ${res.reservationStatus.name}\n`;
+          if (res.startTime) {
+            context += `   - Time: ${new Date(res.startTime).toLocaleString()}`;
+            if (res.endTime) {
+              context += ` to ${new Date(res.endTime).toLocaleTimeString()}`;
+            }
+            context += `\n`;
+          }
+          if (res.location) {
+            context += `   - Location: ${res.location}\n`;
+          }
+          if (res.cost) {
+            context += `   - Cost: ${res.currency || '$'}${res.cost}\n`;
+          }
+          if (res.confirmationNumber) {
+            context += `   - Confirmation: ${res.confirmationNumber}\n`;
+          }
+          context += `   - Reservation ID: ${res.id}\n`;
+        });
+      } else {
+        context += `\nNo reservations in this segment yet.\n`;
+      }
+      context += `\n`;
+      
+    } else if (chatType === 'RESERVATION' && focusedReservation) {
+      const parentSegment = focusedReservation.segment;
+      context += `You are discussing: [RESERVATION] "${focusedReservation.name}"\n`;
+      context += `- In segment: "${parentSegment?.name || 'Unknown'}"\n`;
+      context += `- Part of trip: "${trip.title}"\n`;
+      context += `Focus: This conversation is specifically about the "${focusedReservation.name}" reservation.\n\n`;
+      
+      // Detailed reservation information
+      context += `## FOCUSED RESERVATION DETAILS\n\n`;
+      context += `**Reservation: ${focusedReservation.name}**\n`;
+      context += `- Category: ${focusedReservation.reservationType.category.name}\n`;
+      context += `- Type: ${focusedReservation.reservationType.name}\n`;
+      context += `- Status: ${focusedReservation.reservationStatus.name}\n`;
+      if (focusedReservation.vendor) {
+        context += `- Vendor: ${focusedReservation.vendor}\n`;
+      }
+      if (focusedReservation.startTime) {
+        context += `- Start Time: ${new Date(focusedReservation.startTime).toLocaleString()}`;
+        if (focusedReservation.endTime) {
+          context += ` to ${new Date(focusedReservation.endTime).toLocaleString()}`;
+        }
+        context += `\n`;
+      }
+      if (focusedReservation.location) {
+        context += `- Location: ${focusedReservation.location}\n`;
+      }
+      if (focusedReservation.cost) {
+        context += `- Cost: ${focusedReservation.currency || '$'}${focusedReservation.cost}\n`;
+      }
+      if (focusedReservation.confirmationNumber) {
+        context += `- Confirmation: ${focusedReservation.confirmationNumber}\n`;
+      }
+      if (focusedReservation.contactPhone) {
+        context += `- Contact Phone: ${focusedReservation.contactPhone}\n`;
+      }
+      if (focusedReservation.contactEmail) {
+        context += `- Contact Email: ${focusedReservation.contactEmail}\n`;
+      }
+      if (focusedReservation.url) {
+        context += `- Website: ${focusedReservation.url}\n`;
+      }
+      if (focusedReservation.notes) {
+        context += `- Notes: ${focusedReservation.notes}\n`;
+      }
+      if (focusedReservation.cancellationPolicy) {
+        context += `- Cancellation Policy: ${focusedReservation.cancellationPolicy}\n`;
+      }
+      context += `- Reservation ID: ${focusedReservation.id}\n\n`;
+
+      // Parent segment context
+      if (parentSegment) {
+        context += `## PARENT SEGMENT CONTEXT\n\n`;
+        context += `**Segment: ${parentSegment.name}**\n`;
+        context += `- Type: ${parentSegment.segmentType.name}\n`;
+        context += `- From: ${parentSegment.startTitle}\n`;
+        context += `- To: ${parentSegment.endTitle}\n`;
+        if (parentSegment.startTime) {
+          context += `- Dates: ${new Date(parentSegment.startTime).toLocaleDateString()}`;
+          if (parentSegment.endTime) {
+            context += ` to ${new Date(parentSegment.endTime).toLocaleDateString()}`;
+          }
+          context += `\n`;
+        }
+        context += `- Segment ID: ${parentSegment.id}\n\n`;
+      }
+      
+    } else {
+      // TRIP context (default)
+      context += `You are discussing: [TRIP] "${trip.title}"\n`;
+      context += `Focus: This conversation is about the overall trip.\n\n`;
+    }
+
+    // Add full trip context for all conversation types
+    context += `## PARENT TRIP CONTEXT\n\n`;
+    context += `**Trip: "${trip.title}"**\n`;
     context += `Description: ${trip.description}\n`;
     context += `Dates: ${new Date(trip.startDate).toLocaleDateString()} to ${new Date(trip.endDate).toLocaleDateString()}\n`;
     context += `Trip ID: ${trip.id}\n\n`;
 
     if (trip.segments.length > 0) {
-      context += `### Trip Segments (${trip.segments.length} total):\n\n`;
+      context += `### All Trip Segments (${trip.segments.length} total):\n\n`;
 
       trip.segments.forEach((segment, idx) => {
-        context += `**Segment ${idx + 1}: ${segment.name}**\n`;
+        const isFocused = chatType === 'SEGMENT' && segment.id === focusedSegment?.id;
+        context += `**Segment ${idx + 1}: ${segment.name}${isFocused ? ' ⭐ (FOCUSED)' : ''}**\n`;
         context += `- Type: ${segment.segmentType.name}\n`;
         context += `- From: ${segment.startTitle}\n`;
         context += `- To: ${segment.endTitle}\n`;
@@ -85,7 +250,8 @@ async function getTripContext(conversationId: string, userId: string): Promise<s
         if (segment.reservations.length > 0) {
           context += `\n  **Reservations in this segment (${segment.reservations.length}):**\n`;
           segment.reservations.forEach((res, resIdx) => {
-            context += `  ${resIdx + 1}. ${res.name}\n`;
+            const isResFocused = chatType === 'RESERVATION' && res.id === focusedReservation?.id;
+            context += `  ${resIdx + 1}. ${res.name}${isResFocused ? ' ⭐ (FOCUSED)' : ''}\n`;
             context += `     - Category: ${res.reservationType.category.name}\n`;
             context += `     - Type: ${res.reservationType.name}\n`;
             context += `     - Status: ${res.reservationStatus.name}\n`;
@@ -119,7 +285,15 @@ async function getTripContext(conversationId: string, userId: string): Promise<s
       context += `No segments have been added to this trip yet.\n\n`;
     }
 
-    context += `\n**IMPORTANT**: When answering questions about this trip, always reference the specific details above. You have complete knowledge of all segments, reservations, times, locations, and costs. Use this information to provide accurate, contextual responses.\n`;
+    context += `\n**IMPORTANT**: `;
+    if (chatType === 'SEGMENT') {
+      context += `This conversation is focused on the "${focusedSegment?.name}" segment. Keep your responses centered on this segment, but you have access to the full trip context if needed. `;
+    } else if (chatType === 'RESERVATION') {
+      context += `This conversation is focused on the "${focusedReservation?.name}" reservation. Keep your responses centered on this reservation, but you have access to the parent segment and full trip context if needed. `;
+    } else {
+      context += `This conversation is about the overall trip. `;
+    }
+    context += `When answering questions, always reference the specific details above. You have complete knowledge of all segments, reservations, times, locations, and costs. Use this information to provide accurate, contextual responses.\n`;
 
     return context;
   } catch (error) {

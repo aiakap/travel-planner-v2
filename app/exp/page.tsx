@@ -97,6 +97,7 @@ export default async function ExpPage({
           data: {
             userId: session.user.id,
             tripId,
+            chatType: 'TRIP',
             title: `${selectedTrip.title} - ${formatChatTimestamp(new Date())}`,
           },
           include: {

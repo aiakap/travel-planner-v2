@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/exp/ui/select"
-import { MessageCircle, Plus } from "lucide-react"
+import { MessageCircle, Plus, MapPin, Calendar, Hotel } from "lucide-react"
 import { createTripConversation } from "@/lib/actions/chat-actions"
 
 interface Conversation {
   id: string
   title: string
   tripId: string | null
+  chatType?: 'TRIP' | 'SEGMENT' | 'RESERVATION'
   createdAt: Date
   updatedAt: Date
   messages: Array<{
@@ -58,6 +59,18 @@ export function ChatNameDropdown({
     return d.toLocaleDateString()
   }
 
+  const getChatTypeInfo = (chatType?: 'TRIP' | 'SEGMENT' | 'RESERVATION') => {
+    switch (chatType) {
+      case 'SEGMENT':
+        return { icon: MapPin, label: 'Segment', color: 'text-blue-600' }
+      case 'RESERVATION':
+        return { icon: Hotel, label: 'Reservation', color: 'text-green-600' }
+      case 'TRIP':
+      default:
+        return { icon: Calendar, label: 'Trip', color: 'text-purple-600' }
+    }
+  }
+
   const handleNewChat = async () => {
     setIsCreating(true)
     try {
@@ -91,19 +104,26 @@ export function ChatNameDropdown({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {conversations.map((conv) => (
-          <SelectItem key={conv.id} value={conv.id}>
-            <div className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-2">
-                <MessageCircle className="h-3 w-3" />
-                <span>{conv.title}</span>
+        {conversations.map((conv) => {
+          const typeInfo = getChatTypeInfo(conv.chatType)
+          const TypeIcon = typeInfo.icon
+          return (
+            <SelectItem key={conv.id} value={conv.id}>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <TypeIcon className={`h-3 w-3 ${typeInfo.color}`} />
+                  <span>{conv.title}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 ${typeInfo.color} font-medium`}>
+                    {typeInfo.label}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500">
+                  Updated: {formatDate(conv.updatedAt)}
+                </div>
               </div>
-              <div className="text-xs text-slate-500">
-                Updated: {formatDate(conv.updatedAt)}
-              </div>
-            </div>
-          </SelectItem>
-        ))}
+            </SelectItem>
+          )
+        })}
         <SelectItem value="new" disabled={isCreating}>
           <div className="flex items-center gap-2 text-primary">
             <Plus className="h-3 w-3" />

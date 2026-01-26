@@ -205,6 +205,7 @@ export async function createTripConversation(tripId: string, title?: string) {
     data: {
       userId: session.user.id,
       tripId,
+      chatType: 'TRIP',
       title: title || `${trip.title} - ${formatChatTimestamp(new Date())}`,
     },
     include: {
@@ -268,5 +269,71 @@ export async function renameTripConversation(conversationId: string, newTitle: s
 
   revalidatePath("/experience-builder");
   return updated;
+}
+
+export async function createSegmentConversation(
+  segmentId: string, 
+  segmentName: string,
+  tripId: string
+) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+  
+  const conversation = await prisma.chatConversation.create({
+    data: {
+      userId: session.user.id,
+      tripId,
+      segmentId,
+      chatType: 'SEGMENT',
+      title: `${segmentName} Chat - ${formatChatTimestamp(new Date())}`,
+    },
+    include: { messages: true },
+  });
+  
+  revalidatePath("/exp");
+  return conversation;
+}
+
+export async function createReservationConversation(
+  reservationId: string,
+  reservationName: string,
+  segmentId: string,
+  tripId: string
+) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+  
+  const conversation = await prisma.chatConversation.create({
+    data: {
+      userId: session.user.id,
+      tripId,
+      segmentId,
+      reservationId,
+      chatType: 'RESERVATION',
+      title: `${reservationName} Chat - ${formatChatTimestamp(new Date())}`,
+    },
+    include: { messages: true },
+  });
+  
+  revalidatePath("/exp");
+  return conversation;
+}
+
+export async function findEntityConversations(
+  entityType: 'SEGMENT' | 'RESERVATION',
+  entityId: string
+) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+  
+  const where = entityType === 'SEGMENT' 
+    ? { segmentId: entityId, userId: session.user.id }
+    : { reservationId: entityId, userId: session.user.id };
+  
+  return await prisma.chatConversation.findMany({
+    where,
+    orderBy: { updatedAt: 'desc' },
+    include: { messages: { take: 1 } },
+  });
 }
 
