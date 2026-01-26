@@ -51,7 +51,7 @@ Flight, Drive, Train, Ferry, Walk, Other
 
 **Travel**: Flight, Train, Car Rental, Bus, Ferry
 **Stay**: Hotel, Airbnb, Hostel, Resort, Vacation Rental
-**Activity**: Tour, Event Tickets, Museum, Hike, Excursion, Adventure
+**Activity**: Tour, Event Tickets, Museum, Hike, Excursion, Adventure, Sport
 **Dining**: Restaurant, Cafe, Bar, Food Tour
 
 ## Guidelines

@@ -250,6 +250,34 @@ export function ExpClient({
         segments: data.segments,
       };
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Update conversations array with new messages to keep cache fresh
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === currentConversationId) {
+          return {
+            ...conv,
+            messages: [
+              ...(conv.messages || []),
+              {
+                id: userMessage.id,
+                role: 'user',
+                content: text,
+                createdAt: new Date()
+              },
+              {
+                id: assistantMessage.id,
+                role: 'assistant',
+                content: data.content,
+                createdAt: new Date()
+              }
+            ],
+            updatedAt: new Date()
+          };
+        }
+        return conv;
+      }));
+      
+      console.log('[sendMessage] Updated conversations array with new messages for conversation:', currentConversationId);
     } catch (error) {
       console.error("❌ [sendMessage] Error:", error);
       
@@ -273,6 +301,34 @@ export function ExpClient({
         content: errorContent,
       };
       setMessages(prev => [...prev, errorMessage]);
+      
+      // Update conversations array with error message to keep cache fresh
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === currentConversationId) {
+          return {
+            ...conv,
+            messages: [
+              ...(conv.messages || []),
+              {
+                id: userMessage.id,
+                role: 'user',
+                content: text,
+                createdAt: new Date()
+              },
+              {
+                id: errorMessage.id,
+                role: 'assistant',
+                content: errorContent,
+                createdAt: new Date()
+              }
+            ],
+            updatedAt: new Date()
+          };
+        }
+        return conv;
+      }));
+      
+      console.log('[sendMessage] Updated conversations array with error message for conversation:', currentConversationId);
     } finally {
       setIsLoading(false);
     }

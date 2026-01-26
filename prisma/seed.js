@@ -35,7 +35,7 @@ async function main() {
     },
     {
       category: "Activity",
-      types: ["Tour", "Event Tickets", "Museum", "Hike", "Excursion", "Adventure"],
+      types: ["Tour", "Event Tickets", "Museum", "Hike", "Excursion", "Adventure", "Sport"],
     },
     {
       category: "Dining",

@@ -397,6 +397,18 @@ export function ReservationDetailModal({
           {isEditingReservation && editedReservation ? (
             // Edit Mode - Click to Edit
             <div className="space-y-1">
+              {/* Status Badge in Edit Mode */}
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-muted-foreground">Status</h3>
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(
+                    selectedReservation.reservation.reservationStatus.name,
+                    editedReservation.confirmationNumber,
+                  )}
+                  {renderNightsIndicator(editedReservation.startTime, editedReservation.endTime)}
+                </div>
+              </div>
+              
               {/* Vendor - simplified */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Vendor / Name</label>
