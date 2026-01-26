@@ -31,7 +31,7 @@ export default function Navbar({ session }: NavbarProps) {
           {session ? (
             <>
               <Link
-                href={"/trips/new"}
+                href={"/trip/new"}
                 className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
               >
                 New Trip
@@ -47,6 +47,12 @@ export default function Navbar({ session }: NavbarProps) {
                 className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
               >
                 Manage
+              </Link>
+              <Link
+                href={"/object"}
+                className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
+              >
+                Object System
               </Link>
               <Link
                 href={"/suggestions"}

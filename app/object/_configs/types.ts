@@ -27,6 +27,15 @@ export interface DataSourceConfig {
  */
 export interface LeftPanelConfig {
   /**
+   * Header configuration for left panel
+   */
+  header?: {
+    icon?: string; // Lucide icon name (e.g., "MessageCircle", "BookOpen")
+    title: string;
+    subtitle?: string;
+  };
+
+  /**
    * Welcome message shown when chat starts
    */
   welcomeMessage?: string;
@@ -48,9 +57,31 @@ export interface LeftPanelConfig {
  */
 export interface RightPanelConfig {
   /**
-   * Main view component for displaying data
+   * Header configuration for right panel
    */
-  component: ComponentType<any>;
+  header?: {
+    icon?: string; // Lucide icon name
+    title: string;
+    subtitle?: string;
+  };
+
+  /**
+   * Multiple view templates for the right panel
+   * NEW: Supports switching between different visualizations
+   */
+  views?: Array<{
+    id: string;                    // e.g., "chips", "table"
+    name: string;                  // e.g., "Chips", "Table"
+    icon: string;                  // Lucide icon name
+    component: ComponentType<any>;
+  }>;
+
+  /**
+   * Main view component for displaying data
+   * DEPRECATED: Use views[] instead for multiple view support
+   * Kept for backward compatibility
+   */
+  component?: ComponentType<any>;
 
   /**
    * Optional: Component to show when no data
@@ -71,6 +102,44 @@ export interface ProcessExecutor {
    * Validate process input
    */
   validate?: (input: any) => boolean;
+}
+
+/**
+ * Card style configuration
+ */
+export interface CardStyleConfig {
+  /**
+   * Default card style: "chip" | "button" | "card"
+   */
+  defaultStyle?: "chip" | "button" | "card";
+  
+  /**
+   * Per-card-type style overrides
+   */
+  styleOverrides?: Record<string, "chip" | "button" | "card">;
+}
+
+/**
+ * Auto-action configuration
+ */
+export interface AutoActionConfig {
+  /**
+   * Card types that trigger automatic actions
+   * Example: ["auto_add", "quick_action"]
+   */
+  autoActionCards?: string[];
+  
+  /**
+   * Handler function for auto-actions
+   * Called when auto-action cards are created
+   * 
+   * @param cards - Array of cards to process
+   * @param onDataUpdate - Callback to update UI state with new data
+   */
+  onAutoAction?: (
+    cards: Array<{ type: string; data: any }>,
+    onDataUpdate?: (data: { graphData?: any; xmlData?: string }) => void
+  ) => Promise<void>;
 }
 
 /**
@@ -127,6 +196,58 @@ export interface ObjectConfig {
    * Optional: Custom metadata
    */
   metadata?: Record<string, any>;
+
+  /**
+   * Optional: Card styling configuration
+   */
+  cardStyle?: CardStyleConfig;
+  
+  /**
+   * Optional: Auto-action configuration
+   */
+  autoActions?: AutoActionConfig;
+  
+  /**
+   * Optional: Helper functions for data processing
+   */
+  helpers?: {
+    /**
+     * Category processor for auto-categorizing items
+     */
+    categoryProcessor?: any; // ProcessorConfig from category-processor
+    
+    /**
+     * Transform item before saving
+     * @param item - Raw item from AI
+     * @returns Transformed item
+     */
+    transformItem?: (item: {
+      value: string;
+      category?: string;
+      subcategory?: string;
+    }) => {
+      value: string;
+      category: string;
+      subcategory: string;
+      metadata?: Record<string, any>;
+    };
+    
+    /**
+     * Validate item before saving
+     * @param item - Item to validate
+     * @returns true if valid, error message if invalid
+     */
+    validateItem?: (item: {
+      value: string;
+      category: string;
+      subcategory: string;
+    }) => true | string;
+    
+    /**
+     * Normalize value (trim, capitalize, etc.)
+     */
+    normalizeValue?: (value: string) => string;
+  };
 }
 
 /**

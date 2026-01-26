@@ -9,6 +9,8 @@
 import { useState, useRef, useEffect } from "react";
 import { ChatPanelProps, Message, MessageCard } from "./types";
 import { addItemToXml, parseXmlToGraph, createEmptyProfileXml } from "@/lib/profile-graph-xml";
+import * as LucideIcons from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 export function ChatPanel({
   config,
@@ -16,6 +18,7 @@ export function ChatPanel({
   params,
   xmlData,
   onDataUpdate,
+  onCollapse,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -153,6 +156,9 @@ export function ChatPanel({
   };
 
   const handleCardAction = (action: string, cardData: any) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-panel.tsx:155',message:'handleCardAction called',data:{action,hasOnDataUpdate:!!onDataUpdate},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
     console.log("🎬 [CHAT PANEL] Card action received:", {
       action,
       cardData,
@@ -161,9 +167,19 @@ export function ChatPanel({
     });
     
     if (action === "refresh" || action === "reload") {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-panel.tsx:163',message:'Calling onDataUpdate with reload_data',data:{action:'reload_data'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
       console.log("🔄 [CHAT PANEL] Triggering data reload");
       onDataUpdate({ action: 'reload_data', _refresh: Date.now() });
     }
+  };
+
+  // Get icon component dynamically
+  const getIcon = (iconName?: string) => {
+    if (!iconName) return null;
+    const Icon = (LucideIcons as any)[iconName];
+    return Icon ? <Icon className="w-5 h-5" /> : null;
   };
 
   return (
@@ -175,6 +191,68 @@ export function ChatPanel({
         background: "white",
       }}
     >
+      {/* Header Section */}
+      {config.leftPanel.header && (
+        <div style={{
+          padding: "16px 20px",
+          borderBottom: "2px solid #e5e7eb",
+          background: "white",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {config.leftPanel.header.icon && (
+              <div style={{ color: "#6b7280" }}>
+                {getIcon(config.leftPanel.header.icon)}
+              </div>
+            )}
+            <div>
+              <h2 style={{
+                fontSize: "18px",
+                fontWeight: "600",
+                color: "#111827",
+                marginBottom: "2px"
+              }}>
+                {config.leftPanel.header.title}
+              </h2>
+              {config.leftPanel.header.subtitle && (
+                <p style={{
+                  fontSize: "12px",
+                  color: "#6b7280",
+                  fontStyle: "italic"
+                }}>
+                  {config.leftPanel.header.subtitle}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          {/* Collapse button */}
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              style={{
+                padding: "6px",
+                border: "1px solid #e5e7eb",
+                background: "white",
+                borderRadius: "4px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                color: "#6b7280",
+                transition: "background 0.2s"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#f3f4f6"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "white"}
+              title="Hide chat panel (Cmd+[)"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Messages */}
       <div
         style={{

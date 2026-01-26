@@ -3,13 +3,20 @@
  * Displays a suggestion to add to profile
  */
 
+"use client";
+
+import { useState } from "react";
 import { CardProps } from "../_core/types";
+import { CardWrapper } from "./_shared/card-wrapper";
+import { Chip } from "./_shared/chip";
 
 interface ProfileSuggestionData {
+  type: "hobby" | "preference";
   category: string;
-  subcategory?: string;
   value: string;
-  metadata?: Record<string, string>;
+  hobbyId?: string | null;
+  preferenceTypeId?: string | null;
+  optionId?: string | null;
 }
 
 export function ProfileSuggestionCard({
@@ -17,70 +24,65 @@ export function ProfileSuggestionCard({
   onAction,
   onDataUpdate,
 }: CardProps<ProfileSuggestionData>) {
-  const handleAccept = () => {
-    if (onAction) {
-      onAction("accept", data);
-    }
-    if (onDataUpdate) {
-      onDataUpdate({ action: "add_to_profile", suggestion: data });
-    }
-  };
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAccepted, setIsAccepted] = useState(false);
 
-  const handleReject = () => {
-    if (onAction) {
-      onAction("reject", data);
+  const handleClick = async () => {
+    console.log('🔵 ProfileSuggestion: Chip clicked:', data.value);
+    
+    if (isAccepted || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/profile-graph/add-item", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          category: data.category,
+          subcategory: data.type,
+          value: data.value,
+          metadata: { addedAt: new Date().toISOString() }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add item");
+      }
+
+      const result = await response.json();
+      console.log('🔵 ProfileSuggestion: API returned:', result);
+      if (result.success) {
+        setIsAccepted(true);
+        if (onAction) {
+          onAction("accept", data);
+        }
+        // Pass updated data directly for immediate UI update
+        if (onDataUpdate && result.graphData) {
+          console.log('🔵 ProfileSuggestion: Calling onDataUpdate');
+          onDataUpdate(result.graphData);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to add suggestion:", error);
+      alert("Failed to add to profile. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        padding: "12px",
-        border: "1px solid #e5e7eb",
-        borderRadius: "8px",
-        background: "white",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}
-    >
-      <div style={{ flex: 1 }}>
-        <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>
-          {data.category}
-          {data.subcategory && ` • ${data.subcategory}`}
-        </p>
-        <p style={{ fontSize: "14px", fontWeight: "500" }}>{data.value}</p>
-      </div>
-      <div style={{ display: "flex", gap: "8px" }}>
-        <button
-          onClick={handleReject}
-          style={{
-            padding: "6px 12px",
-            background: "white",
-            border: "1px solid #e5e7eb",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          Reject
-        </button>
-        <button
-          onClick={handleAccept}
-          style={{
-            padding: "6px 12px",
-            background: "#10b981",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontSize: "14px",
-            fontWeight: "500",
-          }}
-        >
-          Accept
-        </button>
-      </div>
-    </div>
+    <CardWrapper label="Suggestion:">
+      <Chip
+        selected={isAccepted}
+        loading={isLoading}
+        disabled={isAccepted || isLoading}
+        onClick={handleClick}
+        icon={isAccepted ? <span>✓</span> : undefined}
+      >
+        {isLoading ? "Saving..." : data.value}
+      </Chip>
+    </CardWrapper>
   );
 }

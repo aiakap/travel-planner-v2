@@ -35,6 +35,11 @@ export async function upsertProfileItem(params: {
 
   console.log("🔵 [upsertProfileItem] Starting:", params);
 
+  // #region agent log
+  const fs = require('fs');
+  fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'profile-crud-actions.ts:36',message:'upsertProfileItem called',data:{category:params.category,subcategory:params.subcategory,value:params.value,userId:session.user.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H6'})+'\n');
+  // #endregion
+
   try {
     // Get current XML
     let profileGraph = await prisma.userProfileGraph.findUnique({
@@ -42,6 +47,10 @@ export async function upsertProfileItem(params: {
     });
     
     const currentXml = profileGraph?.graphData || createEmptyProfileXml();
+    
+    // #region agent log
+    fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'profile-crud-actions.ts:47',message:'Current XML fetched',data:{hasProfileGraph:!!profileGraph,xmlLength:currentXml.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H6'})+'\n');
+    // #endregion
     
     // Add item to XML
     const updatedXml = addItemToXml(
@@ -52,6 +61,10 @@ export async function upsertProfileItem(params: {
       params.metadata
     );
     
+    // #region agent log
+    fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'profile-crud-actions.ts:59',message:'XML updated',data:{oldLength:currentXml.length,newLength:updatedXml.length,changed:currentXml!==updatedXml},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H8'})+'\n');
+    // #endregion
+    
     console.log("🔵 [upsertProfileItem] XML updated, saving to DB...");
     
     // Save to DB
@@ -60,6 +73,10 @@ export async function upsertProfileItem(params: {
       update: { graphData: updatedXml },
       create: { userId: session.user.id, graphData: updatedXml }
     });
+    
+    // #region agent log
+    fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'profile-crud-actions.ts:72',message:'Saved to DB',data:{profileGraphId:profileGraph.id,xmlLength:profileGraph.graphData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H8'})+'\n');
+    // #endregion
     
     console.log("🟢 [upsertProfileItem] Saved to DB:", profileGraph.id);
     

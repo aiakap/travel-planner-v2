@@ -27,7 +27,7 @@ export function ItineraryViewClient({ itineraries }: ItineraryViewClientProps) {
             <h2 className="text-2xl font-semibold mb-2">No Trips Yet</h2>
             <p className="text-muted-foreground mb-6">Create your first trip to see it in this beautiful view</p>
             <Link 
-              href="/trips/new"
+              href="/trip/new"
               className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
             >
               <MapPin className="h-4 w-4" />

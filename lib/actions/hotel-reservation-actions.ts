@@ -164,7 +164,7 @@ export async function createHotelReservation(
       },
     });
 
-    revalidatePath('/exp1');
+    revalidatePath('/exp');
     revalidatePath(`/trips/${tripId}`);
 
     return {
@@ -265,7 +265,7 @@ export async function updateHotelReservation(
       },
     });
 
-    revalidatePath('/exp1');
+    revalidatePath('/exp');
 
     return {
       success: true,
@@ -307,7 +307,7 @@ export async function deleteHotelReservation(reservationId: string) {
       where: { id: reservationId },
     });
 
-    revalidatePath('/exp1');
+    revalidatePath('/exp');
 
     return { success: true };
   } catch (error) {

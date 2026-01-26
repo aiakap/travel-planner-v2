@@ -131,7 +131,7 @@ export default async function WelcomePage() {
             </div>
 
             <div className="flex flex-col gap-2 pt-4">
-              <Link href="/trips/new">
+              <Link href="/trip/new">
                 <Button className="w-full" size="lg">
                   <MapPin className="w-4 h-4 mr-2" />
                   Create Your First Trip

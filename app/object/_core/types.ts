@@ -52,6 +52,7 @@ export interface ChatPanelProps {
   userId: string;
   params?: Record<string, string>;
   onDataUpdate: (data: any) => void;
+  onCollapse?: () => void;
 }
 
 /**
@@ -65,6 +66,7 @@ export interface DataPanelProps {
   onSave?: () => void;
   onDataUpdate?: (update: any) => void;
   onDelete?: () => void;
+  onCollapse?: () => void;
 }
 
 /**

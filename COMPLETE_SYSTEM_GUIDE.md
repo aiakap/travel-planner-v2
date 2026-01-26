@@ -1,4 +1,68 @@
-# Complete Profile Graph System - User Guide
+# Complete Object-Based Chat System - User Guide
+
+## Overview
+
+The object-based chat system provides multiple specialized conversational interfaces:
+1. **Journey Architect** - Build travel timeline structures (Journeys & Chapters)
+2. **Profile Builder** - Build travel profiles through conversation
+3. **Trip Chat** - Manage trips with AI assistance for bookings
+4. **Trip Explorer** - Create trip structures before committing
+
+---
+
+# Journey Architect Guide
+
+## Overview
+
+The Journey Architect is an AI-powered timeline builder that uses strict terminology (Journey/Chapter/Moment) and acts as an "Intelligent Drafter" to create trip structures.
+
+### Key Concepts
+
+- **Journey**: The entire trip/timeline (maps to Trip in database)
+- **Chapter**: Segments or blocks of time (e.g., "Travel", "Stay") (maps to Segment)
+- **Moment**: Granular details/activities (NOT the focus - added later)
+
+### Core Behavior
+
+The AI acts as an "Intelligent Drafter":
+- Takes partial information
+- Infers missing pieces
+- Proposes complete draft immediately
+- Estimates travel time automatically
+- Uses aspirational naming
+
+### Example Usage
+
+**User Input**: "Hokkaido from SFO Jan 29 - Feb 7th for skiing"
+
+**AI Response**:
+- Creates "Hokkaido Winter Expedition" journey
+- Adds 2-day Travel Chapter (long-haul flight)
+- Adds 7-day Stay Chapter ("Hokkaido Alpine Adventure")
+- Shows markdown table with dates and day numbers
+- Right panel displays editable timeline with auto-save
+
+### Travel Time Estimation
+
+- **Long-haul** (US to Asia/Europe): 1-2 days for Travel Chapter
+- **Short-haul/Domestic**: 1 day for Travel Chapter
+- **Multi-city**: Splits Stay Chapters evenly
+
+### Scope Control
+
+If you ask for hotels, flights, or restaurants (Moments):
+- AI politely declines
+- Explains focus is on structure (Chapters)
+- Suggests finalizing timeline first
+- Shows INFO_REQUEST card
+
+### Access
+
+Visit: `/object/journey_architect`
+
+---
+
+# Profile Builder Guide
 
 ## Overview
 

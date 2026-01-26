@@ -28,7 +28,7 @@ export function QuickLinksGrid() {
       bgGradient: "from-amber-50 to-orange-50",
     },
     {
-      href: "/trips/new",
+      href: "/trip/new",
       icon: Plus,
       title: "Create New Trip",
       description: "Start planning your next adventure",

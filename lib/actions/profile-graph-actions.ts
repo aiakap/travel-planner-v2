@@ -40,6 +40,12 @@ export async function getUserProfileGraph(userId?: string) {
       where: { userId: targetUserId }
     });
     
+    console.log('📖 [getUserProfileGraph] Reading for userId:', targetUserId, {
+      found: !!profileGraph,
+      id: profileGraph?.id,
+      xmlLength: profileGraph?.graphData?.length
+    });
+    
     // Create profile graph if it doesn't exist
     if (!profileGraph) {
       profileGraph = await prisma.userProfileGraph.create({
@@ -48,6 +54,7 @@ export async function getUserProfileGraph(userId?: string) {
           graphData: createEmptyProfileXml()
         }
       });
+      console.log('📖 [getUserProfileGraph] Created new record:', profileGraph.id);
     }
     
     // Fetch user with profile
@@ -74,6 +81,11 @@ export async function getUserProfileGraph(userId?: string) {
       targetUserId,
       user?.name || undefined
     );
+    
+    console.log('📖 [getUserProfileGraph] Parsed graph:', {
+      nodeCount: graphData.nodes.length,
+      edgeCount: graphData.edges.length
+    });
     
     return {
       id: profileGraph.id,

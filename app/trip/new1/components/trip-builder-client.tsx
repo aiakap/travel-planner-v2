@@ -9,8 +9,10 @@ import {
   Check,
   ChevronDown,
   Info,
-  HelpCircle
+  HelpCircle,
+  ArrowRight
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { PlaceAutocompleteLive } from './place-autocomplete-live';
 import { SEGMENT_TYPES, getSegmentStyle, type SegmentTypeConfig } from '../lib/segment-types';
 import { 
@@ -18,6 +20,8 @@ import {
   updateTripMetadata, 
   syncSegments 
 } from '../actions/trip-builder-actions';
+import { HandDrawnTooltip } from '@/components/ui/hand-drawn-tooltip';
+import { TooltipOverlay } from '@/components/ui/tooltip-overlay';
 
 interface Segment {
   id: string;
@@ -49,7 +53,8 @@ const addDays = (date: Date | string, days: number) => {
 };
 
 export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
-  const [journeyName, setJourneyName] = useState("Summer Adventure");
+  const router = useRouter();
+  const [journeyName, setJourneyName] = useState("");
   const [manualSummary, setManualSummary] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   
@@ -71,7 +76,21 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
   const [tripId, setTripId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const tripIdRef = useRef<string | null>(null);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+
+  // Tooltip system state
+  const [currentTooltipStep, setCurrentTooltipStep] = useState<string | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
+  const [tourDismissed, setTourDismissed] = useState(false);
+  
+  // Refs for tooltip targets
+  const journeyNameRef = useRef<HTMLInputElement>(null);
+  const dateControlsRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const firstChapterRef = useRef<HTMLInputElement>(null);
+  const firstTypeRef = useRef<HTMLButtonElement>(null);
+  const firstLocationRef = useRef<HTMLDivElement>(null);
 
   // --- LOGIC ENGINE ---
   const generateSkeleton = (totalDays: number): Segment[] => {
@@ -140,9 +159,140 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
     return nextSegments;
   };
 
+  // Calculate if we have minimum info to show timeline
+  const hasMinimumInfo = journeyName.trim().length > 0;
+  const showTimeline = hasMinimumInfo;
+
+  // Generate segments when timeline should be shown
   useEffect(() => {
-    setSegments(generateSkeleton(duration));
+    if (showTimeline && segments.length === 0) {
+      setSegments(generateSkeleton(duration));
+    }
+  }, [showTimeline, duration]);
+
+  // Load tour state from localStorage
+  useEffect(() => {
+    const dismissed = localStorage.getItem('tripBuilderTourDismissed');
+    if (dismissed === 'true') {
+      setTourDismissed(true);
+    } else {
+      // Start tour on first visit
+      setCurrentTooltipStep('welcome');
+    }
   }, []);
+
+  // Tooltip progression logic
+  useEffect(() => {
+    if (tourDismissed) return;
+
+    // Step 1: Welcome - show on initial load
+    if (currentTooltipStep === null && !journeyName && completedSteps.size === 0) {
+      setCurrentTooltipStep('welcome');
+    }
+
+    // Step 2: Show dates tooltip when title is filled
+    if (journeyName.trim().length > 0 && !completedSteps.has('welcome') && currentTooltipStep === 'welcome') {
+      // User started typing, advance to dates
+      setCompletedSteps(new Set([...completedSteps, 'welcome']));
+      setCurrentTooltipStep('dates');
+    }
+
+    // Step 3: Show timeline celebration when both title and dates are set
+    if (showTimeline && completedSteps.has('dates') && !completedSteps.has('timeline')) {
+      setCompletedSteps(new Set([...completedSteps, 'dates']));
+      setCurrentTooltipStep('timeline');
+      // Auto-advance after 5 seconds
+      setTimeout(() => {
+        setCompletedSteps(prev => new Set([...prev, 'timeline']));
+        setCurrentTooltipStep('chapterName');
+      }, 5000);
+    }
+
+    // Step 4: Show chapter name tooltip when timeline is visible
+    if (showTimeline && segments.length > 0 && completedSteps.has('timeline') && !completedSteps.has('chapterName')) {
+      const hasRenamedChapter = segments.some(s => 
+        !['Main Stay', 'Chapter 1', 'Chapter 2', 'Travel Out', 'Travel Back', 'New Chapter'].includes(s.name)
+      );
+      if (hasRenamedChapter) {
+        setCompletedSteps(new Set([...completedSteps, 'chapterName']));
+        setCurrentTooltipStep('chapterType');
+      }
+    }
+
+    // Step 5: Show type tooltip after chapter renamed
+    if (completedSteps.has('chapterName') && !completedSteps.has('chapterType')) {
+      // Check if user has changed any types
+      const hasChangedType = segments.some((s, i) => {
+        if (i === 0 && s.type !== 'TRAVEL') return true;
+        if (i === segments.length - 1 && s.type !== 'TRAVEL') return true;
+        return false;
+      });
+      if (hasChangedType) {
+        setCompletedSteps(new Set([...completedSteps, 'chapterType']));
+        setCurrentTooltipStep('location');
+      }
+    }
+
+    // Step 6: Show location tooltip
+    if (completedSteps.has('chapterType') && !completedSteps.has('location')) {
+      const hasLocation = segments.some(s => s.start_location || s.end_location);
+      if (hasLocation) {
+        setCompletedSteps(new Set([...completedSteps, 'location']));
+        setCurrentTooltipStep('advanced');
+      }
+    }
+
+    // Step 7: Show advanced features tooltip
+    if (completedSteps.has('location') && !completedSteps.has('advanced')) {
+      // Auto-advance after showing
+      setTimeout(() => {
+        setCompletedSteps(new Set([...completedSteps, 'advanced']));
+        setCurrentTooltipStep(null);
+        setTourDismissed(true);
+        localStorage.setItem('tripBuilderTourDismissed', 'true');
+      }, 8000);
+    }
+  }, [journeyName, showTimeline, segments, currentTooltipStep, completedSteps, tourDismissed]);
+
+  const stepOrder = ['welcome', 'dates', 'timeline', 'chapterName', 'chapterType', 'location', 'advanced'];
+
+  const handleNextTooltip = () => {
+    if (currentTooltipStep) {
+      setCompletedSteps(new Set([...completedSteps, currentTooltipStep]));
+    }
+    const currentIndex = stepOrder.indexOf(currentTooltipStep || '');
+    if (currentIndex < stepOrder.length - 1) {
+      setCurrentTooltipStep(stepOrder[currentIndex + 1]);
+    } else {
+      setCurrentTooltipStep(null);
+      setTourDismissed(true);
+      localStorage.setItem('tripBuilderTourDismissed', 'true');
+    }
+  };
+
+  const handlePreviousTooltip = () => {
+    const currentIndex = stepOrder.indexOf(currentTooltipStep || '');
+    if (currentIndex > 0) {
+      setCurrentTooltipStep(stepOrder[currentIndex - 1]);
+    }
+  };
+
+  const handleCloseTooltip = () => {
+    if (currentTooltipStep) {
+      setCompletedSteps(new Set([...completedSteps, currentTooltipStep]));
+    }
+    handleNextTooltip();
+  };
+
+  const handleSkipTour = () => {
+    setTourDismissed(true);
+    setCurrentTooltipStep(null);
+    localStorage.setItem('tripBuilderTourDismissed', 'true');
+  };
+
+  const getCurrentStepNumber = () => {
+    return stepOrder.indexOf(currentTooltipStep || '') + 1;
+  };
 
   // --- LOCATION PROPAGATION ---
   const propagateLocations = (newSegments: Segment[], changedIndex: number): Segment[] => {
@@ -227,8 +377,8 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
 
   // --- AUTO-SAVE LOGIC ---
   useEffect(() => {
-    // Don't save on initial mount - only after user interaction
-    if (!hasUserInteracted) {
+    // Don't save on initial mount - only after user interaction and timeline is shown
+    if (!hasUserInteracted || !showTimeline) {
       return;
     }
 
@@ -243,18 +393,36 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
     // Debounce save
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        if (!tripId) {
+        console.log('🔄 Auto-save triggered, tripIdRef.current:', tripIdRef.current);
+        
+        // Generate summary at save time to avoid stale closures
+        const dateRange = `${formatDateReadable(startDate)} - ${formatDateReadable(endDate)}`;
+        const segmentList = segments.map(s => {
+          let loc = '';
+          if (s.start_location && s.end_location && s.start_location !== s.end_location) {
+            loc = ` (${s.start_location} → ${s.end_location})`;
+          } else if (s.start_location) {
+            loc = ` (${s.start_location})`;
+          }
+          return `${s.name}${loc}`;
+        }).join(' → ');
+        const generatedSummary = `${duration} Days · ${dateRange}\nJourney Plan: ${segmentList}`;
+        
+        if (!tripIdRef.current) {
           // First save - create trip
+          console.log('📝 Creating new draft trip...');
           const id = await createDraftTrip({
             title: journeyName || "Untitled Trip",
-            description: manualSummary || getGeneratedSummary(),
+            description: manualSummary || generatedSummary,
             startDate,
             endDate,
           });
-          setTripId(id);
+          tripIdRef.current = id;
+          setTripId(id); // Update state for UI display
           console.log('✅ Created draft trip:', id);
         } else {
           // Subsequent saves - update trip and segments
+          console.log('💾 Updating existing trip:', tripIdRef.current);
           const segmentsWithDates = segments.map((seg, idx) => {
             const daysBefore = segments.slice(0, idx).reduce((sum, s) => sum + s.days, 0);
             const segStart = addDays(new Date(startDate), daysBefore);
@@ -269,13 +437,13 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
           });
 
           await Promise.all([
-            updateTripMetadata(tripId, {
+            updateTripMetadata(tripIdRef.current, {
               title: journeyName,
-              description: manualSummary || getGeneratedSummary(),
+              description: manualSummary || generatedSummary,
               startDate,
               endDate,
             }),
-            syncSegments(tripId, segmentsWithDates, segmentTypeMap),
+            syncSegments(tripIdRef.current, segmentsWithDates, segmentTypeMap),
           ]);
           console.log('✅ Saved trip updates');
         }
@@ -293,7 +461,8 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [journeyName, manualSummary, startDate, endDate, segments, tripId, segmentTypeMap, hasUserInteracted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journeyName, manualSummary, startDate, endDate, segments, hasUserInteracted, showTimeline]);
 
   // --- HANDLERS ---
   const handleEditDatesClick = () => {
@@ -539,6 +708,20 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
     };
   }, [isResizing, duration, segments, startDate, anchor, openTypeSelectorIndex]);
 
+  // Validate segment types are loaded
+  if (!segmentTypeMap || Object.keys(segmentTypeMap).length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8">
+          <div className="text-xl font-bold text-gray-700 mb-4">Loading Trip Builder...</div>
+          <div className="text-gray-500 mb-2">Segment types are being loaded from the database.</div>
+          <div className="text-sm text-gray-400">If this persists, run: <code className="bg-gray-100 px-2 py-1 rounded">npx prisma db seed</code></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main UI - always show, timeline appears progressively
   return (
     <div className="min-h-screen bg-gray-50 text-slate-800 font-sans selection:bg-indigo-100">
       {/* HEADER */}
@@ -547,6 +730,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <input
+                ref={journeyNameRef}
                 type="text"
                 value={journeyName}
                 onChange={(e) => { setJourneyName(e.target.value); setHasUserInteracted(true); }}
@@ -601,6 +785,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
           {/* Date Controls */}
           {!isEditingDates ? (
             <div
+              ref={dateControlsRef}
               onClick={handleEditDatesClick}
               className="group flex items-center justify-between bg-gray-50 hover:bg-white hover:ring-2 hover:ring-indigo-100 p-4 rounded-xl border border-gray-200 cursor-pointer transition-all"
             >
@@ -667,12 +852,14 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
       {/* MAIN WORKSPACE */}
       <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8">
         <div className="flex-1">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Journey Timeline</h3>
-            <div className="text-xs text-gray-400">{segments.length} Chapters</div>
-          </div>
+          {showTimeline && (
+            <div ref={timelineRef}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Journey Timeline</h3>
+                <div className="text-xs text-gray-400">{segments.length} Chapters</div>
+              </div>
 
-          <div className="relative mx-4 h-48 select-none mb-12">
+              <div className="relative mx-4 h-48 select-none mb-12">
             <div
               className="absolute left-0 top-0 bottom-0 w-4 -ml-4 z-30 cursor-col-resize flex flex-col items-center justify-center group/outer"
               onMouseDown={handleResizeStartOuterStart}
@@ -723,6 +910,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
                         <div className="flex justify-between items-start">
                           <div className="relative type-selector-container">
                             <button
+                              ref={index === 0 ? firstTypeRef : undefined}
                               onClick={(e) => { e.stopPropagation(); setOpenTypeSelectorIndex(openTypeSelectorIndex === index ? null : index); }}
                               className="flex items-center gap-1 hover:bg-black/10 p-1 -ml-1 rounded transition-colors group/type"
                             >
@@ -755,6 +943,7 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
                         </div>
 
                         <input
+                          ref={index === 0 ? firstChapterRef : undefined}
                           type="text"
                           value={segment.name}
                           onChange={(e) => { setHasUserInteracted(true); const newSegs = [...segments]; newSegs[index].name = e.target.value; setSegments(newSegs); }}
@@ -764,14 +953,16 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
                         
                         <div className="flex flex-col gap-2 mt-auto">
                           {isSingleLocation ? (
-                            <PlaceAutocompleteLive
-                              value={segment.start_location}
-                              onChange={(val, img) => handleLocationChange(index, 'start_location', val, img)}
-                              placeholder="Where to?"
-                              className="text-gray-800"
-                            />
+                            <div ref={index === 0 ? firstLocationRef : undefined}>
+                              <PlaceAutocompleteLive
+                                value={segment.start_location}
+                                onChange={(val, img) => handleLocationChange(index, 'start_location', val, img)}
+                                placeholder="Where to?"
+                                className="text-gray-800"
+                              />
+                            </div>
                           ) : (
-                            <div className="flex flex-col gap-1">
+                            <div ref={index === 0 ? firstLocationRef : undefined} className="flex flex-col gap-1">
                               <PlaceAutocompleteLive
                                 value={segment.start_location}
                                 onChange={(val, img) => handleLocationChange(index, 'start_location', val, img)}
@@ -829,45 +1020,221 @@ export function TripBuilderClient({ segmentTypeMap }: TripBuilderClientProps) {
                 <Plus size={14} strokeWidth={3} />
               </button>
             </div>
-          </div>
+              </div>
+
+              {/* Helper Text and Create Journey Button */}
+              <div className="mt-8 space-y-4">
+                {/* Helper Text */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+                    <div className="text-sm text-blue-900">
+                      <p className="font-semibold mb-1">Customize Your Journey Outline</p>
+                      <p className="text-blue-800">
+                        Take a moment to refine your chapters: rename them, adjust their types (Stay, Travel, or Tour), 
+                        and add locations. This outline will help organize your journey before you add specific moments 
+                        like hotel reservations and activities.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Create Journey Button */}
+                {tripId && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => router.push(`/exp?tripId=${tripId}`)}
+                      className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg"
+                    >
+                      Continue to Journey Planning
+                      <ArrowRight size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      
-      {/* DATA MODEL PREVIEW */}
-      <div className="max-w-6xl mx-auto px-4 pb-12 mt-12 border-t border-gray-200 pt-8">
-        <div className="bg-gray-900 rounded-xl p-6 shadow-2xl overflow-hidden">
-          <h3 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4">Live Data Model (JSON)</h3>
-          <pre className="font-mono text-xs text-emerald-400 overflow-x-auto">
-            {JSON.stringify({
-              tripId,
-              journey: {
-                name: journeyName,
-                description: manualSummary || getGeneratedSummary(),
-                start_date: startDate,
-                end_date: endDate,
-                duration_days: duration,
-                chapters: segments.map((s, i) => {
-                  const daysBefore = segments.slice(0, i).reduce((sum, seg) => sum + seg.days, 0);
-                  const segStart = addDays(new Date(startDate), daysBefore);
-                  const segEnd = addDays(segStart, s.days - 1);
-                  return {
-                    id: s.id,
-                    dbId: s.dbId,
-                    name: s.name,
-                    days: s.days,
-                    type_id: s.type,
-                    locations: { start: s.start_location, end: s.end_location },
-                    images: { start: s.start_image, end: s.end_image },
-                    order_index: i,
-                    start_datetime: segStart.toISOString(),
-                    end_datetime: segEnd.toISOString().replace('T00:00:00.000Z', 'T23:59:59.000Z')
-                  };
-                })
-              }
-            }, null, 2)}
-          </pre>
-        </div>
-      </div>
+
+      {/* Tooltip System */}
+      {!tourDismissed && currentTooltipStep && (
+        <>
+          {currentTooltipStep === 'welcome' && journeyNameRef.current && (
+            <>
+              <TooltipOverlay 
+                show={true} 
+                targetRef={journeyNameRef}
+                onBackdropClick={handleCloseTooltip}
+              />
+              <HandDrawnTooltip
+                content="Welcome! Let's begin by giving your journey a name. This will be the title of your entire trip."
+                targetRef={journeyNameRef}
+                position="bottom"
+                onClose={handleCloseTooltip}
+                show={true}
+                showSkip={true}
+                onSkipAll={handleSkipTour}
+                onNext={handleNextTooltip}
+                showNext={true}
+                showPrevious={false}
+                currentStep={getCurrentStepNumber()}
+                totalSteps={stepOrder.length}
+              />
+            </>
+          )}
+
+          {currentTooltipStep === 'dates' && dateControlsRef.current && (
+            <>
+              <TooltipOverlay 
+                show={true} 
+                targetRef={dateControlsRef}
+                onBackdropClick={handleCloseTooltip}
+              />
+              <HandDrawnTooltip
+                content="Now, select your travel dates. You can adjust the duration using the slider or by changing the start and end dates."
+                targetRef={dateControlsRef}
+                position="top"
+                onClose={handleCloseTooltip}
+                show={true}
+                showSkip={true}
+                onSkipAll={handleSkipTour}
+                onNext={handleNextTooltip}
+                onPrevious={handlePreviousTooltip}
+                showNext={true}
+                showPrevious={true}
+                currentStep={getCurrentStepNumber()}
+                totalSteps={stepOrder.length}
+              />
+            </>
+          )}
+
+          {currentTooltipStep === 'timeline' && timelineRef.current && (
+            <>
+              <TooltipOverlay 
+                show={true} 
+                targetRef={timelineRef}
+                onBackdropClick={handleCloseTooltip}
+              />
+              <HandDrawnTooltip
+                content="Perfect! Here's your journey timeline. We're creating the outline for your trip with chapters. You'll be able to add specific moments—like hotel reservations and activities—later."
+                targetRef={timelineRef}
+                position="top"
+                onClose={handleCloseTooltip}
+                show={true}
+                showSkip={true}
+                onSkipAll={handleSkipTour}
+                onNext={handleNextTooltip}
+                onPrevious={handlePreviousTooltip}
+                showNext={true}
+                showPrevious={true}
+                currentStep={getCurrentStepNumber()}
+                totalSteps={stepOrder.length}
+              />
+            </>
+          )}
+
+          {currentTooltipStep === 'chapterName' && firstChapterRef.current && (
+            <>
+              <TooltipOverlay 
+                show={true} 
+                targetRef={firstChapterRef}
+                onBackdropClick={handleCloseTooltip}
+              />
+              <HandDrawnTooltip
+                content="Click here to rename your chapters. Give each phase of your journey a meaningful name that reflects what you'll be doing."
+                targetRef={firstChapterRef}
+                position="top"
+                onClose={handleCloseTooltip}
+                show={true}
+                showSkip={true}
+                onSkipAll={handleSkipTour}
+                onNext={handleNextTooltip}
+                onPrevious={handlePreviousTooltip}
+                showNext={true}
+                showPrevious={true}
+                currentStep={getCurrentStepNumber()}
+                totalSteps={stepOrder.length}
+              />
+            </>
+          )}
+
+          {currentTooltipStep === 'chapterType' && firstTypeRef.current && (
+            <>
+              <TooltipOverlay 
+                show={true} 
+                targetRef={firstTypeRef}
+                onBackdropClick={handleCloseTooltip}
+              />
+              <HandDrawnTooltip
+                content="Use this dropdown to set the chapter type: Stay (for time in one location), Travel (for transit days), or Tour (for multi-stop exploration)."
+                targetRef={firstTypeRef}
+                position="bottom"
+                onClose={handleCloseTooltip}
+                show={true}
+                showSkip={true}
+                onSkipAll={handleSkipTour}
+                onNext={handleNextTooltip}
+                onPrevious={handlePreviousTooltip}
+                showNext={true}
+                showPrevious={true}
+                currentStep={getCurrentStepNumber()}
+                totalSteps={stepOrder.length}
+              />
+            </>
+          )}
+
+          {currentTooltipStep === 'location' && firstLocationRef.current && (
+            <>
+              <TooltipOverlay 
+                show={true} 
+                targetRef={firstLocationRef}
+                onBackdropClick={handleCloseTooltip}
+              />
+              <HandDrawnTooltip
+                content="Add locations to your chapters. This helps us understand your journey's geography and will make it easier to add specific moments later."
+                targetRef={firstLocationRef}
+                position="top"
+                onClose={handleCloseTooltip}
+                show={true}
+                showSkip={true}
+                onSkipAll={handleSkipTour}
+                onNext={handleNextTooltip}
+                onPrevious={handlePreviousTooltip}
+                showNext={true}
+                showPrevious={true}
+                currentStep={getCurrentStepNumber()}
+                totalSteps={stepOrder.length}
+              />
+            </>
+          )}
+
+          {currentTooltipStep === 'advanced' && timelineRef.current && (
+            <>
+              <TooltipOverlay 
+                show={true} 
+                targetRef={timelineRef}
+                onBackdropClick={handleCloseTooltip}
+              />
+              <HandDrawnTooltip
+                content="You can drag chapters to reorder them, click the + buttons to add new chapters, or drag the edges to adjust chapter duration. Your journey outline is flexible and easy to customize."
+                targetRef={timelineRef}
+                position="bottom"
+                onClose={handleCloseTooltip}
+                show={true}
+                showSkip={true}
+                onSkipAll={handleSkipTour}
+                onNext={handleNextTooltip}
+                onPrevious={handlePreviousTooltip}
+                showNext={false}
+                showPrevious={true}
+                currentStep={getCurrentStepNumber()}
+                totalSteps={stepOrder.length}
+              />
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

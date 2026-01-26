@@ -4,6 +4,26 @@ import { prisma } from "@/lib/prisma"
 import { ExpClient } from "./client"
 import { getUserPersonalizationData, generateChatQuickActions } from "@/lib/personalization"
 
+// Helper function to format chat timestamp
+function formatChatTimestamp(date: Date): string {
+  const month = date.getMonth() + 1 // 0-indexed
+  const day = date.getDate()
+  const year = date.getFullYear().toString().slice(-2) // Last 2 digits
+  
+  let hours = date.getHours()
+  const minutes = date.getMinutes()
+  const ampm = hours >= 12 ? 'PM' : 'AM'
+  
+  // Convert to 12-hour format
+  hours = hours % 12
+  hours = hours ? hours : 12 // 0 should be 12
+  
+  // Pad minutes with leading zero if needed
+  const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString()
+  
+  return `${month}/${day}/${year} - ${hours}:${minutesStr} ${ampm}`
+}
+
 export default async function ExpPage({
   searchParams,
 }: {
@@ -77,7 +97,7 @@ export default async function ExpPage({
           data: {
             userId: session.user.id,
             tripId,
-            title: `Chat about ${selectedTrip.title}`,
+            title: `${selectedTrip.title} - ${formatChatTimestamp(new Date())}`,
           },
           include: {
             messages: true,
@@ -98,11 +118,6 @@ export default async function ExpPage({
     console.error("Error loading profile data:", error)
   }
 
-  // Load segment types for editing
-  const segmentTypes = await prisma.segmentType.findMany({
-    orderBy: { name: "asc" },
-  })
-
   return (
     <ExpClient
       initialTrips={allTrips}
@@ -112,7 +127,6 @@ export default async function ExpPage({
       userId={session.user.id}
       profileData={profileData}
       quickActions={quickActions}
-      segmentTypes={segmentTypes}
     />
   )
 }

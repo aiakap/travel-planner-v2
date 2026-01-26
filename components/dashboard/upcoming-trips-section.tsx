@@ -549,7 +549,7 @@ export function UpcomingTripsSection({
                   : "No upcoming trips"}
               </p>
             </div>
-            <Link href="/trips/new">
+            <Link href="/trip/new">
               <Button size="lg" className="shadow-lg hover:shadow-xl">
                 <Plus className="h-5 w-5 mr-2" />
                 New Trip
@@ -567,7 +567,7 @@ export function UpcomingTripsSection({
               <p className="text-slate-500 mb-6 max-w-md mx-auto">
                 Start planning your next adventure by creating a new trip.
               </p>
-              <Link href="/trips/new">
+              <Link href="/trip/new">
                 <Button size="lg">
                   <Plus className="h-5 w-5 mr-2" />
                   Create Your Next Trip

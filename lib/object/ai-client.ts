@@ -3,10 +3,10 @@
  * Handles AI API calls
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export interface AIMessage {
@@ -33,8 +33,12 @@ export async function callAI(options: AICallOptions): Promise<string> {
   } = options;
 
   try {
-    // Build messages array
-    const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+    // Build messages array with system message first
+    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
       ...messageHistory.map((msg) => ({
         role: msg.role,
         content: msg.content,
@@ -45,16 +49,14 @@ export async function callAI(options: AICallOptions): Promise<string> {
       },
     ];
 
-    const response = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
       max_tokens: maxTokens,
-      system: systemPrompt,
       messages,
     });
 
     // Extract text from response
-    const textContent = response.content.find((block) => block.type === "text");
-    return textContent && "text" in textContent ? textContent.text : "";
+    return response.choices[0]?.message?.content || "";
   } catch (error) {
     console.error("AI call error:", error);
     throw new Error("Failed to call AI");

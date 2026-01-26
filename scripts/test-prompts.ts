@@ -9,7 +9,7 @@
  */
 
 import { generatePlaceSuggestions } from "@/lib/ai/generate-place-suggestions";
-import { EXP_BUILDER_SYSTEM_PROMPT } from "@/app/exp1/lib/exp-prompts";
+import { EXP_BUILDER_SYSTEM_PROMPT } from "@/app/exp/lib/exp-prompts";
 import { validateAIResponse, formatValidationErrors } from "@/lib/ai/validate-ai-response";
 
 interface TestResult {

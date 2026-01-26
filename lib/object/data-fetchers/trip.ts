@@ -1,6 +1,9 @@
+"use server";
+
 /**
  * Trip data fetcher
  * Fetches trip data from database using Prisma
+ * This is a server action that can be called from client components
  */
 
 import { prisma } from "@/lib/prisma";

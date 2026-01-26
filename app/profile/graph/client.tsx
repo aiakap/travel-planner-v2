@@ -715,7 +715,7 @@ export function ProfileGraphClient({
             </div>
             
             {/* Actions */}
-            <Link href="/trips/new">
+            <Link href="/trip/new">
               <Button
                 variant="default"
                 size="sm"

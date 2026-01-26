@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { MapPin, Calendar, Plane, Hotel, Utensils, Ticket, DollarSign, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { updateTripSimple } from "@/lib/actions/update-trip-simple";
-import { updateSegmentSimple } from "@/lib/actions/update-segment-simple";
-import { updateReservationSimple } from "@/lib/actions/update-reservation-simple";
+import { Button } from "@/app/exp/ui/button";
+import { updateTripSimple } from "@/app/exp/lib/actions/update-trip-simple";
+import { updateSegmentSimple } from "@/app/exp/lib/actions/update-segment-simple";
+import { updateReservationSimple } from "@/app/exp/lib/actions/update-reservation-simple";
 
 interface ContextAction {
   id: string;

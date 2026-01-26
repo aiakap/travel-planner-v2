@@ -91,6 +91,7 @@ export function parseAIResponse(response: string): ParsedResponse {
   while ((match = relatedSuggestionsRegex.exec(response)) !== null) {
     try {
       const data = JSON.parse(match[1]);
+      console.log('🔍 [RESPONSE PARSER] Parsed RELATED_SUGGESTIONS card:', data);
       cards.push({
         id: `related-suggestions-${Date.now()}-${Math.random()}`,
         type: "related_suggestions",
@@ -98,7 +99,7 @@ export function parseAIResponse(response: string): ParsedResponse {
       });
       text = text.replace(match[0], "");
     } catch (e) {
-      console.error("Failed to parse related suggestions card:", e);
+      console.error("❌ [RESPONSE PARSER] Failed to parse related suggestions card:", e);
     }
   }
 
@@ -107,6 +108,7 @@ export function parseAIResponse(response: string): ParsedResponse {
   while ((match = topicChoiceRegex.exec(response)) !== null) {
     try {
       const data = JSON.parse(match[1]);
+      console.log('🔍 [RESPONSE PARSER] Parsed TOPIC_CHOICE card:', data);
       cards.push({
         id: `topic-choice-${Date.now()}-${Math.random()}`,
         type: "topic_choice",
@@ -114,7 +116,7 @@ export function parseAIResponse(response: string): ParsedResponse {
       });
       text = text.replace(match[0], "");
     } catch (e) {
-      console.error("Failed to parse topic choice card:", e);
+      console.error("❌ [RESPONSE PARSER] Failed to parse topic choice card:", e);
     }
   }
 

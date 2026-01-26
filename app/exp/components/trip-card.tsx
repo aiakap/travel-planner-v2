@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { MapPin, Calendar, Edit2, Check, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/app/exp/ui/button";
 
 interface TripCardProps {
   tripId: string;

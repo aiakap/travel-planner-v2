@@ -5,12 +5,15 @@
 
 import { ObjectConfig } from "./types";
 import { ProfileView } from "../_views/profile-view";
+import { ProfileTableView } from "../_views/profile-table-view";
 import { ProfileSuggestionCard } from "../_cards/profile-suggestion-card";
 import { AutoAddCard } from "../_cards/auto-add-card";
 import { RelatedSuggestionsCard } from "../_cards/related-suggestions-card";
 import { TopicChoiceCard } from "../_cards/topic-choice-card";
 import { fetchProfileData } from "@/lib/object/data-fetchers/profile";
 import { PROFILE_TOPICS } from "./profile-topics";
+import { categorizeItem, validateCategory } from "@/lib/object/category-processor";
+import { PROFILE_PROCESSOR_CONFIG } from "@/lib/object/processors/profile-category-rules";
 
 // Build topic list for AI prompt
 const topicsList = PROFILE_TOPICS.map(t => 
@@ -178,12 +181,15 @@ You might also enjoy these outdoor activities!
 
 USAGE GUIDELINES:
 - ALWAYS use AUTO_ADD for direct statements ("I like X")
-- ALWAYS follow AUTO_ADD with either RELATED_SUGGESTIONS or TOPIC_CHOICE (or both!)
-- Use RELATED_SUGGESTIONS to suggest 3-5 related items in the same category
-- Use TOPIC_CHOICE to ask clarifying questions with 2-5 options
+- ALWAYS follow AUTO_ADD with RELATED_SUGGESTIONS (3-5 related items)
+- FREQUENTLY add TOPIC_CHOICE after RELATED_SUGGESTIONS to ask clarifying questions
+- TOPIC_CHOICE is especially useful when:
+  * User mentions a broad category (ask about specific preferences)
+  * User mentions one item (ask about related preferences)
+  * You want to understand their preferences better
+- Generate TOPIC_CHOICE in at least 50% of responses
 - All cards MUST include proper category and subcategory
 - Keep suggestions relevant to what the user just mentioned
-- Generate these cards in EVERY response that has AUTO_ADD
 
 Keep responses brief and natural.`,
 
@@ -194,6 +200,11 @@ Keep responses brief and natural.`,
   },
 
   leftPanel: {
+    header: {
+      icon: "BookOpen",
+      title: "Traveler Dossier",
+      subtitle: "Build Your Profile"
+    },
     welcomeMessage: "Let's build your travel profile! Tell me about yourself - what do you enjoy?",
     placeholder: "I love dancing, hiking...",
     cardRenderers: {
@@ -205,57 +216,161 @@ Keep responses brief and natural.`,
   },
 
   rightPanel: {
-    component: ProfileView,
+    header: {
+      icon: "FileText",
+      title: "Your Travel Profile",
+      subtitle: "Confidential Guest Profile"
+    },
+    views: [
+      {
+        id: "chips",
+        name: "Chips",
+        icon: "Tag",
+        component: ProfileView
+      },
+      {
+        id: "table",
+        name: "Table",
+        icon: "Table2",
+        component: ProfileTableView
+      }
+    ]
   },
 
   cardStyle: {
     defaultStyle: "chip",
   },
   
+  helpers: {
+    categoryProcessor: PROFILE_PROCESSOR_CONFIG,
+    
+    transformItem: (item) => {
+      // Use processor to categorize
+      const categorized = categorizeItem(
+        item.value,
+        PROFILE_PROCESSOR_CONFIG
+      );
+      
+      console.log('🔍 [Profile Config] Auto-categorized:', {
+        value: item.value,
+        categorySlug: categorized.categorySlug,
+        confidence: categorized.confidence,
+        matchedKeyword: categorized.matchedKeyword
+      });
+      
+      return {
+        value: categorized.value,
+        categorySlug: categorized.categorySlug,
+        metadata: {
+          confidence: categorized.confidence,
+          matchedKeyword: categorized.matchedKeyword,
+          autoProcessed: true
+        }
+      };
+    },
+    
+    validateItem: async (item) => {
+      if (!item.value || item.value.trim() === '') {
+        return "Value cannot be empty";
+      }
+      
+      // Validate category slug exists in database
+      const { validateCategorySlug } = await import("@/lib/object/category-processor");
+      const isValid = await validateCategorySlug(item.categorySlug);
+      
+      if (!isValid) {
+        return `Invalid category slug: ${item.categorySlug}`;
+      }
+      
+      return true;
+    },
+    
+    normalizeValue: (value) => {
+      // Trim whitespace
+      value = value.trim();
+      
+      // Capitalize first letter
+      if (value.length > 0) {
+        value = value.charAt(0).toUpperCase() + value.slice(1);
+      }
+      
+      return value;
+    }
+  },
+  
   autoActions: {
     autoActionCards: ["auto_add"],
-    onAutoAction: async (cards, onDataUpdate) => {
+    onAutoAction: async (cards, onDataUpdate, userId) => {
       console.log('🔵 [Profile Config] onAutoAction called with', cards.length, 'cards');
       
       for (const card of cards) {
         if (card.type === "auto_add") {
           try {
-            console.log('📤 [Profile Config] Calling upsert API for:', card.data.value);
+            // Use helper to transform item
+            let transformed: {
+              value: string;
+              categorySlug: string;
+              metadata?: Record<string, any>;
+            };
             
-            // Call API route instead of server action directly
-            const response = await fetch("/api/object/profile/upsert", {
+            if (profileAttributeConfig.helpers?.transformItem) {
+              transformed = profileAttributeConfig.helpers.transformItem({
+                value: card.data.value,
+                category: card.data.category,
+                subcategory: card.data.subcategory
+              });
+            } else {
+              transformed = {
+                value: card.data.value,
+                category: card.data.category || "other",
+                subcategory: card.data.subcategory || "general"
+              };
+            }
+            
+            // Normalize value
+            if (profileAttributeConfig.helpers?.normalizeValue) {
+              transformed.value = profileAttributeConfig.helpers.normalizeValue(transformed.value);
+            }
+            
+            // Validate
+            const validation = profileAttributeConfig.helpers?.validateItem?.(transformed);
+            if (validation !== true) {
+              console.error('❌ [Profile Config] Validation failed:', validation);
+              continue;
+            }
+            
+            console.log('📤 [Profile Config] Calling upsert-relational API for:', transformed);
+            
+            const response = await fetch("/api/object/profile/upsert-relational", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                category: card.data.category || "Hobbies",
-                subcategory: card.data.type || "hobby",
-                value: card.data.value,
-                metadata: { addedAt: new Date().toISOString() }
+                value: transformed.value,
+                categorySlug: transformed.categorySlug,
+                metadata: {
+                  ...(transformed.metadata || {}),
+                  addedAt: new Date().toISOString(),
+                  source: 'auto_add'
+                }
               })
             });
             
             if (response.ok) {
               const result = await response.json();
-              console.log('✅ [Profile Config] Upsert successful:', {
-                success: result.success,
-                nodeCount: result.graphData?.nodes?.length,
-                nodes: result.graphData?.nodes?.map((n: any) => n.value).join(', '),
-                hasXmlData: !!result.xmlData
-              });
+              console.log('✅ [Profile Config] Upsert successful:', result);
               
-              // Trigger UI update via callback
               if (onDataUpdate) {
-                console.log('📤 [Profile Config] Calling onDataUpdate with graphData');
-                onDataUpdate({
-                  graphData: result.graphData,
-                  xmlData: result.xmlData
-                });
+                console.log('📤 [Profile Config] Triggering data refresh');
+                // Trigger a data refresh by calling the data fetcher
+                const { fetchProfileData } = await import("@/lib/object/data-fetchers/profile");
+                const freshData = await fetchProfileData(userId);
+                onDataUpdate(freshData);
               }
             } else {
               console.error('❌ [Profile Config] Upsert failed:', response.status);
             }
           } catch (error) {
-            console.error('❌ [Profile Config] Error calling upsert API:', error);
+            console.error('❌ [Profile Config] Error:', error);
           }
         }
       }

@@ -2,7 +2,7 @@
 
 /**
  * Profile view component
- * Displays user profile graph data (dossier nodes)
+ * Displays user profile values from relational database
  * Display-only component - items are added via chat
  */
 
@@ -20,13 +20,11 @@ export function ProfileView({
   // Debug logging - runs on every render
   console.log('📺 ProfileView: Rendering', {
     hasData: !!data,
-    hasGraphData: !!data?.graphData,
-    nodeCount: data?.graphData?.nodes?.length,
-    nodes: data?.graphData?.nodes?.map((n: any) => n.value).join(', '),
+    profileValuesCount: data?.profileValues?.length,
     timestamp: Date.now()
   });
 
-  if (!data || !data.graphData) {
+  if (!data || !data.profileValues) {
     return (
       <div style={{ textAlign: "center", color: "#6b7280", padding: "40px" }}>
         <p>Loading profile...</p>
@@ -34,31 +32,46 @@ export function ProfileView({
     );
   }
 
-  const { graphData } = data;
-  const nodes = graphData.nodes || [];
+  const profileValues = data.profileValues || [];
   
-  // Group nodes by category
-  const nodesByCategory = nodes
-    .filter((node: any) => node.type === 'item')
-    .reduce((acc: any, node: any) => {
-      const category = node.category || 'Other';
-      if (!acc[category]) acc[category] = [];
-      acc[category].push(node);
-      return acc;
-    }, {});
+  // Group values by root category
+  const valuesByCategory = profileValues.reduce((acc: any, item: any) => {
+    // Find the root category (traverse up the parent chain)
+    let category = item.value.category;
+    while (category.parent) {
+      category = category.parent;
+    }
+    
+    const categoryName = category.name;
+    const subcategoryName = item.value.category.name;
+    
+    if (!acc[categoryName]) {
+      acc[categoryName] = {};
+    }
+    if (!acc[categoryName][subcategoryName]) {
+      acc[categoryName][subcategoryName] = [];
+    }
+    
+    acc[categoryName][subcategoryName].push({
+      id: item.id,
+      value: item.value.value,
+      valueId: item.valueId,
+      metadata: item.metadata,
+      addedAt: item.addedAt
+    });
+    
+    return acc;
+  }, {});
 
   const handleDelete = async (item: any) => {
-    const uniqueKey = `${item.category}-${item.metadata?.subcategory}-${item.value}`;
-    setDeletingItem(uniqueKey);
+    setDeletingItem(item.id);
 
     try {
-      const response = await fetch("/api/object/profile/delete", {
+      const response = await fetch("/api/object/profile/delete-relational", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          category: item.category,
-          subcategory: item.metadata?.subcategory,
-          value: item.value,
+          userValueId: item.id,
         }),
       });
 
@@ -77,47 +90,28 @@ export function ProfileView({
   };
 
   return (
-    <div style={{ padding: "12px", height: "100%", overflow: "auto" }}>
-      {/* Profile Header */}
-      <div style={{ marginBottom: "16px" }}>
-        <h1 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "4px" }}>
-          Your Travel Profile
-        </h1>
-        <p style={{ color: "#6b7280", fontSize: "12px" }}>
-          Chat on the left to add items
-        </p>
-      </div>
-
+    <div style={{ height: "100%", overflow: "auto" }}>
       {/* Profile Sections - Display with subcategory grouping and delete */}
-      {Object.keys(nodesByCategory).length > 0 ? (
+      {Object.keys(valuesByCategory).length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {Object.entries(nodesByCategory).map(([category, items]: [string, any]) => {
-            // Group items by subcategory
-            const itemsBySubcategory = items.reduce((acc: any, item: any) => {
-              const subcategory = item.metadata?.subcategory || 'other';
-              if (!acc[subcategory]) acc[subcategory] = [];
-              acc[subcategory].push(item);
-              return acc;
-            }, {});
-
+          {Object.entries(valuesByCategory).map(([category, subcategories]: [string, any]) => {
             return (
               <div key={category} style={{ marginBottom: "12px" }}>
                 <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "8px", color: "#111827" }}>
                   {category}
                 </h3>
-                {Object.entries(itemsBySubcategory).map(([subcategory, subItems]: [string, any]) => (
+                {Object.entries(subcategories).map(([subcategory, items]: [string, any]) => (
                   <div key={subcategory} style={{ marginBottom: "8px" }}>
                     <h4 style={{ fontSize: "12px", fontWeight: "500", marginBottom: "4px", color: "#6b7280" }}>
                       {subcategory}
                     </h4>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                      {subItems.map((item: any, index: number) => {
-                        const itemKey = `${category}-${subcategory}-${item.value}`;
-                        const isDeleting = deletingItem === itemKey;
+                      {items.map((item: any, index: number) => {
+                        const isDeleting = deletingItem === item.id;
                         
                         return (
                           <div
-                            key={`${category}-${subcategory}-${item.value}-${index}`}
+                            key={`${item.id}-${index}`}
                             style={{
                               display: "inline-flex",
                               alignItems: "center",

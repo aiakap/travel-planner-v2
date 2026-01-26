@@ -6,6 +6,7 @@
  */
 
 import { useRef, useEffect } from "react";
+import { GripVertical } from "lucide-react";
 import { ResizableDividerProps } from "./types";
 
 export function ResizableDivider({ onResize }: ResizableDividerProps) {
@@ -65,42 +66,19 @@ export function ResizableDivider({ onResize }: ResizableDividerProps) {
   return (
     <div
       onMouseDown={handleMouseDown}
+      className="group"
       style={{
-        width: "4px",
-        background: "#e5e7eb",
+        width: "12px",
+        background: "transparent",
         cursor: "col-resize",
-        transition: "background 0.2s",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         position: "relative",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#3b82f6";
-      }}
-      onMouseLeave={(e) => {
-        if (!isDragging.current) {
-          e.currentTarget.style.background = "#e5e7eb";
-        }
+        flexShrink: 0,
       }}
     >
-      {/* Grip icon */}
-      <div
-        style={{
-          width: "16px",
-          height: "32px",
-          background: "#9ca3af",
-          borderRadius: "4px",
-          opacity: 0.5,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "10px",
-          color: "white",
-        }}
-      >
-        ⋮
-      </div>
+      <GripVertical className="h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" />
     </div>
   );
 }

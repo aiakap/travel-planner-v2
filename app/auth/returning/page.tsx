@@ -157,7 +157,7 @@ export default async function ReturningUserPage() {
             <CardDescription>What would you like to do?</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Link href="/trips/new">
+            <Link href="/trip/new">
               <Button className="w-full justify-start" variant="outline" size="lg">
                 <MapPin className="w-4 h-4 mr-2" />
                 Plan a New Trip

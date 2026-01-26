@@ -63,12 +63,20 @@ export default async function ObjectPage({ params, searchParams }: PageProps) {
     console.error("Error fetching initial data:", error);
   }
 
+  // Pass only serializable data to client
   return (
     <ObjectClient
-      config={config}
+      objectType={objectType}
       userId={session.user.id}
       initialData={initialData}
       params={resolvedSearchParams}
+      configMetadata={{
+        id: config.id,
+        name: config.name,
+        description: config.description,
+        welcomeMessage: config.leftPanel.welcomeMessage,
+        placeholder: config.leftPanel.placeholder,
+      }}
     />
   );
 }

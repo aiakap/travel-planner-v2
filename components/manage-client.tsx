@@ -604,7 +604,7 @@ export default function ManageClient({
                 Home
               </Button>
             </Link>
-            <Link href="/trips/new">
+            <Link href="/trip/new">
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 New Trip
@@ -661,7 +661,7 @@ export default function ManageClient({
             <p className="text-slate-500 mb-6 max-w-md mx-auto">
               Start planning your next adventure by creating your first trip.
             </p>
-            <Link href="/trips/new">
+            <Link href="/trip/new">
               <Button size="lg">
                 <Plus className="h-5 w-5 mr-2" />
                 Create Your First Trip

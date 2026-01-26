@@ -7,7 +7,7 @@ import { MessageSegment } from "@/lib/types/place-pipeline";
 import { prisma } from "@/lib/prisma";
 import { parseIntentFromResponse } from "@/lib/ai/parse-intent";
 import { createFullItinerary } from "@/lib/actions/create-full-itinerary";
-import { parseCardsFromText } from "@/app/exp1/lib/parse-card-syntax";
+import { parseCardsFromText } from "@/app/exp/lib/parse-card-syntax";
 import { validateAIResponse, formatValidationErrors } from "@/lib/ai/validate-ai-response";
 
 export const maxDuration = 60;
@@ -226,12 +226,12 @@ export async function POST(req: Request) {
         ? `${message}\n\n${tripContext}`
         : message;
       
-      // Use exp1 prompt if requested
+      // Use exp prompt if requested
       let customPrompt: string | undefined;
       if (useExpPrompt) {
-        const { EXP_BUILDER_SYSTEM_PROMPT } = await import("@/app/exp1/lib/exp-prompts");
+        const { EXP_BUILDER_SYSTEM_PROMPT } = await import("@/app/exp/lib/exp-prompts");
         customPrompt = EXP_BUILDER_SYSTEM_PROMPT;
-        console.log("🤖 [AI] Using EXP1 custom prompt");
+        console.log("🤖 [AI] Using EXP custom prompt");
       } else {
         console.log("🤖 [AI] Using default prompt");
       }

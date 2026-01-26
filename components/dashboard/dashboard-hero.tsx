@@ -116,7 +116,7 @@ export function DashboardHero({ upcomingTrips, userName }: DashboardHeroProps) {
               <p className="text-lg md:text-xl text-white/90 mb-6">
                 Your next extraordinary experience awaits
               </p>
-              <Link href="/trips/new">
+              <Link href="/trip/new">
                 <Button
                   size="lg"
                   className="inline-flex items-center gap-2 bg-white text-slate-900 hover:bg-slate-100 text-base px-6 py-3 rounded-lg font-medium shadow-xl hover:shadow-2xl hover:scale-105 transition-all"

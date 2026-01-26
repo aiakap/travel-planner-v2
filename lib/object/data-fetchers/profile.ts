@@ -2,34 +2,25 @@
 
 /**
  * Profile data fetcher
- * Fetches user profile graph data (dossier) from database using Prisma
+ * Fetches user profile values from relational database using Prisma
  * This is a server action that can be called from client components
  */
 
-import { prisma } from "@/lib/prisma";
-import { parseXmlToGraph } from "@/lib/profile-graph-xml";
+import { getUserProfileValues } from "@/lib/actions/profile-relational-actions";
 
 export async function fetchProfileData(userId: string) {
   try {
-    const profileGraph = await prisma.userProfileGraph.findUnique({
-      where: { userId },
-    });
-
-    // Parse XML to graph data structure
-    const graphData = parseXmlToGraph(
-      profileGraph?.graphData || null,
-      userId
-    );
+    const profileValues = await getUserProfileValues(userId);
 
     return {
-      graphData,
-      hasData: graphData.nodes.length > 1, // More than just the user node
+      profileValues,
+      hasData: profileValues.length > 0,
     };
   } catch (error) {
-    console.error("Error fetching profile graph data:", error);
-    // Return empty graph with user node
+    console.error("Error fetching profile data:", error);
+    // Return empty array
     return {
-      graphData: { nodes: [], edges: [] },
+      profileValues: [],
       hasData: false,
     };
   }

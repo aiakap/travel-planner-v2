@@ -41,6 +41,11 @@ export async function POST(req: NextRequest) {
       userId: session.user.id
     });
 
+    // #region agent log
+    const fs = require('fs');
+    fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'upsert-route.ts:45',message:'Before upsertProfileItem',data:{category,subcategory,value,userId:session.user.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H6'})+'\n');
+    // #endregion
+
     // Call server action
     const result = await upsertProfileItem({
       category,
@@ -48,6 +53,10 @@ export async function POST(req: NextRequest) {
       value,
       metadata
     });
+
+    // #region agent log
+    fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'upsert-route.ts:54',message:'After upsertProfileItem',data:{success:result.success,nodeCount:result.graphData.nodes.length,hasXmlData:!!result.xmlData},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H6'})+'\n');
+    // #endregion
 
     console.log("📤 [Profile Upsert API] Success:", {
       nodeCount: result.graphData.nodes.length

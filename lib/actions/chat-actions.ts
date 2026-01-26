@@ -4,6 +4,26 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+// Helper function to format chat timestamp
+function formatChatTimestamp(date: Date): string {
+  const month = date.getMonth() + 1 // 0-indexed
+  const day = date.getDate()
+  const year = date.getFullYear().toString().slice(-2) // Last 2 digits
+  
+  let hours = date.getHours()
+  const minutes = date.getMinutes()
+  const ampm = hours >= 12 ? 'PM' : 'AM'
+  
+  // Convert to 12-hour format
+  hours = hours % 12
+  hours = hours ? hours : 12 // 0 should be 12
+  
+  // Pad minutes with leading zero if needed
+  const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString()
+  
+  return `${month}/${day}/${year} - ${hours}:${minutesStr} ${ampm}`
+}
+
 export async function createConversation(title?: string, shouldRevalidate = true) {
   const session = await auth();
 
@@ -185,7 +205,7 @@ export async function createTripConversation(tripId: string, title?: string) {
     data: {
       userId: session.user.id,
       tripId,
-      title: title || `Chat about ${trip.title}`,
+      title: title || `${trip.title} - ${formatChatTimestamp(new Date())}`,
     },
     include: {
       messages: true,

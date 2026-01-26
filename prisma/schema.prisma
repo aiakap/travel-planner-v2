@@ -24,6 +24,7 @@ model User {
   hobbies           UserHobby[]
   profile           UserProfile?
   profileGraph      UserProfileGraph?
+  profileValues     UserProfileValue[]
   relatedTo         UserRelationship[]     @relation("RelatedToUser")
   relationships     UserRelationship[]     @relation("UserRelationships")
   travelPreferences UserTravelPreference[]
@@ -371,6 +372,59 @@ model UserProfileGraph {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProfileCategory {
+  id          String            @id @default(cuid())
+  name        String
+  slug        String            @unique
+  description String?
+  icon        String?
+  color       String?
+  parentId    String?
+  parent      ProfileCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    ProfileCategory[] @relation("CategoryHierarchy")
+  level       Int               @default(0)
+  sortOrder   Int               @default(0)
+  isActive    Boolean           @default(true)
+  values      ProfileValue[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([parentId])
+  @@index([level, sortOrder])
+}
+
+model ProfileValue {
+  id          String             @id @default(cuid())
+  value       String
+  categoryId  String
+  category    ProfileCategory    @relation(fields: [categoryId], references: [id])
+  description String?
+  icon        String?
+  aliases     String[]
+  userValues  UserProfileValue[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([value, categoryId])
+  @@index([categoryId])
+}
+
+model UserProfileValue {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  valueId   String
+  value     ProfileValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
+  metadata  Json?
+  notes     String?
+  addedAt   DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([userId, valueId])
+  @@index([userId])
+  @@index([valueId])
 }
 
 enum TripStatus {

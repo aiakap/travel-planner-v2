@@ -1,7 +1,26 @@
-# Profile Graph Enhancement Plans - Index
+# Travel Planner System - Plans Index
 
 **Created:** January 22, 2026, 8:45pm  
+**Updated:** January 26, 2026
 **Location:** Workspace root directory
+
+---
+
+## Recent Implementations
+
+### ✅ Journey Architect (January 26, 2026)
+📋 **[JOURNEY_ARCHITECT_COMPLETE.md](JOURNEY_ARCHITECT_COMPLETE.md)**
+
+AI-powered timeline builder using strict terminology (Journey/Chapter/Moment). Acts as "Intelligent Drafter" to create trip structures through natural language conversation.
+
+**Key Features:**
+- Intelligent drafting (infers missing pieces)
+- Automatic travel time estimation
+- Aspirational naming
+- Scope control (politely declines Moment requests)
+- Full integration with existing Trip/Segment models
+
+**Access:** `/object/journey_architect`
 
 ---
 

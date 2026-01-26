@@ -173,6 +173,7 @@ export function ChatLayout({
             userId={userId}
             params={params}
             xmlData={xmlData}
+            onCollapse={toggleLeftPanel}
             onDataUpdate={(update) => {
               // #region agent log
               fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-layout.tsx:169',message:'onDataUpdate received',data:{type:typeof update,hasAction:update&&'action' in update,action:update?.action,hasGraphData:!!update?.graphData},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
@@ -221,25 +222,6 @@ export function ChatLayout({
               }
             }}
           />
-          
-          {/* Collapse button */}
-          <button
-            onClick={toggleLeftPanel}
-            style={{
-              position: "absolute",
-              top: "8px",
-              right: "8px",
-              padding: "4px 8px",
-              border: "1px solid #e5e7eb",
-              background: "white",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-            }}
-            title="Collapse chat (Cmd+[)"
-          >
-            ←
-          </button>
         </div>
       )}
 
@@ -289,6 +271,7 @@ export function ChatLayout({
             hasUnsavedChanges={hasUnsavedChanges}
             onSave={handleSave}
             onDelete={handleDelete}
+            onCollapse={toggleRightPanel}
             onDataUpdate={(update) => {
               console.log('📊 DataPanel triggered update:', {
                 hasGraphData: !!update?.graphData,
@@ -307,25 +290,6 @@ export function ChatLayout({
               }
             }}
           />
-          
-          {/* Collapse button */}
-          <button
-            onClick={toggleRightPanel}
-            style={{
-              position: "absolute",
-              top: "8px",
-              left: "8px",
-              padding: "4px 8px",
-              border: "1px solid #e5e7eb",
-              background: "white",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-            }}
-            title="Collapse data view (Cmd+])"
-          >
-            →
-          </button>
         </div>
       )}
 
