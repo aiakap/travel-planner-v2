@@ -1,9 +1,9 @@
 import React from "react";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateTotalDistance } from "@/lib/utils";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
-import LandingPage from "@/components/landing-page";
 
 // Helper function to get timezone info
 type TimeZoneInfo = {
@@ -43,9 +43,9 @@ async function getTimeZoneForCoordinates(
 export default async function HomePage() {
   const session = await auth();
 
-  // If not logged in, show marketing landing page
+  // If not logged in, redirect to /ws (marketing landing page)
   if (!session?.user?.id) {
-    return <LandingPage />;
+    redirect("/ws");
   }
 
   // Logged in - fetch user's trips and show dashboard

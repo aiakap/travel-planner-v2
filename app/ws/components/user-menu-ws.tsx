@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { User, UserCircle, Settings, LogOut, BookOpen } from "lucide-react";
+import { User, UserCircle, Settings, LogOut, BookOpen, MapIcon } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import {
@@ -48,6 +48,15 @@ export function UserMenuWS() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
+        <DropdownMenuItem asChild>
+          <Link
+            href="/"
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <MapIcon className="w-4 h-4" />
+            <span>My Trips</span>
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link
             href="/profile"
