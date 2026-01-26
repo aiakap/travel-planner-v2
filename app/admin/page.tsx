@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, TestTube, Settings, ArrowRight, Plug, Upload, Trash2 } from "lucide-react";
+import { FileText, TestTube, Settings, ArrowRight, Plug, Upload, Trash2, Mail, List, ImageIcon } from "lucide-react";
 
 export default function AdminDashboard() {
   return (
@@ -61,7 +61,11 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      {/* Quick Actions */}
+      {/* Admin Tools */}
+      <div>
+        <h3 className="text-xl font-semibold mb-4">Admin Tools</h3>
+      </div>
+      
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader>
@@ -118,14 +122,31 @@ export default function AdminDashboard() {
           <CardHeader>
             <CardTitle>Email Extraction</CardTitle>
             <CardDescription>
-              Upload flight confirmation emails and extract structured data
+              Extract flight/hotel data from confirmation emails
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Link href="/admin/email-extract">
               <Button variant="outline" className="w-full">
-                Test Email Extraction
-                <Upload className="ml-2 h-4 w-4" />
+                Email Extraction
+                <Mail className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Travel Extraction (Queue)</CardTitle>
+            <CardDescription>
+              Batch upload and process .eml files with queue system
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/travel-extraction">
+              <Button variant="outline" className="w-full">
+                Queue Processing
+                <List className="ml-2 h-4 w-4" />
               </Button>
             </Link>
           </CardContent>
@@ -143,6 +164,81 @@ export default function AdminDashboard() {
               <Button variant="outline" className="w-full">
                 Manage User Data
                 <Trash2 className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Individual API Test Pages */}
+      <div>
+        <h3 className="text-xl font-semibold mb-4 mt-8">Individual API Tests</h3>
+      </div>
+      
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Google Maps</CardTitle>
+            <CardDescription>
+              Places, Geocoding, Timezone APIs
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/apis/google-maps">
+              <Button variant="outline" className="w-full" size="sm">
+                Test Google Maps
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Amadeus</CardTitle>
+            <CardDescription>
+              Flight search and hotel APIs
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/apis/amadeus">
+              <Button variant="outline" className="w-full" size="sm">
+                Test Amadeus
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>OpenAI</CardTitle>
+            <CardDescription>
+              Chat and structured generation
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/apis/openai">
+              <Button variant="outline" className="w-full" size="sm">
+                Test OpenAI
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Vertex AI Imagen</CardTitle>
+            <CardDescription>
+              Image generation with Imagen
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/apis/imagen">
+              <Button variant="outline" className="w-full" size="sm">
+                Test Imagen
+                <ImageIcon className="ml-2 h-4 w-4" />
               </Button>
             </Link>
           </CardContent>

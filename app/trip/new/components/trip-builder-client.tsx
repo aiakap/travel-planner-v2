@@ -47,15 +47,27 @@ interface TripBuilderClientProps {
   onUpdate?: (data: any) => void; // Callback for updates
 }
 
+// Parse date string as local timezone to avoid UTC conversion issues
+const parseLocalDate = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 const formatDateReadable = (dateStr: string) => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
 const addDays = (date: Date | string, days: number) => {
-  const result = new Date(date);
+  let result: Date;
+  if (typeof date === 'string') {
+    // Parse string dates in local timezone to avoid UTC conversion
+    result = parseLocalDate(date);
+  } else {
+    result = new Date(date);
+  }
   result.setDate(result.getDate() + days);
   return result;
 };
@@ -596,7 +608,7 @@ export function TripBuilderClient({
   // --- CHAPTER DATE CALCULATION ---
   const getChapterDates = (index: number): { start: Date; end: Date } => {
     const daysBefore = segments.slice(0, index).reduce((sum, s) => sum + s.days, 0);
-    const chapterStart = addDays(new Date(startDate), daysBefore);
+    const chapterStart = addDays(parseLocalDate(startDate), daysBefore);
     const chapterEnd = addDays(chapterStart, segments[index].days - 1);
     return { start: chapterStart, end: chapterEnd };
   };
@@ -777,7 +789,7 @@ export function TripBuilderClient({
     newSegments.splice(indexBefore + 1, 0, newSegment);
     setSegments(newSegments);
     if (indexBefore === -1) {
-      const prevStart = new Date(startDate);
+      const prevStart = parseLocalDate(startDate);
       const newStart = formatDate(addDays(prevStart, -1));
       updateDurationAndDates(1, newStart);
     } else {

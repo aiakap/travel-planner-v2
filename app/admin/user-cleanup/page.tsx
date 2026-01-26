@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Search, Trash2, User, FileText, Network, 
   AlertTriangle, Loader2, CheckCircle 
@@ -39,6 +40,9 @@ export default function UserCleanupPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
+  // Trip selection state
+  const [selectedTripIds, setSelectedTripIds] = useState<Set<string>>(new Set());
+  
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -70,6 +74,7 @@ export default function UserCleanupPage() {
   const handleSelectUser = async (userId: string) => {
     setLoading(true);
     setError(null);
+    setSelectedTripIds(new Set()); // Clear trip selections
     
     try {
       const details = await getUserDetails(userId);
@@ -78,6 +83,30 @@ export default function UserCleanupPage() {
       setError(err.message || "Failed to load user details");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleTripSelection = (tripId: string) => {
+    setSelectedTripIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(tripId)) {
+        newSet.delete(tripId);
+      } else {
+        newSet.add(tripId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllTrips = () => {
+    if (!selectedUser?.trips) return;
+    
+    if (selectedTripIds.size === selectedUser.trips.length) {
+      // All selected, so deselect all
+      setSelectedTripIds(new Set());
+    } else {
+      // Some or none selected, so select all
+      setSelectedTripIds(new Set(selectedUser.trips.map((t: any) => t.id)));
     }
   };
 
@@ -126,12 +155,25 @@ export default function UserCleanupPage() {
     );
   };
 
-  const handleDeleteTrip = (tripId: string, tripTitle: string) => {
-    if (!selectedUser) return;
+  const handleDeleteSelectedTrips = async () => {
+    if (!selectedUser || selectedTripIds.size === 0) return;
+    
+    const tripCount = selectedTripIds.size;
+    const tripTitles = selectedUser.trips
+      .filter((t: any) => selectedTripIds.has(t.id))
+      .map((t: any) => t.title)
+      .join(", ");
+    
     confirmAction(
-      "Delete Trip",
-      `Are you sure you want to delete "${tripTitle}"? This will also delete all segments, reservations, and chats associated with this trip. This action cannot be undone.`,
-      () => deleteUserTrip(tripId, selectedUser.id)
+      `Delete ${tripCount} Trip${tripCount > 1 ? 's' : ''}`,
+      `Are you sure you want to delete ${tripCount} trip${tripCount > 1 ? 's' : ''}?\n\n${tripTitles}\n\nThis will also delete all segments, reservations, and chats associated with ${tripCount > 1 ? 'these trips' : 'this trip'}. This action cannot be undone.`,
+      async () => {
+        const tripIds = Array.from(selectedTripIds);
+        for (const tripId of tripIds) {
+          await deleteUserTrip(tripId, selectedUser.id);
+        }
+        setSelectedTripIds(new Set()); // Clear selections after delete
+      }
     );
   };
 
@@ -314,24 +356,54 @@ export default function UserCleanupPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>Trips ({selectedUser.trips.length})</CardTitle>
-                    <CardDescription>Delete individual trips or all at once</CardDescription>
+                    <CardDescription>
+                      Select trips to delete ({selectedTripIds.size} selected)
+                    </CardDescription>
                   </div>
-                  <Button
-                    variant="destructive"
-                    onClick={handleDeleteAllTrips}
-                    disabled={loading}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete All Trips
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={toggleAllTrips}
+                      disabled={loading}
+                      size="sm"
+                    >
+                      {selectedTripIds.size === selectedUser.trips.length ? "Deselect All" : "Select All"}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteSelectedTrips}
+                      disabled={loading || selectedTripIds.size === 0}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Selected ({selectedTripIds.size})
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteAllTrips}
+                      disabled={loading}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete All
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 {selectedUser.trips.map((trip: any) => (
-                  <Card key={trip.id} className="border-2">
+                  <Card 
+                    key={trip.id} 
+                    className={`border-2 transition-colors ${
+                      selectedTripIds.has(trip.id) ? 'border-primary bg-primary/5' : ''
+                    }`}
+                  >
                     <CardContent className="py-3">
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={selectedTripIds.has(trip.id)}
+                          onCheckedChange={() => toggleTripSelection(trip.id)}
+                          disabled={loading}
+                        />
+                        <div className="flex-1">
                           <div className="font-medium">{trip.title}</div>
                           <div className="text-sm text-muted-foreground">
                             {new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}
@@ -340,15 +412,6 @@ export default function UserCleanupPage() {
                             {trip._count.segments} segments • {trip._count.conversations} chats
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteTrip(trip.id, trip.title)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          Delete
-                        </Button>
                       </div>
                     </CardContent>
                   </Card>

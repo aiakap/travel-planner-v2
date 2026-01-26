@@ -91,12 +91,12 @@ const adminNavItems: NavItem[] = [
   },
   {
     label: "Tools",
-    href: "/admin/email-extract",
+    href: "/admin/travel-extraction",
     children: [
       {
-        label: "Email Extraction",
-        href: "/admin/email-extract",
-        description: "Extract flight data from emails",
+        label: "Travel Extraction",
+        href: "/admin/travel-extraction",
+        description: "Extract flights & hotels from emails/images",
         icon: <Upload className="h-5 w-5" />,
       },
     ],

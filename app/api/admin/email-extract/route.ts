@@ -46,7 +46,10 @@ export async function POST(request: NextRequest) {
   try {
     const { emailText } = await request.json();
 
+    console.log(`📧 Email extraction request received, text length: ${emailText?.length || 0}`);
+
     if (!emailText) {
+      console.error('❌ No email text provided');
       return NextResponse.json(
         { error: "Email text is required" },
         { status: 400 }
@@ -115,6 +118,7 @@ IMPORTANT: If any optional information is not available in the email, use an emp
 Email content:
 ${emailText}`;
 
+    console.log(`🤖 Starting AI extraction with ${reservationType} schema...`);
     const startTime = Date.now();
     const result = await generateObject({
       model: openai("gpt-4o"),
@@ -122,6 +126,7 @@ ${emailText}`;
       prompt,
     });
     const duration = Date.now() - startTime;
+    console.log(`⏱️ AI extraction completed in ${duration}ms`);
 
     // Validate the extracted data
     const validation = validator(result.object);
@@ -156,6 +161,12 @@ ${emailText}`;
     });
   } catch (error: any) {
     console.error("❌ Email extraction error:", error);
+    console.error("❌ Error details:", {
+      message: error.message,
+      name: error.name,
+      cause: error.cause,
+      stack: error.stack?.split('\n').slice(0, 5).join('\n')
+    });
     
     // Provide helpful error messages based on error type
     if (error.message?.includes('required') || error.message?.includes('Missing')) {
@@ -191,7 +202,7 @@ ${emailText}`;
     
     return NextResponse.json(
       { 
-        error: error.message || "Failed to extract reservation data",
+        error: error.message || "Failed to extract travel information",
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       },
       { status: 500 }
