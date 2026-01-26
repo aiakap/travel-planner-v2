@@ -131,6 +131,12 @@ export function ChatLayout({
     }
   };
 
+  // Delete handler - refreshes data without reloading page
+  const handleDelete = () => {
+    console.log('🗑️ [CHAT LAYOUT] Item deleted, refreshing data...');
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -282,6 +288,7 @@ export function ChatLayout({
             params={params}
             hasUnsavedChanges={hasUnsavedChanges}
             onSave={handleSave}
+            onDelete={handleDelete}
             onDataUpdate={(update) => {
               console.log('📊 DataPanel triggered update:', {
                 hasGraphData: !!update?.graphData,

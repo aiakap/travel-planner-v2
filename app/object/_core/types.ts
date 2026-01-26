@@ -61,6 +61,10 @@ export interface DataPanelProps {
   config: any; // Will be typed properly in config types
   data: any;
   params?: Record<string, string>;
+  hasUnsavedChanges?: boolean;
+  onSave?: () => void;
+  onDataUpdate?: (update: any) => void;
+  onDelete?: () => void;
 }
 
 /**

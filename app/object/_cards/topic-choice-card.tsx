@@ -1,6 +1,6 @@
 /**
  * Topic Choice Card Component
- * Shows multiple-choice options with Accept buttons that save directly to database
+ * Shows multiple-choice options as clickable chips that auto-save on click
  */
 
 "use client";
@@ -27,7 +27,7 @@ export function TopicChoiceCard({
   const [acceptedOptions, setAcceptedOptions] = useState<Set<string>>(new Set());
   const [loadingOptions, setLoadingOptions] = useState<Set<string>>(new Set());
 
-  const handleAccept = async (optionValue: string) => {
+  const handleClick = async (optionValue: string) => {
     if (acceptedOptions.has(optionValue) || loadingOptions.has(optionValue)) {
       return;
     }
@@ -35,8 +35,6 @@ export function TopicChoiceCard({
     setLoadingOptions(prev => new Set([...prev, optionValue]));
 
     try {
-      console.log('🎯 [TOPIC_CHOICE] Accepting:', optionValue);
-      
       const response = await fetch("/api/object/profile/upsert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -50,26 +48,15 @@ export function TopicChoiceCard({
         })
       });
 
-      console.log('🎯 [TOPIC_CHOICE] API response:', {
-        status: response.status,
-        ok: response.ok
-      });
-
       if (response.ok) {
         setAcceptedOptions(prev => new Set([...prev, optionValue]));
         
         if (onAction) {
-          console.log('🎯 [TOPIC_CHOICE] Triggering reload');
           onAction('reload', {});
         }
-      } else {
-        const errorText = await response.text();
-        console.error('❌ [TOPIC_CHOICE] API error:', errorText);
-        alert('Failed to add item. Please try again.');
       }
     } catch (error) {
       console.error('❌ [TOPIC_CHOICE] Exception:', error);
-      alert('Error adding item. Please try again.');
     } finally {
       setLoadingOptions(prev => {
         const next = new Set(prev);
@@ -80,13 +67,7 @@ export function TopicChoiceCard({
   };
 
   return (
-    <div style={{
-      padding: "16px",
-      background: "#f9fafb",
-      border: "1px solid #e5e7eb",
-      borderRadius: "8px",
-      marginBottom: "12px"
-    }}>
+    <div style={{ marginBottom: "16px" }}>
       <div style={{
         fontSize: "14px",
         fontWeight: "600",
@@ -97,61 +78,39 @@ export function TopicChoiceCard({
       </div>
       
       {data.allowMultiple && (
-        <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "12px" }}>
+        <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "8px" }}>
           Select all that apply
         </div>
       )}
       
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "8px" }}>
         {data.options.map((option) => {
           const isAccepted = acceptedOptions.has(option.value);
           const isLoading = loadingOptions.has(option.value);
 
           return (
-            <div
+            <button
               key={option.value}
+              onClick={() => handleClick(option.value)}
+              disabled={isAccepted || isLoading}
               style={{
-                padding: "12px",
-                background: isAccepted ? "#f0fdf4" : "white",
-                border: `1px solid ${isAccepted ? "#86efac" : "#e5e7eb"}`,
-                borderRadius: "6px",
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 16px",
+                background: isAccepted ? "#10b981" : isLoading ? "#e5e7eb" : "#eff6ff",
+                color: isAccepted ? "white" : "#1e40af",
+                border: `1px solid ${isAccepted ? "#10b981" : "#bfdbfe"}`,
+                borderRadius: "16px",
+                fontSize: "14px",
+                fontWeight: "500",
+                cursor: isAccepted || isLoading ? "default" : "pointer",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                {option.icon && <span>{option.icon}</span>}
-                <span style={{ fontSize: "14px", fontWeight: "500", color: "#111827" }}>
-                  {option.value}
-                </span>
-              </div>
-              
-              {!isAccepted && (
-                <button
-                  onClick={() => handleAccept(option.value)}
-                  disabled={isLoading}
-                  style={{
-                    padding: "6px 12px",
-                    background: isLoading ? "#d1d5db" : "#2563eb",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: isLoading ? "not-allowed" : "pointer",
-                    fontSize: "13px",
-                    fontWeight: "500"
-                  }}
-                >
-                  {isLoading ? "Adding..." : "Accept"}
-                </button>
-              )}
-              
-              {isAccepted && (
-                <div style={{ fontSize: "13px", color: "#16a34a", fontWeight: "500" }}>
-                  ✓ Added
-                </div>
-              )}
-            </div>
+              {option.icon && <span>{option.icon}</span>}
+              {isAccepted && <span>✓ </span>}
+              {option.value}
+            </button>
           );
         })}
       </div>

@@ -7,7 +7,15 @@
 
 import { DataPanelProps } from "./types";
 
-export function DataPanel({ config, data, params }: DataPanelProps) {
+export function DataPanel({ 
+  config, 
+  data, 
+  params, 
+  hasUnsavedChanges, 
+  onSave,
+  onDataUpdate,
+  onDelete 
+}: DataPanelProps) {
   const ViewComponent = config.rightPanel.component;
   const EmptyComponent = config.rightPanel.emptyState;
 
@@ -61,7 +69,12 @@ export function DataPanel({ config, data, params }: DataPanelProps) {
         background: "white",
       }}
     >
-      <ViewComponent data={data} params={params} />
+      <ViewComponent 
+        data={data} 
+        params={params} 
+        onDelete={onDelete}
+        onDataUpdate={onDataUpdate}
+      />
     </div>
   );
 }
