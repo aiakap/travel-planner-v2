@@ -3,6 +3,8 @@ import { Playfair_Display, Outfit, Inter } from "next/font/google";
 import "./globals.css";
 import NavigationMain from "@/components/navigation-main";
 import { auth } from "@/auth";
+import { getMinimalUserContext } from "@/lib/actions/user-context";
+import { headers } from "next/headers";
 
 const playfair = Playfair_Display({
   variable: "--font-display",
@@ -33,13 +35,19 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await auth();
+  const userContext = session?.user?.id ? await getMinimalUserContext(session.user.id) : null;
+  
+  // Get the current pathname to conditionally render navigation
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") || "";
+  const isAdminRoute = pathname.startsWith("/admin");
 
   return (
     <html lang="en">
       <body
         className={`${playfair.variable} ${outfit.variable} ${inter.variable} antialiased`}
       >
-        <NavigationMain session={session} />
+        {!isAdminRoute && <NavigationMain session={session} userContext={userContext} />}
         {children}
       </body>
     </html>

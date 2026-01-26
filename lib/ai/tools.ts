@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -42,10 +43,10 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
     update_in_memory_trip: tool({
       description: "Update the Journey metadata in memory (not database). Use this to populate Journey details from conversation. This updates the UI immediately without creating database records.",
       inputSchema: z.object({
-        title: z.string().optional().describe("Journey title (use aspirational names)"),
-        description: z.string().optional().describe("Journey description"),
-        startDate: z.string().optional().describe("Start date in YYYY-MM-DD format"),
-        endDate: z.string().optional().describe("End date in YYYY-MM-DD format"),
+        title: z.string().nullable().default(null).describe("Journey title (use aspirational names) or null if not provided"),
+        description: z.string().nullable().default(null).describe("Journey description or null if not provided"),
+        startDate: z.string().nullable().default(null).describe("Start date in YYYY-MM-DD format or null if not provided"),
+        endDate: z.string().nullable().default(null).describe("End date in YYYY-MM-DD format or null if not provided"),
       }),
       execute: async ({ title, description, startDate, endDate }) => {
         return {
@@ -64,9 +65,9 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
         segmentType: z.enum(["Travel", "Stay", "Tour", "Retreat", "Road Trip"]).describe("Type of Chapter"),
         startLocation: z.string().describe("Starting location (city, country)"),
         endLocation: z.string().describe("Ending location (city, country)"),
-        startTime: z.string().optional().describe("Start date/time in ISO format"),
-        endTime: z.string().optional().describe("End date/time in ISO format"),
-        notes: z.string().optional().describe("Additional notes about this Chapter"),
+        startTime: z.string().nullable().default(null).describe("Start date/time in ISO format or null if not specified"),
+        endTime: z.string().nullable().default(null).describe("End date/time in ISO format or null if not specified"),
+        notes: z.string().nullable().default(null).describe("Additional notes about this Chapter or null if none"),
       }),
       execute: async ({ name, segmentType, startLocation, endLocation, startTime, endTime, notes }) => {
         return {
@@ -102,28 +103,34 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
           .describe("Specific type (e.g., Restaurant, Hotel, Tour, Museum)"),
         tripId: z
           .string()
-          .optional()
-          .describe("ID of the trip this suggestion is for"),
+          .nullable()
+          .default(null)
+          .describe("ID of the trip this suggestion is for or null if not specified"),
         segmentId: z
           .string()
-          .optional()
-          .describe("ID of the segment this suggestion is for"),
+          .nullable()
+          .default(null)
+          .describe("ID of the segment this suggestion is for or null if not specified"),
         dayNumber: z
           .number()
-          .optional()
-          .describe("Which day of the trip (1 for first day, 2 for second, etc.)"),
+          .nullable()
+          .default(null)
+          .describe("Which day of the trip (1 for first day, 2 for second, etc.) or null if not specified"),
         timeOfDay: z
           .enum(["morning", "afternoon", "evening", "night"])
-          .optional()
-          .describe("General time of day for this suggestion"),
+          .nullable()
+          .default(null)
+          .describe("General time of day for this suggestion or null if not specified"),
         specificTime: z
           .string()
-          .optional()
-          .describe("Specific time if mentioned (e.g., '7:00 PM', '12:30 PM')"),
+          .nullable()
+          .default(null)
+          .describe("Specific time if mentioned (e.g., '7:00 PM', '12:30 PM') or null if not specified"),
         notes: z
           .string()
-          .optional()
-          .describe("Additional context or recommendations about this place"),
+          .nullable()
+          .default(null)
+          .describe("Additional context or recommendations about this place or null if none"),
       }),
       execute: async ({
         placeName,
@@ -225,13 +232,15 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
           .describe("Ending location (city, country format)"),
         startTime: z
           .string()
-          .optional()
-          .describe("Start date/time in ISO format"),
+          .nullable()
+          .default(null)
+          .describe("Start date/time in ISO format or null if not specified"),
         endTime: z
           .string()
-          .optional()
-          .describe("End date/time in ISO format"),
-        notes: z.string().optional().describe("Additional notes or details"),
+          .nullable()
+          .default(null)
+          .describe("End date/time in ISO format or null if not specified"),
+        notes: z.string().nullable().default(null).describe("Additional notes or details or null if none"),
       }),
       execute: async ({
         tripId,
@@ -321,32 +330,39 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
           ),
         confirmationNumber: z
           .string()
-          .optional()
-          .describe("Confirmation/reference number if known"),
+          .nullable()
+          .default(null)
+          .describe("Confirmation/reference number if known or null if not available"),
         notes: z
           .string()
-          .optional()
-          .describe("Additional details, recommendations, or instructions"),
+          .nullable()
+          .default(null)
+          .describe("Additional details, recommendations, or instructions or null if none"),
         cost: z
           .number()
-          .optional()
-          .describe("Estimated cost in USD"),
+          .nullable()
+          .default(null)
+          .describe("Estimated cost in USD or null if not known"),
         location: z
           .string()
-          .optional()
-          .describe("Physical address or location"),
+          .nullable()
+          .default(null)
+          .describe("Physical address or location or null if not applicable"),
         url: z
           .string()
-          .optional()
-          .describe("Website or booking URL"),
+          .nullable()
+          .default(null)
+          .describe("Website or booking URL or null if not available"),
         startTime: z
           .string()
-          .optional()
-          .describe("Start time in ISO format"),
+          .nullable()
+          .default(null)
+          .describe("Start time in ISO format or null if not specified"),
         endTime: z
           .string()
-          .optional()
-          .describe("End time in ISO format"),
+          .nullable()
+          .default(null)
+          .describe("End time in ISO format or null if not specified"),
       }),
       execute: async ({
         segmentId,
@@ -361,33 +377,17 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
         startTime,
         endTime,
       }) => {
-        // Get reservation type
-        const reservationType = await prisma.reservationType.findFirst({
-          where: {
-            name: type,
-            category: {
-              name: category,
-            },
-          },
-          include: { category: true },
-        });
-
-        if (!reservationType) {
+        // Get cached reservation type and status
+        let reservationType;
+        let status;
+        
+        try {
+          reservationType = await getReservationType(category, type);
+          status = await getReservationStatus("Pending");
+        } catch (error: any) {
           return {
             success: false,
-            message: `Reservation type "${type}" in category "${category}" not found`,
-          };
-        }
-
-        // Get "Pending" status
-        const status = await prisma.reservationStatus.findFirst({
-          where: { name: "Pending" },
-        });
-
-        if (!status) {
-          return {
-            success: false,
-            message: "Could not find Pending status",
+            message: error.message || "Failed to get reservation type or status",
           };
         }
 

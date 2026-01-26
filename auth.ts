@@ -157,6 +157,44 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           authLogger.userCreated(user.id || "unknown", account.provider, user.email || undefined);
         }
 
+        // Store OAuth profile data for context
+        // PrismaAdapter creates/updates the account before this callback completes
+        if (account && profile && user.id) {
+          try {
+            // Build OAuth profile data object
+            const oauthProfileData = {
+              provider: account.provider,
+              email: user.email || '',
+              email_verified: (profile as any).email_verified,
+              name: user.name || '',
+              given_name: (profile as any).given_name,
+              family_name: (profile as any).family_name,
+              picture: user.image || (profile as any).picture,
+              locale: (profile as any).locale,
+              sub: (profile as any).sub,
+              raw: profile
+            };
+
+            // Store OAuth profile data immediately
+            // The PrismaAdapter runs BEFORE this callback, so the account already exists
+            const updateResult = await prisma.account.updateMany({
+              where: {
+                userId: user.id,
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+              },
+              data: {
+                oauth_profile_data: oauthProfileData as any,
+              },
+            });
+            
+            console.log(`✅ [signIn] Stored OAuth profile data for ${account.provider} (updated ${updateResult.count} records)`);
+          } catch (profileError) {
+            console.error("❌ [signIn] Error storing OAuth profile data:", profileError);
+            // Don't fail signin if profile storage fails
+          }
+        }
+
         // The PrismaAdapter will handle account creation
         console.log("signIn callback returning: true");
         return true;
@@ -302,6 +340,12 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   events: {
     async signIn({ user, account }) {
       try {
+        console.log("🔔 [events.signIn] Sign-in event triggered", {
+          userId: user.id,
+          provider: account?.provider,
+          email: user.email,
+        });
+        
         authLogger.info("signin_event", {
           userId: user.id,
           provider: account?.provider,
@@ -319,8 +363,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
               lastLoginAt: new Date(),
             },
           });
+          console.log("✅ [events.signIn] Updated lastLoginAt for", account.provider);
         }
       } catch (error) {
+        console.error("❌ [events.signIn] Error:", error);
         authLogger.error(error, {
           event: "signIn",
           userId: user.id,

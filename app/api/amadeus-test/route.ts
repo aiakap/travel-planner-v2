@@ -16,11 +16,22 @@ export async function POST(request: NextRequest) {
     console.log('Request params:', JSON.stringify(params, null, 2));
 
     if (type === 'flight') {
-      const flightParams = params as FlightSearchParams;
+      const flightParams = params as any;
+      
+      // Transform parameters to match client expectations
+      const transformedParams: FlightSearchParams = {
+        origin: flightParams.originLocationCode || flightParams.origin,
+        destination: flightParams.destinationLocationCode || flightParams.destination,
+        departureDate: flightParams.departureDate,
+        adults: flightParams.adults,
+        returnDate: flightParams.returnDate,
+        max: flightParams.max
+      };
+      
       const apiStartTime = Date.now();
       
       try {
-        const flights = await searchFlights(flightParams);
+        const flights = await searchFlights(transformedParams);
         const apiDuration = Date.now() - apiStartTime;
         const totalDuration = Date.now() - startTime;
         
@@ -29,7 +40,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           type: 'flight',
-          params: flightParams,
+          params: transformedParams,
           results: flights,
           count: flights.length,
           meta: {
@@ -51,7 +62,7 @@ export async function POST(request: NextRequest) {
         const errorResponse = {
           success: false,
           type: 'flight',
-          params: flightParams,
+          params: transformedParams,
           error: {
             message: getErrorMessage(error),
             code: error.code || 'UNKNOWN_ERROR',

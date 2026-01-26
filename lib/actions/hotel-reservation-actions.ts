@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 
 interface HotelReservationData {
   hotelName: string;
@@ -39,23 +40,9 @@ export async function createHotelReservation(
   }
 
   try {
-    // Get or create "Hotel" reservation type
-    const hotelType = await prisma.reservationType.findFirst({
-      where: { name: "Hotel" },
-    });
-
-    if (!hotelType) {
-      throw new Error("Hotel reservation type not found in database");
-    }
-
-    // Get "Confirmed" status
-    const confirmedStatus = await prisma.reservationStatus.findFirst({
-      where: { name: "Confirmed" },
-    });
-
-    if (!confirmedStatus) {
-      throw new Error("Confirmed status not found in database");
-    }
+    // Get cached reservation type and status
+    const hotelType = await getReservationType("Stay", "Hotel");
+    const confirmedStatus = await getReservationStatus("Confirmed");
 
     // If no segment provided, try to find or create a Stay segment
     let targetSegmentId = segmentId;

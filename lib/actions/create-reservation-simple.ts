@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { queueReservationImageGeneration } from "./queue-image-generation";
+import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 
 export interface CreateReservationSimpleParams {
   segmentId: string;
@@ -65,28 +66,9 @@ export async function createReservationSimple({
     throw new Error("Segment not found or unauthorized");
   }
 
-  // Get reservation type
-  const reservationType = await prisma.reservationType.findFirst({
-    where: {
-      name: type,
-      category: {
-        name: category,
-      },
-    },
-  });
-
-  if (!reservationType) {
-    throw new Error(`Reservation type "${type}" in category "${category}" not found`);
-  }
-
-  // Get reservation status
-  const reservationStatus = await prisma.reservationStatus.findFirst({
-    where: { name: status },
-  });
-
-  if (!reservationStatus) {
-    throw new Error(`Status "${status}" not found`);
-  }
+  // Get cached reservation type and status
+  const reservationType = await getReservationType(category, type);
+  const reservationStatus = await getReservationStatus(status);
 
   // Create reservation
   const reservation = await prisma.reservation.create({

@@ -12,7 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function UserMenu() {
+interface UserMenuProps {
+  userName?: string | null;
+  userEmail?: string | null;
+  userImage?: string | null;
+}
+
+export function UserMenu({ userName, userEmail, userImage }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   let closeTimer: NodeJS.Timeout;
 
@@ -35,11 +41,26 @@ export function UserMenu() {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button 
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-muted hover:bg-muted/80 text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="flex items-center gap-2 px-3 py-2 rounded-full bg-muted hover:bg-muted/80 text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <User className="w-5 h-5" />
+          {userImage ? (
+            <img 
+              src={userImage} 
+              alt={userName || 'User'} 
+              className="w-7 h-7 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+              <User className="w-4 h-4" />
+            </div>
+          )}
+          {userName && (
+            <span className="text-sm font-medium max-w-[120px] truncate hidden md:block">
+              {userName}
+            </span>
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent 

@@ -717,7 +717,46 @@ TRAVEL CONTEXT TO VISUALIZE:`
   }
   console.log("✓ Travel preferences seeded");
 
-  console.log("Database seeding completed!");
+  // Verify critical reservation types and statuses exist
+  console.log("\n🔍 Verifying critical reservation data...");
+
+  const criticalChecks = [
+    { category: "Travel", type: "Flight" },
+    { category: "Travel", type: "Train" },
+    { category: "Stay", type: "Hotel" },
+    { category: "Activity", type: "Tour" },
+    { category: "Dining", type: "Restaurant" },
+    { status: "Confirmed" },
+    { status: "Pending" },
+    { status: "Cancelled" },
+  ];
+
+  for (const check of criticalChecks) {
+    if (check.category && check.type) {
+      const found = await prisma.reservationType.findFirst({
+        where: { 
+          name: check.type,
+          category: { name: check.category }
+        },
+        include: { category: true }
+      });
+      if (!found) {
+        throw new Error(`❌ Critical reservation type missing: ${check.category}/${check.type}`);
+      }
+      console.log(`  ✓ ${check.category}/${check.type}`);
+    } else if (check.status) {
+      const found = await prisma.reservationStatus.findFirst({
+        where: { name: check.status }
+      });
+      if (!found) {
+        throw new Error(`❌ Critical status missing: ${check.status}`);
+      }
+      console.log(`  ✓ Status: ${check.status}`);
+    }
+  }
+
+  console.log("✅ All critical reservation data verified");
+  console.log("\nDatabase seeding completed!");
 }
 
 main()

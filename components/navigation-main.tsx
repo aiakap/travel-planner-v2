@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
 import { TestMenu } from "@/components/test-menu";
+import { UserContextIcon } from "@/components/user-context-icon";
+import { getMinimalUserContext } from "@/lib/actions/user-context";
 
 interface NavItem {
   label: string;
@@ -219,9 +221,10 @@ function MobileNavItem({ item }: { item: NavItem }) {
 
 interface NavigationMainProps {
   session: Session | null;
+  userContext?: Awaited<ReturnType<typeof getMinimalUserContext>>;
 }
 
-export default function NavigationMain({ session }: NavigationMainProps) {
+export default function NavigationMain({ session, userContext }: NavigationMainProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -247,7 +250,12 @@ export default function NavigationMain({ session }: NavigationMainProps) {
 
               <div className="hidden md:flex items-center gap-3">
                 <TestMenu />
-                <UserMenu />
+                <UserContextIcon userContext={userContext || null} />
+                <UserMenu 
+                  userName={session.user?.name}
+                  userEmail={session.user?.email}
+                  userImage={session.user?.image}
+                />
               </div>
             </>
           ) : (
@@ -290,7 +298,12 @@ export default function NavigationMain({ session }: NavigationMainProps) {
                 </div>
                 <div className="pt-4 mt-4 border-t border-border flex items-center justify-center gap-3">
                   <TestMenu />
-                  <UserMenu />
+                  <UserContextIcon userContext={userContext || null} />
+                  <UserMenu 
+                    userName={session.user?.name}
+                    userEmail={session.user?.email}
+                    userImage={session.user?.image}
+                  />
                 </div>
               </>
             ) : (

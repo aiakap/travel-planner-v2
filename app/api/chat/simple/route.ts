@@ -403,9 +403,39 @@ export async function POST(req: Request) {
       // Use exp prompt if requested
       let customPrompt: string | undefined;
       if (useExpPrompt) {
-        const { EXP_BUILDER_SYSTEM_PROMPT } = await import("@/app/exp/lib/exp-prompts");
-        customPrompt = EXP_BUILDER_SYSTEM_PROMPT;
-        console.log("🤖 [AI] Using EXP custom prompt");
+        const { buildExpPrompt } = await import("@/app/exp/lib/prompts/build-exp-prompt");
+        
+        // Get message count from conversation
+        const messageCount = await prisma.chatMessage.count({
+          where: { conversationId }
+        });
+        
+        const conversation = await prisma.chatConversation.findUnique({
+          where: { id: conversationId },
+          select: { chatType: true, tripId: true }
+        });
+        
+        // Build context for prompt plugins
+        const promptContext = {
+          conversationId,
+          chatType: conversation?.chatType as any,
+          messageCount,
+          userMessage: message,
+          hasExistingTrip: !!conversation?.tripId,
+          metadata: {
+            // Extensible: add A/B test groups, feature flags, etc.
+            // experimentGroup: req.headers.get('x-experiment-group'),
+          }
+        };
+        
+        // Build prompt with active plugins
+        const result = buildExpPrompt(promptContext);
+        customPrompt = result.prompt;
+        
+        console.log("🤖 [AI] Using EXP plugin-based prompt system");
+        console.log(`   Active plugins: ${result.activePlugins.join(', ')}`);
+        console.log(`   Total length: ${result.stats.totalLength} chars`);
+        console.log(`   Plugin count: ${result.stats.pluginCount}`);
       } else {
         console.log("🤖 [AI] Using default prompt");
       }

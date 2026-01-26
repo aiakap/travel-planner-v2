@@ -9,25 +9,26 @@ datasource db {
 }
 
 model User {
-  id                String                 @id @default(cuid())
-  name              String?
-  email             String                 @unique
-  emailVerified     DateTime?
-  image             String?
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  accounts          Account[]
-  conversations     ChatConversation[]
-  sessions          Session[]
-  trips             Trip[]
-  contacts          UserContact[]
-  hobbies           UserHobby[]
-  profile           UserProfile?
-  profileGraph      UserProfileGraph?
-  profileValues     UserProfileValue[]
-  relatedTo         UserRelationship[]     @relation("RelatedToUser")
-  relationships     UserRelationship[]     @relation("UserRelationships")
-  travelPreferences UserTravelPreference[]
+  id                     String                    @id @default(cuid())
+  name                   String?
+  email                  String                    @unique
+  emailVerified          DateTime?
+  image                  String?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  accounts               Account[]
+  conversations          ChatConversation[]
+  sessions               Session[]
+  trips                  Trip[]
+  contacts               UserContact[]
+  hobbies                UserHobby[]
+  profile                UserProfile?
+  profileGraph           UserProfileGraph?
+  profileValues          UserProfileValue[]
+  relatedTo              UserRelationship[]        @relation("RelatedToUser")
+  relationships          UserRelationship[]        @relation("UserRelationships")
+  travelPreferences      UserTravelPreference[]
+  travelExtractionQueue  TravelExtractionQueue[]
 }
 
 model Account {
@@ -43,6 +44,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
+  oauth_profile_data Json?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   canLogin          Boolean   @default(true)
@@ -452,4 +454,41 @@ enum ChatType {
   TRIP
   SEGMENT
   RESERVATION
+}
+
+model TravelExtractionQueue {
+  id            String            @id @default(cuid())
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // File info
+  fileName      String
+  fileType      String            // "eml", "text", "image", "pdf"
+  fileSize      Int
+  fileUrl       String?           // For images/PDFs stored temporarily
+  textContent   String?           @db.Text // For .eml/.txt files
+  
+  // Processing status
+  status        ExtractionStatus  @default(PENDING)
+  progress      Int               @default(0) // 0-100
+  
+  // Extraction results (JSON)
+  extractedData Json?             // Flights, hotels, cars, activities
+  errorMessage  String?
+  
+  // Metadata
+  tripId        String?
+  createdAt     DateTime          @default(now())
+  processedAt   DateTime?
+  
+  @@index([userId, status])
+  @@index([createdAt])
+}
+
+enum ExtractionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVIEWED
 }

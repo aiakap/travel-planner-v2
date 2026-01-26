@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const placeId = searchParams.get("placeid");
+  const placeId = searchParams.get("placeId"); // Changed from "placeid" to "placeId"
   
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   
@@ -21,9 +21,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Expanded fields for comprehensive testing including contact, hours, reviews, and accessibility
+    const fields = [
+      'name', 'formatted_address', 'geometry', 'types', 'rating', 'photos',
+      'formatted_phone_number', 'international_phone_number', 'website',
+      'opening_hours', 'business_status', 'price_level', 'user_ratings_total',
+      'url', 'plus_code', 'wheelchair_accessible_entrance', 'reviews',
+      'editorial_summary', 'place_id', 'vicinity'
+    ].join(',');
+    
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(
       placeId
-    )}&fields=name,formatted_address,geometry&key=${apiKey}`;
+    )}&fields=${fields}&key=${apiKey}`;
     
     const response = await fetch(url);
     
@@ -40,6 +49,7 @@ export async function GET(request: NextRequest) {
     if (data.status === "OK" && data.result) {
       const result = data.result;
       return NextResponse.json({
+        // Simplified for display
         name: result.name || result.formatted_address,
         formattedAddress: result.formatted_address,
         location: {
@@ -47,6 +57,10 @@ export async function GET(request: NextRequest) {
           lng: result.geometry.location.lng,
         },
         placeId,
+        types: result.types,
+        // Full result for inspection
+        result: data.result,
+        status: "success"
       });
     }
     

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { queueReservationImageGeneration } from "./queue-image-generation";
 import { GooglePlaceData } from "@/lib/types/place-suggestion";
+import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 
 export async function createReservation(formData: FormData) {
   const session = await auth();
@@ -214,19 +215,8 @@ export async function createReservationFromSuggestion({
     });
   }
 
-  // Get reservation type
-  const reservationType = await prisma.reservationType.findFirst({
-    where: {
-      name: type,
-      category: {
-        name: category,
-      },
-    },
-  });
-
-  if (!reservationType) {
-    throw new Error(`Reservation type "${type}" in category "${category}" not found`);
-  }
+  // Get cached reservation type
+  const reservationType = await getReservationType(category, type);
 
   // Map status type to database status name
   const statusNameMap = {
@@ -237,14 +227,8 @@ export async function createReservationFromSuggestion({
 
   const statusName = statusNameMap[statusType];
 
-  // Get reservation status
-  const status = await prisma.reservationStatus.findFirst({
-    where: { name: statusName },
-  });
-
-  if (!status) {
-    throw new Error(`Could not find ${statusName} status`);
-  }
+  // Get cached reservation status
+  const status = await getReservationStatus(statusName);
 
   // Extract contact info from Google Places data
   const contactPhone = placeData?.phoneNumber || null;

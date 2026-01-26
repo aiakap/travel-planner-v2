@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Calendar, 
   Plus,
@@ -10,7 +11,9 @@ import {
   ChevronDown,
   Info,
   HelpCircle,
-  ArrowRight
+  ArrowRight,
+  ChevronUp,
+  Minus
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PlaceAutocompleteLive } from './place-autocomplete-live';
@@ -22,6 +25,8 @@ import {
 } from '../actions/trip-builder-actions';
 import { HandDrawnTooltip } from '@/components/ui/hand-drawn-tooltip';
 import { TooltipOverlay } from '@/components/ui/tooltip-overlay';
+import { LocationPromptModal } from './location-prompt-modal';
+import { DateChangeModal } from './date-change-modal';
 
 interface Segment {
   id: string;
@@ -78,6 +83,8 @@ export function TripBuilderClient({
   const [endDate, setEndDate] = useState(calculateEndDate(startDate, duration));
   const [segments, setSegments] = useState<Segment[]>([]);
   const [openTypeSelectorIndex, setOpenTypeSelectorIndex] = useState<number | null>(null);
+  const [typeSelectorPosition, setTypeSelectorPosition] = useState<{ top: number; left: number } | null>(null);
+  const typeSelectorRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const startDateInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-save state
@@ -86,6 +93,25 @@ export function TripBuilderClient({
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const tripIdRef = useRef<string | null>(null);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  
+  // Location prompt modal state
+  const [locationPromptModal, setLocationPromptModal] = useState<{
+    sourceIndex: number;
+    sourceSegment: string;
+    field: 'start_location' | 'end_location';
+    value: string;
+    imageUrl: string | null;
+    suggestions: LocationSuggestion[];
+  } | null>(null);
+  
+  // Date change modal state
+  const [dateChangeModal, setDateChangeModal] = useState<{
+    isOpen: boolean;
+    changeType: 'chapter_increase' | 'chapter_decrease' | 'trip_duration_change';
+    daysDelta: number;
+    sourceChapterIndex?: number;
+    sourceChapterName?: string;
+  } | null>(null);
   
   // Initialize from external props (for Journey Architect integration)
   useEffect(() => {
@@ -149,15 +175,15 @@ export function TripBuilderClient({
     });
 
     if (totalDays === 1) {
-      return [mkSeg('STAY', 'Main Stay', 1)];
+      return [mkSeg('STAY', 'The Adventure', 1)];
     } else if (totalDays === 2) {
-      return [mkSeg('STAY', 'Chapter 1', 1), mkSeg('STAY', 'Chapter 2', 1)];
+      return [mkSeg('STAY', 'First Stop', 1), mkSeg('STAY', 'Second Stop', 1)];
     } else {
       const stayDays = totalDays - 2;
       return [
-        mkSeg('TRAVEL', 'Travel Out', 1),
-        mkSeg('STAY', 'Main Stay', stayDays),
-        mkSeg('TRAVEL', 'Travel Back', 1),
+        mkSeg('TRAVEL', 'Journey Begins', 1),
+        mkSeg('STAY', 'The Adventure', stayDays),
+        mkSeg('TRAVEL', 'Journey Home', 1),
       ];
     }
   };
@@ -174,8 +200,8 @@ export function TripBuilderClient({
     }
     
     if (diff > 0) {
-      const stayIndex = nextSegments.findIndex(s => s.name === 'Main Stay') !== -1 
-        ? nextSegments.findIndex(s => s.name === 'Main Stay') 
+      const stayIndex = nextSegments.findIndex(s => s.name === 'The Adventure') !== -1 
+        ? nextSegments.findIndex(s => s.name === 'The Adventure') 
         : Math.floor(nextSegments.length / 2);
       nextSegments[stayIndex].days += diff;
     } else {
@@ -254,7 +280,7 @@ export function TripBuilderClient({
     // Step 4: Show chapter name tooltip when timeline is visible
     if (showTimeline && segments.length > 0 && completedSteps.has('timeline') && !completedSteps.has('chapterName')) {
       const hasRenamedChapter = segments.some(s => 
-        !['Main Stay', 'Chapter 1', 'Chapter 2', 'Travel Out', 'Travel Back', 'New Chapter'].includes(s.name)
+        !['The Adventure', 'First Stop', 'Second Stop', 'Journey Begins', 'Journey Home', 'New Adventure'].includes(s.name)
       );
       if (hasRenamedChapter) {
         setCompletedSteps(new Set([...completedSteps, 'chapterName']));
@@ -337,42 +363,96 @@ export function TripBuilderClient({
     return stepOrder.indexOf(currentTooltipStep || '') + 1;
   };
 
-  // --- LOCATION PROPAGATION ---
-  const propagateLocations = (newSegments: Segment[], changedIndex: number): Segment[] => {
-    // Round Trip Sync
-    if (changedIndex === 0) {
-      const firstSeg = newSegments[0];
-      const lastIndex = newSegments.length - 1;
-      if (lastIndex > 0) {
-        newSegments[lastIndex].end_location = firstSeg.start_location;
-        newSegments[lastIndex].end_image = firstSeg.start_image;
+  // --- LOCATION HELPERS ---
+  interface LocationSuggestion {
+    title: string;
+    description: string;
+    targets: Array<{ index: number; field: 'start_location' | 'end_location'; name: string; type: string }>;
+    autoSelect?: boolean;
+  }
 
-        if (SEGMENT_TYPES[newSegments[lastIndex].type.toUpperCase()]?.singleLocation) {
-          newSegments[lastIndex].start_location = firstSeg.start_location;
-          newSegments[lastIndex].start_image = firstSeg.start_image;
-        }
+  const generateLocationSuggestions = (
+    allSegments: Segment[],
+    sourceIndex: number,
+    sourceField: 'start_location' | 'end_location',
+    value: string
+  ): LocationSuggestion[] => {
+    const suggestions: LocationSuggestion[] = [];
+    
+    // Special case: First chapter start location
+    if (sourceIndex === 0 && sourceField === 'start_location') {
+      const lastIndex = allSegments.length - 1;
+      if (lastIndex > 0 && !allSegments[lastIndex].end_location) {
+        suggestions.push({
+          title: "Round Trip",
+          description: "Set this as your return destination",
+          targets: [{
+            index: lastIndex,
+            field: 'end_location',
+            name: allSegments[lastIndex].name,
+            type: SEGMENT_TYPES[allSegments[lastIndex].type.toUpperCase()]?.label || allSegments[lastIndex].type
+          }],
+          autoSelect: true
+        });
       }
     }
-
-    // Cascade Forward
-    for (let i = changedIndex; i < newSegments.length - 1; i++) {
-      const current = newSegments[i];
-      const next = newSegments[i + 1];
-
-      if (current.end_location) {
-        next.start_location = current.end_location;
-        next.start_image = current.end_image;
-
-        if (SEGMENT_TYPES[next.type.toUpperCase()]?.singleLocation) {
-          next.end_location = next.start_location;
-          next.end_image = next.start_image;
-        }
-      }
+    
+    // Find all blank matching locations
+    const blankTargets = allSegments
+      .map((seg, idx) => ({ seg, idx }))
+      .filter(({ seg, idx }) => idx !== sourceIndex && !seg[sourceField]?.trim())
+      .map(({ seg, idx }) => ({
+        index: idx,
+        field: sourceField,
+        name: seg.name,
+        type: SEGMENT_TYPES[seg.type.toUpperCase()]?.label || seg.type
+      }));
+      
+    if (blankTargets.length > 0) {
+      suggestions.push({
+        title: `Other ${sourceField === 'start_location' ? 'Starting' : 'Ending'} Locations`,
+        description: `Apply to chapters with blank ${sourceField === 'start_location' ? 'start' : 'end'} locations`,
+        targets: blankTargets,
+        autoSelect: false
+      });
     }
-    return newSegments;
+    
+    return suggestions;
   };
 
-  const handleLocationChange = (index: number, field: 'start_location' | 'end_location', value: string, imageUrl: string | null = null) => {
+  const findSegmentsWithBlankLocations = (allSegments: Segment[], field: 'start_location' | 'end_location', excludeIndex: number): Array<{ index: number; name: string; type: string }> => {
+    return allSegments
+      .map((seg, idx) => ({ seg, idx }))
+      .filter(({ seg, idx }) => idx !== excludeIndex && !seg[field]?.trim())
+      .map(({ seg, idx }) => ({
+        index: idx,
+        name: seg.name,
+        type: SEGMENT_TYPES[seg.type.toUpperCase()]?.label || seg.type
+      }));
+  };
+
+  const applyLocationToSegments = (selections: Array<{ index: number; field: 'start_location' | 'end_location' }>, value: string, imageUrl: string | null) => {
+    const newSegments = [...segments];
+    
+    selections.forEach(({ index, field }) => {
+      const imageField = field === 'start_location' ? 'start_image' : 'end_image';
+      newSegments[index][field] = value;
+      newSegments[index][imageField] = imageUrl;
+      
+      // If it's a single location segment type, sync both start and end
+      const typeConfig = SEGMENT_TYPES[newSegments[index].type.toUpperCase()];
+      if (typeConfig?.singleLocation) {
+        const otherField = field === 'start_location' ? 'end_location' : 'start_location';
+        const otherImageField = field === 'start_location' ? 'end_image' : 'start_image';
+        newSegments[index][otherField] = value;
+        newSegments[index][otherImageField] = imageUrl;
+      }
+    });
+    
+    setSegments(newSegments);
+  };
+
+  const handleLocationTyping = (index: number, field: 'start_location' | 'end_location', value: string, imageUrl: string | null = null) => {
     setHasUserInteracted(true);
     const newSegments = [...segments];
     const segment = newSegments[index];
@@ -400,8 +480,125 @@ export function TripBuilderClient({
       }
     }
 
-    const propagatedSegments = propagateLocations(newSegments, index);
-    setSegments(propagatedSegments);
+    setSegments(newSegments);
+  };
+
+  const handleLocationSelected = (index: number, field: 'start_location' | 'end_location', value: string, imageUrl: string | null = null) => {
+    // Location already updated by typing handler, now show intelligent prompt
+    if (value.trim() !== '') {
+      const suggestions = generateLocationSuggestions(segments, index, field, value);
+      if (suggestions.length > 0) {
+        setLocationPromptModal({
+          sourceIndex: index,
+          sourceSegment: segments[index].name,
+          field,
+          value,
+          imageUrl,
+          suggestions
+        });
+      }
+    }
+  };
+
+  // --- TYPE SELECTOR ---
+  const handleOpenTypeSelector = (index: number, buttonElement: HTMLButtonElement) => {
+    if (openTypeSelectorIndex === index) {
+      setOpenTypeSelectorIndex(null);
+      setTypeSelectorPosition(null);
+    } else {
+      const rect = buttonElement.getBoundingClientRect();
+      setTypeSelectorPosition({
+        top: rect.bottom + 4,
+        left: rect.left
+      });
+      setOpenTypeSelectorIndex(index);
+    }
+  };
+
+  // --- SEGMENT REORDERING ---
+  const moveSegmentUp = (index: number) => {
+    if (index === 0) return;
+    setHasUserInteracted(true);
+    const newSegments = [...segments];
+    [newSegments[index], newSegments[index - 1]] = [newSegments[index - 1], newSegments[index]];
+    setSegments(newSegments);
+  };
+
+  const moveSegmentDown = (index: number) => {
+    if (index === segments.length - 1) return;
+    setHasUserInteracted(true);
+    const newSegments = [...segments];
+    [newSegments[index], newSegments[index + 1]] = [newSegments[index + 1], newSegments[index]];
+    setSegments(newSegments);
+  };
+
+  // --- DAY ADJUSTMENT ---
+  const adjustSegmentDays = (index: number, delta: number) => {
+    setHasUserInteracted(true);
+    
+    // Show modal asking how to handle the change
+    setDateChangeModal({
+      isOpen: true,
+      changeType: delta > 0 ? 'chapter_increase' : 'chapter_decrease',
+      daysDelta: delta,
+      sourceChapterIndex: index,
+      sourceChapterName: segments[index].name
+    });
+  };
+
+  // --- DATE CHANGE MODAL HANDLER ---
+  const handleDateChangeApply = (action: string, targetChapterIndex?: number) => {
+    if (!dateChangeModal) return;
+    
+    const { daysDelta, sourceChapterIndex } = dateChangeModal;
+    const newSegments = [...segments];
+    
+    if (action === 'adjust_trip_start') {
+      // Adjust trip start date
+      const newStart = formatDate(addDays(new Date(startDate), -daysDelta));
+      setStartDate(newStart);
+      setAnchor('start');
+      setEndDate(calculateEndDate(newStart, duration + daysDelta));
+      setDuration(duration + daysDelta);
+      
+      // Update the chapter that initiated the change
+      if (sourceChapterIndex !== undefined) {
+        newSegments[sourceChapterIndex].days += daysDelta;
+        setSegments(newSegments);
+      }
+      
+    } else if (action === 'adjust_trip_end') {
+      // Adjust trip end date
+      const newEnd = formatDate(addDays(new Date(endDate), daysDelta));
+      setEndDate(newEnd);
+      setAnchor('end');
+      setStartDate(calculateStartDate(newEnd, duration + daysDelta));
+      setDuration(duration + daysDelta);
+      
+      // Update the chapter that initiated the change
+      if (sourceChapterIndex !== undefined) {
+        newSegments[sourceChapterIndex].days += daysDelta;
+        setSegments(newSegments);
+      }
+      
+    } else if (action === 'take_from_chapter') {
+      // Transfer days between chapters
+      if (sourceChapterIndex !== undefined && targetChapterIndex !== undefined) {
+        newSegments[sourceChapterIndex].days += daysDelta;
+        newSegments[targetChapterIndex].days -= daysDelta;
+        setSegments(newSegments);
+      }
+    }
+    
+    setDateChangeModal(null);
+  };
+
+  // --- CHAPTER DATE CALCULATION ---
+  const getChapterDates = (index: number): { start: Date; end: Date } => {
+    const daysBefore = segments.slice(0, index).reduce((sum, s) => sum + s.days, 0);
+    const chapterStart = addDays(new Date(startDate), daysBefore);
+    const chapterEnd = addDays(chapterStart, segments[index].days - 1);
+    return { start: chapterStart, end: chapterEnd };
   };
 
   const getGeneratedSummary = () => {
@@ -455,7 +652,7 @@ export function TripBuilderClient({
           // First save - create trip
           console.log('📝 Creating new draft trip...');
           const id = await createDraftTrip({
-            title: journeyName || "Untitled Trip",
+            title: journeyName || "Untitled Journey",
             description: manualSummary || generatedSummary,
             startDate,
             endDate,
@@ -552,61 +749,6 @@ export function TripBuilderClient({
     setStartDate(calculateStartDate(newEnd, duration));
   };
   
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    if (openTypeSelectorIndex !== null) return;
-    e.dataTransfer.setData("segmentIdx", index.toString());
-  };
-  
-  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
-    setHasUserInteracted(true);
-    const sourceIdx = parseInt(e.dataTransfer.getData("segmentIdx"));
-    if (isNaN(sourceIdx) || sourceIdx === targetIndex) return;
-    const newSegs = [...segments];
-    const [moved] = newSegs.splice(sourceIdx, 1);
-    newSegs.splice(targetIndex, 0, moved);
-    const reconnectedSegs = propagateLocations(newSegs, 0);
-    setSegments(reconnectedSegs);
-  };
-  
-  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
-  
-  const ribbonRef = useRef<HTMLDivElement>(null);
-  const [isResizing, setIsResizing] = useState<any>(null);
-  
-  const handleResizeStartInternal = (e: React.MouseEvent, index: number) => {
-    if (index >= segments.length - 1) return;
-    e.preventDefault();
-    setIsResizing({
-      type: 'internal',
-      index,
-      startX: e.clientX,
-      initialLeftDays: segments[index].days,
-      initialRightDays: segments[index + 1].days,
-      initialDuration: duration,
-    });
-  };
-  
-  const handleResizeStartOuterStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing({
-      type: 'start',
-      startX: e.clientX,
-      initialDuration: duration,
-      initialSegmentDays: segments[0].days,
-      initialStartDate: new Date(startDate),
-    });
-  };
-  
-  const handleResizeStartOuterEnd = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing({
-      type: 'end',
-      startX: e.clientX,
-      initialDuration: duration,
-      initialSegmentDays: segments[segments.length - 1].days,
-    });
-  };
-  
   const updateDurationAndDates = (change: number, newStart: string | null = null) => {
     const newDuration = duration + change;
     setDuration(newDuration);
@@ -621,28 +763,19 @@ export function TripBuilderClient({
   
   const handleInsertSegment = (indexBefore: number) => {
     setHasUserInteracted(true);
-    const prevSeg = indexBefore >= 0 ? segments[indexBefore] : null;
-    let startLoc = "", endLoc = "", startImg: string | null = null, endImg: string | null = null;
-    if (prevSeg) {
-      startLoc = prevSeg.end_location || "";
-      startImg = prevSeg.end_image || null;
-      endLoc = startLoc;
-      endImg = startImg;
-    }
     const newSegment: Segment = {
       id: crypto.randomUUID(),
       type: 'STAY',
-      name: 'New Chapter',
+      name: 'New Adventure',
       days: 1,
-      start_location: startLoc,
-      end_location: endLoc,
-      start_image: startImg,
-      end_image: endImg,
+      start_location: "",
+      end_location: "",
+      start_image: null,
+      end_image: null,
     };
     const newSegments = [...segments];
     newSegments.splice(indexBefore + 1, 0, newSegment);
-    const propagated = propagateLocations(newSegments, indexBefore + 1);
-    setSegments(propagated);
+    setSegments(newSegments);
     if (indexBefore === -1) {
       const prevStart = new Date(startDate);
       const newStart = formatDate(addDays(prevStart, -1));
@@ -657,8 +790,7 @@ export function TripBuilderClient({
     if (segments.length <= 1) return;
     const segmentToRemove = segments[index];
     const newSegments = segments.filter((_, i) => i !== index);
-    const reconnected = propagateLocations(newSegments, Math.max(0, index - 1));
-    setSegments(reconnected);
+    setSegments(newSegments);
     updateDurationAndDates(-segmentToRemove.days);
   };
   
@@ -671,85 +803,38 @@ export function TripBuilderClient({
       newSegs[index].end_location = newSegs[index].start_location;
       newSegs[index].end_image = newSegs[index].start_image;
     }
-    const propagated = propagateLocations(newSegs, index);
-    setSegments(propagated);
+    setSegments(newSegs);
     setOpenTypeSelectorIndex(null);
+    setTypeSelectorPosition(null);
   };
 
   // Global Listeners
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing || !ribbonRef.current) return;
-      const ribbonWidth = ribbonRef.current.offsetWidth;
-      const pixelsPerDay = ribbonWidth / (isResizing.initialDuration || duration);
-      const deltaPixels = e.clientX - isResizing.startX;
-      const deltaDays = Math.round(deltaPixels / pixelsPerDay);
-      
-      if (isResizing.type === 'internal') {
-        const { index, initialLeftDays, initialRightDays } = isResizing;
-        let newLeftDays = initialLeftDays + deltaDays;
-        let newRightDays = initialRightDays - deltaDays;
-        if (newLeftDays < 1) { newLeftDays = 1; newRightDays = (initialLeftDays + initialRightDays) - 1; }
-        if (newRightDays < 1) { newRightDays = 1; newLeftDays = (initialLeftDays + initialRightDays) - 1; }
-        if (newLeftDays !== segments[index].days) {
-          const newSegs = [...segments];
-          newSegs[index].days = newLeftDays;
-          newSegs[index + 1].days = newRightDays;
-          setSegments(newSegs);
-        }
-      } else if (isResizing.type === 'start') {
-        const { initialSegmentDays, initialDuration, initialStartDate } = isResizing;
-        const changeInDays = -deltaDays;
-        let newFirstSegDays = initialSegmentDays + changeInDays;
-        if (newFirstSegDays < 1) newFirstSegDays = 1;
-        const validChange = newFirstSegDays - initialSegmentDays;
-        if (validChange !== 0 || segments[0].days !== newFirstSegDays) {
-          const newSegs = [...segments];
-          newSegs[0].days = newFirstSegDays;
-          setSegments(newSegs);
-          const newDuration = initialDuration + validChange;
-          setDuration(newDuration);
-          const newStartObj = addDays(initialStartDate, -validChange);
-          const newStartStr = formatDate(newStartObj);
-          setStartDate(newStartStr);
-          setEndDate(calculateEndDate(newStartStr, newDuration));
-        }
-      } else if (isResizing.type === 'end') {
-        const { initialSegmentDays, initialDuration } = isResizing;
-        let newLastSegDays = initialSegmentDays + deltaDays;
-        if (newLastSegDays < 1) newLastSegDays = 1;
-        const validChange = newLastSegDays - initialSegmentDays;
-        if (validChange !== 0 || segments[segments.length - 1].days !== newLastSegDays) {
-          const newSegs = [...segments];
-          newSegs[segments.length - 1].days = newLastSegDays;
-          setSegments(newSegs);
-          const newDuration = initialDuration + validChange;
-          setDuration(newDuration);
-          if (anchor === 'start') setEndDate(calculateEndDate(startDate, newDuration));
-          else setEndDate(calculateEndDate(startDate, newDuration));
-        }
-      }
-    };
-    
-    const handleMouseUp = () => { setIsResizing(null); };
     const handleClickOutside = (e: MouseEvent) => {
-      if (openTypeSelectorIndex !== null && !(e.target as Element).closest('.type-selector-container')) {
+      const target = e.target as Element;
+      if (openTypeSelectorIndex !== null && 
+          !target.closest('.type-selector-container') &&
+          !target.closest('[data-type-dropdown]')) {
         setOpenTypeSelectorIndex(null);
+        setTypeSelectorPosition(null);
       }
     };
     
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && openTypeSelectorIndex !== null) {
+        setOpenTypeSelectorIndex(null);
+        setTypeSelectorPosition(null);
+      }
+    };
+    
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
     
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
     };
-  }, [isResizing, duration, segments, startDate, anchor, openTypeSelectorIndex]);
+  }, [openTypeSelectorIndex]);
 
   // Validate segment types are loaded
   if (!segmentTypeMap || Object.keys(segmentTypeMap).length === 0) {
@@ -899,170 +984,233 @@ export function TripBuilderClient({
             <div ref={timelineRef}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Journey Timeline</h3>
-                <div className="text-xs text-gray-400">{segments.length} Chapters</div>
+                <div className="text-xs text-gray-400">{segments.length} Chapters · {duration} Days Total</div>
               </div>
 
-              <div className="relative mx-4 h-48 select-none mb-12">
-            <div
-              className="absolute left-0 top-0 bottom-0 w-4 -ml-4 z-30 cursor-col-resize flex flex-col items-center justify-center group/outer"
-              onMouseDown={handleResizeStartOuterStart}
-            >
-              <div className="w-1 h-full bg-gray-200 rounded-l-md group-hover/outer:bg-indigo-400 transition-colors"></div>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleInsertSegment(-1); }}
-                className="absolute -top-3 w-6 h-6 bg-white border border-indigo-200 text-indigo-600 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover/outer:opacity-100 hover:bg-indigo-50 hover:scale-110 transition-all z-30"
-                title="Add Start Chapter"
-              >
-                <Plus size={14} strokeWidth={3} />
-              </button>
-            </div>
-
-            <div ref={ribbonRef} className="relative h-full flex">
-              <div className="absolute inset-0 bg-gray-100 rounded-xl overflow-hidden pointer-events-none z-0">
-                <div className="absolute inset-0 flex">
-                  {Array.from({ length: duration }).map((_, i) => (
-                    <div key={i} className="flex-1 border-r border-gray-200/50 last:border-0"></div>
-                  ))}
+              {/* Add segment button at the top */}
+              <div className="relative group my-1">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center">
+                  <button
+                    onClick={() => handleInsertSegment(-1)}
+                    className="bg-white px-2 py-0.5 text-xs text-gray-400 hover:text-indigo-600 border border-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Add chapter at start"
+                  >
+                    <Plus size={12} />
+                  </button>
                 </div>
               </div>
-              <div className="absolute inset-0 border border-gray-200 rounded-xl pointer-events-none z-10"></div>
 
-              {segments.map((segment, index) => {
-                const style = getSegmentStyle(segment.type);
-                const widthPct = (segment.days / duration) * 100;
-                const isSingleLocation = style.singleLocation;
-                const bgImage = segment.start_image || segment.end_image;
+              {/* Vertical segment list */}
+              <div className="space-y-2">
+                {segments.map((segment, index) => {
+                  const style = getSegmentStyle(segment.type);
+                  const isSingleLocation = style.singleLocation;
+                  const bgImage = segment.start_image || segment.end_image;
 
-                return (
-                  <React.Fragment key={segment.id}>
-                    <div
-                      draggable={true}
-                      onDragStart={(e) => handleDragStart(e, index)}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, index)}
-                      style={{ width: `${widthPct}%` }}
-                      className={`relative group h-full flex flex-col transition-all duration-200 first:rounded-l-xl last:rounded-r-xl overflow-visible ${isResizing ? '' : 'hover:brightness-95'}`}
-                    >
-                      {bgImage && (
-                        <div className="absolute inset-0 bg-cover bg-center z-0 transition-opacity duration-500" style={{ backgroundImage: `url(${bgImage})` }}>
-                          <div className={`absolute inset-0 ${style.overlayColor || 'bg-white/80'} backdrop-blur-[2px] mix-blend-multiply`}></div>
-                        </div>
-                      )}
-
-                      <div className={`relative h-full w-full p-3 flex flex-col justify-between ${bgImage ? 'text-white' : style.color} border-r border-white/20 first:rounded-l-xl last:rounded-r-xl z-10`}>
-                        <div className="flex justify-between items-start">
-                          <div className="relative type-selector-container">
-                            <button
-                              ref={index === 0 ? firstTypeRef : undefined}
-                              onClick={(e) => { e.stopPropagation(); setOpenTypeSelectorIndex(openTypeSelectorIndex === index ? null : index); }}
-                              className="flex items-center gap-1 hover:bg-black/10 p-1 -ml-1 rounded transition-colors group/type"
-                            >
-                              <style.icon size={14} className="opacity-70 group-hover/type:opacity-100" />
-                              <ChevronDown size={10} className="opacity-50 group-hover/type:opacity-100" />
-                            </button>
-                            {openTypeSelectorIndex === index && (
-                              <div className="absolute top-full left-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden text-gray-800">
-                                {Object.entries(SEGMENT_TYPES).map(([key, type]) => (
-                                  <button
-                                    key={key}
-                                    onClick={(e) => { e.stopPropagation(); handleTypeSelect(index, key); }}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 text-sm"
-                                  >
-                                    <type.icon size={14} />
-                                    <span className="font-medium text-gray-700">{type.label}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
+                  return (
+                    <div key={segment.id} className="relative">
+                      {/* Segment card */}
+                      <div className={`relative group rounded-xl border-2 shadow-sm hover:shadow-md transition-all ${bgImage ? 'border-gray-300' : style.color.replace('text-', 'border-').replace('-900', '-300')}`}>
+                        {bgImage && (
+                          <div className="absolute inset-0 bg-cover bg-center z-0 rounded-xl overflow-hidden" style={{ backgroundImage: `url(${bgImage})` }}>
+                            <div className={`absolute inset-0 ${style.overlayColor || 'bg-white/80'} backdrop-blur-[2px] mix-blend-multiply`}></div>
                           </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        )}
+
+                        <div className={`relative z-10 p-2.5 ${bgImage ? 'text-white' : ''}`}>
+                          {/* Header row - Type, Name, Actions */}
+                          <div className="flex items-start gap-2 mb-2">
+                            {/* Type selector */}
+                            <div className="relative type-selector-container group/typetooltip">
+                              <button
+                                ref={(el) => {
+                                  typeSelectorRefs.current[index] = el;
+                                  if (index === 0 && firstTypeRef) {
+                                    (firstTypeRef as any).current = el;
+                                  }
+                                }}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (typeSelectorRefs.current[index]) {
+                                    handleOpenTypeSelector(index, typeSelectorRefs.current[index]!);
+                                  }
+                                }}
+                                className={`p-1.5 rounded transition-colors ${bgImage ? 'hover:bg-white/20' : 'hover:bg-gray-200'}`}
+                                title={style.label}
+                              >
+                                <style.icon size={16} />
+                              </button>
+                              
+                              {/* Hover tooltip */}
+                              <div className="absolute left-full ml-2 top-0 w-72 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl opacity-0 group-hover/typetooltip:opacity-100 pointer-events-none transition-opacity z-[10000]">
+                                <div className="font-bold mb-1">{style.label}</div>
+                                <div className="mb-2">{style.description}</div>
+                                <div className="text-gray-300">
+                                  <div className="font-semibold mb-1">Typical Moments:</div>
+                                  <ul className="list-disc list-inside space-y-0.5">
+                                    {style.typicalMoments.map(moment => (
+                                      <li key={moment}>{moment}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <div className="mt-2 text-gray-400 text-[10px] italic">
+                                  {style.usage}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Chapter name */}
+                            <input
+                              ref={index === 0 ? firstChapterRef : undefined}
+                              type="text"
+                              value={segment.name}
+                              onChange={(e) => { setHasUserInteracted(true); const newSegs = [...segments]; newSegs[index].name = e.target.value; setSegments(newSegs); }}
+                              onFocus={(e) => e.target.select()}
+                              className={`flex-1 bg-transparent border-none p-0 font-semibold text-base focus:ring-0 ${bgImage ? 'placeholder-white/50 text-white' : 'placeholder-gray-400 text-gray-900'}`}
+                              placeholder="Chapter Name"
+                            />
+
+                            {/* Delete button */}
                             <button
                               onClick={() => handleDeleteSegment(index)}
-                              className="p-1 hover:bg-red-100/20 hover:text-red-500 rounded text-inherit"
+                              className={`p-1 rounded transition-colors ${bgImage ? 'hover:bg-red-500/20 text-white' : 'hover:bg-red-50 text-red-600'}`}
+                              title="Delete Chapter"
                             >
                               <Trash2 size={14} />
                             </button>
                           </div>
-                        </div>
 
-                        <input
-                          ref={index === 0 ? firstChapterRef : undefined}
-                          type="text"
-                          value={segment.name}
-                          onChange={(e) => { setHasUserInteracted(true); const newSegs = [...segments]; newSegs[index].name = e.target.value; setSegments(newSegs); }}
-                          className={`w-full bg-transparent border-none p-0 font-bold text-base focus:ring-0 my-1 ${bgImage ? 'placeholder-white/50 text-white drop-shadow-md' : 'placeholder-black/20'}`}
-                          placeholder="Chapter Name"
-                        />
-                        
-                        <div className="flex flex-col gap-2 mt-auto">
-                          {isSingleLocation ? (
-                            <div ref={index === 0 ? firstLocationRef : undefined}>
+                          {/* Location inputs */}
+                          <div ref={index === 0 ? firstLocationRef : undefined} className="mb-2">
+                            {isSingleLocation ? (
                               <PlaceAutocompleteLive
                                 value={segment.start_location}
-                                onChange={(val, img) => handleLocationChange(index, 'start_location', val, img)}
+                                onChange={(val, img) => handleLocationTyping(index, 'start_location', val, img)}
+                                onPlaceSelected={(val, img) => handleLocationSelected(index, 'start_location', val, img)}
                                 placeholder="Where to?"
                                 className="text-gray-800"
                               />
+                            ) : (
+                              <div className="flex flex-col gap-2">
+                                <PlaceAutocompleteLive
+                                  value={segment.start_location}
+                                  onChange={(val, img) => handleLocationTyping(index, 'start_location', val, img)}
+                                  onPlaceSelected={(val, img) => handleLocationSelected(index, 'start_location', val, img)}
+                                  placeholder="From"
+                                  className="text-gray-800"
+                                />
+                                <PlaceAutocompleteLive
+                                  value={segment.end_location}
+                                  onChange={(val, img) => handleLocationTyping(index, 'end_location', val, img)}
+                                  onPlaceSelected={(val, img) => handleLocationSelected(index, 'end_location', val, img)}
+                                  placeholder="To"
+                                  className="text-gray-800"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Compact footer controls */}
+                          <div className={`flex items-center justify-between text-xs ${bgImage ? 'bg-white/10' : 'bg-gray-50'} rounded px-2 py-1`}>
+                            {/* Left: Move controls */}
+                            <div className="flex gap-0.5">
+                              <button
+                                onClick={() => moveSegmentUp(index)}
+                                disabled={index === 0}
+                                className={`p-1 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${bgImage ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-700'}`}
+                                title="Move Up"
+                              >
+                                <ChevronUp size={14} />
+                              </button>
+                              <button
+                                onClick={() => moveSegmentDown(index)}
+                                disabled={index === segments.length - 1}
+                                className={`p-1 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${bgImage ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-700'}`}
+                                title="Move Down"
+                              >
+                                <ChevronDown size={14} />
+                              </button>
                             </div>
-                          ) : (
-                            <div ref={index === 0 ? firstLocationRef : undefined} className="flex flex-col gap-1">
-                              <PlaceAutocompleteLive
-                                value={segment.start_location}
-                                onChange={(val, img) => handleLocationChange(index, 'start_location', val, img)}
-                                placeholder="From"
-                                className="text-gray-800"
-                              />
-                              <PlaceAutocompleteLive
-                                value={segment.end_location}
-                                onChange={(val, img) => handleLocationChange(index, 'end_location', val, img)}
-                                placeholder="To"
-                                className="text-gray-800"
-                              />
+
+                            {/* Center: Day count and dates */}
+                            <div className="flex flex-col items-center gap-0.5">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => adjustSegmentDays(index, -1)}
+                                  disabled={segment.days <= 1}
+                                  className={`p-0.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${bgImage ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-700'}`}
+                                  title="Decrease days"
+                                >
+                                  <Minus size={12} />
+                                </button>
+                                <span className={`font-semibold px-2 min-w-[40px] text-center ${bgImage ? 'text-white' : 'text-gray-900'}`}>
+                                  {segment.days}d
+                                </span>
+                                <button
+                                  onClick={() => adjustSegmentDays(index, 1)}
+                                  className={`p-0.5 rounded transition-colors ${bgImage ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-700'}`}
+                                  title="Increase days"
+                                >
+                                  <Plus size={12} />
+                                </button>
+                              </div>
+                              <div className={`text-[10px] ${bgImage ? 'text-white/70' : 'text-gray-500'}`}>
+                                {(() => {
+                                  const dates = getChapterDates(index);
+                                  const startStr = dates.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                  const endStr = dates.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                  return segment.days === 1 ? startStr : `${startStr} - ${endStr}`;
+                                })()}
+                              </div>
                             </div>
-                          )}
-                          <div className="flex items-center justify-end">
-                            <span className={`text-[10px] font-bold uppercase opacity-60 ${bgImage ? 'text-white' : ''}`}>
-                              {segment.days} Day{segment.days > 1 ? 's' : ''}
-                            </span>
+
+                            {/* Right: Segment order indicator */}
+                            <div className={`text-[10px] opacity-50 ${bgImage ? 'text-white' : 'text-gray-500'}`}>
+                              #{index + 1}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                    {index < segments.length - 1 && (
-                      <div
-                        className="w-4 -ml-2 hover:ml-0 hover:mr-0 z-40 cursor-col-resize flex items-center justify-center group/handle absolute h-full hover:bg-indigo-500/10 transition-colors"
-                        style={{ left: `${(segments.slice(0, index + 1).reduce((sum, s) => sum + s.days, 0) / duration) * 100}%` }}
-                        onMouseDown={(e) => handleResizeStartInternal(e, index)}
-                      >
-                        <div className="w-1 h-8 bg-black/10 rounded-full group-hover/handle:bg-indigo-500 group-hover/handle:scale-y-125 transition-all shadow-sm"></div>
-                        <button
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => { e.stopPropagation(); handleInsertSegment(index); }}
-                          className="absolute -top-3 z-50 w-6 h-6 bg-white border border-indigo-200 text-indigo-600 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover/handle:opacity-100 hover:bg-indigo-50 hover:scale-110 transition-all transform"
-                          title="Insert Chapter"
-                        >
-                          <Plus size={14} strokeWidth={3} />
-                        </button>
-                      </div>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </div>
 
-            <div
-              className="absolute right-0 top-0 bottom-0 w-4 -mr-4 z-30 cursor-col-resize flex flex-col items-center justify-center group/outer"
-              onMouseDown={handleResizeStartOuterEnd}
-            >
-              <div className="w-1 h-full bg-gray-200 rounded-r-md group-hover/outer:bg-indigo-400 transition-colors"></div>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleInsertSegment(segments.length - 1); }}
-                className="absolute -top-3 w-6 h-6 bg-white border border-indigo-200 text-indigo-600 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover/outer:opacity-100 hover:bg-indigo-50 hover:scale-110 transition-all z-30"
-                title="Add End Chapter"
-              >
-                <Plus size={14} strokeWidth={3} />
-              </button>
-            </div>
+                      {/* Add segment button between cards */}
+                      {index < segments.length - 1 && (
+                        <div className="relative group my-1">
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-gray-200"></div>
+                          </div>
+                          <div className="relative flex justify-center">
+                            <button
+                              onClick={() => handleInsertSegment(index)}
+                              className="bg-white px-2 py-0.5 text-xs text-gray-400 hover:text-indigo-600 border border-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Add chapter here"
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add segment button at the bottom */}
+              <div className="relative group my-1">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center">
+                  <button
+                    onClick={() => handleInsertSegment(segments.length - 1)}
+                    className="bg-white px-2 py-0.5 text-xs text-gray-400 hover:text-indigo-600 border border-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Add chapter at end"
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
               </div>
 
               {/* Helper Text and Create Journey Button */}
@@ -1100,6 +1248,73 @@ export function TripBuilderClient({
         </div>
       </div>
 
+      {/* Type Selector Dropdown Portal */}
+      {openTypeSelectorIndex !== null && typeSelectorPosition && createPortal(
+        <div 
+          data-type-dropdown
+          className="fixed bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden text-gray-800"
+          style={{
+            top: `${typeSelectorPosition.top}px`,
+            left: `${typeSelectorPosition.left}px`,
+            width: '280px',
+            zIndex: 9999
+          }}
+        >
+          {Object.entries(SEGMENT_TYPES).map(([key, type]) => (
+            <button
+              key={key}
+              onClick={(e) => { e.stopPropagation(); handleTypeSelect(openTypeSelectorIndex, key); }}
+              className="w-full flex flex-col gap-1 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0"
+            >
+              <div className="flex items-center gap-2">
+                <type.icon size={16} className="flex-shrink-0" />
+                <span className="font-semibold text-sm text-gray-900">{type.label}</span>
+              </div>
+              <div className="text-xs text-gray-600 leading-relaxed">
+                {type.description}
+              </div>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+
+      {/* Date Change Modal */}
+      {dateChangeModal && (
+        <DateChangeModal
+          isOpen={dateChangeModal.isOpen}
+          onClose={() => setDateChangeModal(null)}
+          changeType={dateChangeModal.changeType}
+          daysDelta={dateChangeModal.daysDelta}
+          sourceChapterIndex={dateChangeModal.sourceChapterIndex}
+          sourceChapterName={dateChangeModal.sourceChapterName}
+          chapters={segments.map((seg, idx) => ({ name: seg.name, days: seg.days, index: idx }))}
+          currentTripStart={startDate}
+          currentTripEnd={endDate}
+          onApply={handleDateChangeApply}
+        />
+      )}
+
+      {/* Location Prompt Modal */}
+      {locationPromptModal && (
+        <LocationPromptModal
+          isOpen={true}
+          onClose={() => setLocationPromptModal(null)}
+          sourceChapter={locationPromptModal.sourceSegment}
+          field={locationPromptModal.field}
+          value={locationPromptModal.value}
+          suggestions={locationPromptModal.suggestions}
+          onApply={(selections) => {
+            applyLocationToSegments(
+              selections,
+              locationPromptModal.value,
+              locationPromptModal.imageUrl
+            );
+            setLocationPromptModal(null);
+          }}
+        />
+      )}
+
       {/* Tooltip System */}
       {!tourDismissed && currentTooltipStep && (
         <>
@@ -1111,7 +1326,7 @@ export function TripBuilderClient({
                 onBackdropClick={handleCloseTooltip}
               />
               <HandDrawnTooltip
-                content="Welcome! Let's begin by giving your journey a name. This will be the title of your entire trip."
+                content="Welcome! Let's begin by giving your journey a name. This will be the title of your entire journey."
                 targetRef={journeyNameRef}
                 position="bottom"
                 onClose={handleCloseTooltip}
@@ -1160,7 +1375,7 @@ export function TripBuilderClient({
                 onBackdropClick={handleCloseTooltip}
               />
               <HandDrawnTooltip
-                content="Perfect! Here's your journey timeline. We're creating the outline for your trip with chapters. You'll be able to add specific moments—like hotel reservations and activities—later."
+                content="Perfect! Here's your journey timeline. We're creating the outline for your journey with chapters. You'll be able to add specific moments—like hotel reservations and activities—later."
                 targetRef={timelineRef}
                 position="top"
                 onClose={handleCloseTooltip}
@@ -1260,7 +1475,7 @@ export function TripBuilderClient({
                 onBackdropClick={handleCloseTooltip}
               />
               <HandDrawnTooltip
-                content="You can drag chapters to reorder them, click the + buttons to add new chapters, or drag the edges to adjust chapter duration. Your journey outline is flexible and easy to customize."
+                content="You can use the Up/Down buttons to reorder chapters, click the + buttons to add new chapters, or use the +/- buttons to adjust the number of days in each chapter. Your journey outline is flexible and easy to customize."
                 targetRef={timelineRef}
                 position="bottom"
                 onClose={handleCloseTooltip}

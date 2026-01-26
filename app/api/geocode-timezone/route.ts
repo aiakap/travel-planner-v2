@@ -7,6 +7,11 @@ interface GeocodeResult {
   formatted: string;
   timezone?: string;
   timezoneName?: string;
+  addressComponents?: any[];
+  placeId?: string;
+  types?: string[];
+  locationType?: string;
+  plusCode?: any;
 }
 
 async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
@@ -38,6 +43,11 @@ async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
       lat,
       lng,
       formatted: firstResult.formatted_address ?? address,
+      addressComponents: firstResult.address_components,
+      placeId: firstResult.place_id,
+      types: firstResult.types,
+      locationType: firstResult.geometry.location_type,
+      plusCode: firstResult.plus_code,
     };
   } catch (error) {
     console.error("Geocoding error:", error);
@@ -48,7 +58,7 @@ async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
 async function getTimezoneFromCoordinates(
   lat: number,
   lng: number
-): Promise<{ timezone?: string; timezoneName?: string }> {
+): Promise<{ timezone?: string; timezoneName?: string; rawOffset?: number; dstOffset?: number }> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
     return {};
@@ -72,10 +82,57 @@ async function getTimezoneFromCoordinates(
     return {
       timezone: data.timeZoneId,
       timezoneName: data.timeZoneName,
+      rawOffset: data.rawOffset,
+      dstOffset: data.dstOffset,
     };
   } catch (error) {
     console.error("Timezone lookup error:", error);
     return {};
+  }
+}
+
+// New GET handler for admin testing (no auth required)
+export async function GET(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const address = searchParams.get("address");
+
+    if (!address) {
+      return NextResponse.json(
+        { error: "Address parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    const geocodeResult = await geocodeAddress(address);
+    if (!geocodeResult) {
+      return NextResponse.json(
+        { error: "Could not geocode location" },
+        { status: 404 }
+      );
+    }
+
+    const timezoneResult = await getTimezoneFromCoordinates(
+      geocodeResult.lat,
+      geocodeResult.lng
+    );
+
+    return NextResponse.json({
+      coordinates: {
+        lat: geocodeResult.lat,
+        lng: geocodeResult.lng,
+      },
+      formattedAddress: geocodeResult.formatted,
+      timezone: timezoneResult.timezone,
+      timezoneName: timezoneResult.timezoneName,
+      status: "success"
+    });
+  } catch (error) {
+    console.error("Geocode timezone error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 

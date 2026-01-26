@@ -6,6 +6,7 @@ import { searchPlacesAutocomplete } from '../actions/google-places-autocomplete'
 interface PlaceAutocompleteLiveProps {
   value: string;
   onChange: (value: string, imageUrl: string | null) => void;
+  onPlaceSelected?: (value: string, imageUrl: string | null) => void;
   placeholder: string;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
   className?: string;
@@ -14,6 +15,7 @@ interface PlaceAutocompleteLiveProps {
 export function PlaceAutocompleteLive({ 
   value, 
   onChange, 
+  onPlaceSelected,
   placeholder, 
   icon: Icon, 
   className 
@@ -83,6 +85,7 @@ export function PlaceAutocompleteLive({
     setQuery(place.name);
     setIsOpen(false);
     onChange(place.name, place.image);
+    onPlaceSelected?.(place.name, place.image);
   };
 
   return (
