@@ -3,7 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "../prisma";
 
-export async function updateReservationSimple(reservationId: string, updates: {
+export async function updateReservationSimple(rawReservationId: string | number, updates: {
   name?: string;
   confirmationNumber?: string;
   cost?: number;
@@ -22,7 +22,16 @@ export async function updateReservationSimple(reservationId: string, updates: {
   website?: string;
   notes?: string;
   cancellationPolicy?: string;
+  reservationStatusId?: string;
 }) {
+  // Ensure ID is always a string (defensive type conversion)
+  const reservationId = String(rawReservationId);
+  
+  // Validate it's a valid ID
+  if (!reservationId || reservationId === 'undefined' || reservationId === 'null') {
+    throw new Error("Invalid reservation ID");
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     throw new Error("Unauthorized");
@@ -72,6 +81,7 @@ export async function updateReservationSimple(reservationId: string, updates: {
   if (updates.website !== undefined) updateData.url = updates.website;
   if (updates.notes !== undefined) updateData.notes = updates.notes;
   if (updates.cancellationPolicy !== undefined) updateData.cancellationPolicy = updates.cancellationPolicy;
+  if (updates.reservationStatusId !== undefined) updateData.reservationStatusId = updates.reservationStatusId;
 
   await prisma.reservation.update({
     where: { id: reservationId },

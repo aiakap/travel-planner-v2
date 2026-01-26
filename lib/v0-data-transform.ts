@@ -180,7 +180,7 @@ function transformReservation(res: DBReservation): V0Reservation {
     : undefined
   
   return {
-    id: Math.floor(Math.random() * 100000), // Convert string ID to number for V0
+    id: res.id, // Preserve actual database ID (string)
     vendor: res.name,
     text: res.notes || deriveReservationText(res),
     status: mapReservationStatus(res.reservationStatus?.name || "Confirmed"),

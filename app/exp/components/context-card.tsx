@@ -36,6 +36,10 @@ export function ContextCard({ type, data, actions, onActionClick, onSaved }: Con
   const [resName, setResName] = useState(data.vendor || data.name || "");
   const [resConfNum, setResConfNum] = useState(data.confirmationNumber || "");
   const [resCost, setResCost] = useState(data.cost?.toString() || "");
+  const [resStatus, setResStatus] = useState(data.status || "");
+  const [resStatusId, setResStatusId] = useState<string>("");
+  const [availableStatuses, setAvailableStatuses] = useState<Array<{id: string, name: string}>>([]);
+  const [statusesLoading, setStatusesLoading] = useState(true);
   
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -63,11 +67,18 @@ export function ContextCard({ type, data, actions, onActionClick, onSaved }: Con
             name: segmentName,
           });
         } else if (type === "reservation") {
-          await updateReservationSimple(data.reservationId, {
+          const updates: any = {
             name: resName,
             confirmationNumber: resConfNum,
             cost: resCost ? parseFloat(resCost) : undefined,
-          });
+          };
+          
+          // Only include status if it's a valid non-empty ID
+          if (resStatusId && resStatusId.trim() !== '') {
+            updates.reservationStatusId = resStatusId;
+          }
+          
+          await updateReservationSimple(data.reservationId, updates);
         }
         
         setSaveStatus("saved");
@@ -90,6 +101,74 @@ export function ContextCard({ type, data, actions, onActionClick, onSaved }: Con
       }
     };
   }, []);
+
+  // Fetch available statuses for reservation
+  useEffect(() => {
+    if (type === "reservation") {
+      setStatusesLoading(true);
+      fetch('/api/reservation-statuses')
+        .then(res => res.json())
+        .then(statuses => {
+          setAvailableStatuses(statuses);
+          // Case-insensitive match for status
+          const current = statuses.find((s: {id: string, name: string}) => 
+            s.name.toLowerCase() === data.status.toLowerCase()
+          );
+          if (current) {
+            setResStatusId(current.id);
+            setResStatus(current.name); // Use the DB name (correct case)
+          }
+          setStatusesLoading(false);
+        })
+        .catch(error => {
+          console.error("Error fetching statuses:", error);
+          setStatusesLoading(false);
+        });
+    }
+  }, [type, data.status]);
+
+  // Date formatting helper functions
+  const formatDateDisplay = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+    });
+  };
+
+  const formatTimeDisplay = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit'
+    });
+  };
+
+  const formatDateRange = (startTime?: string, endTime?: string) => {
+    if (!startTime) return "";
+    
+    const startDate = formatDateDisplay(startTime);
+    const startTimeStr = formatTimeDisplay(startTime);
+    
+    if (!endTime) {
+      return `${startDate} at ${startTimeStr}`;
+    }
+    
+    const endDate = formatDateDisplay(endTime);
+    const endTimeStr = formatTimeDisplay(endTime);
+    
+    // Same day
+    const startDay = new Date(startTime).toDateString();
+    const endDay = new Date(endTime).toDateString();
+    
+    if (startDay === endDay) {
+      return `${startDate}, ${startTimeStr} - ${endTimeStr}`;
+    }
+    
+    // Different days
+    return `${startDate} - ${endDate}`;
+  };
 
   const renderTripCard = () => (
     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-4 space-y-3">
@@ -205,7 +284,34 @@ export function ContextCard({ type, data, actions, onActionClick, onSaved }: Con
           />
         </div>
         <div className="text-sm space-y-2">
-          <div className="font-medium">Status: {data.status}</div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium">Status:</span>
+            <select
+              value={resStatusId}
+              onChange={(e) => {
+                const newStatusId = e.target.value;
+                const newStatus = availableStatuses.find(s => s.id === newStatusId);
+                setResStatusId(newStatusId);
+                if (newStatus) {
+                  setResStatus(newStatus.name);
+                  // Only save if we have a valid status ID
+                  if (newStatusId) {
+                    scheduleSave();
+                  }
+                }
+              }}
+              disabled={statusesLoading || availableStatuses.length === 0}
+              className="flex-1 text-sm bg-transparent border-b border-transparent hover:border-slate-400 focus:border-slate-600 focus:outline-none px-1 disabled:opacity-50"
+            >
+              {statusesLoading ? (
+                <option>Loading...</option>
+              ) : (
+                availableStatuses.map(status => (
+                  <option key={status.id} value={status.id}>{status.name}</option>
+                ))
+              )}
+            </select>
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xs">Conf #:</span>
             <input
@@ -232,14 +338,12 @@ export function ContextCard({ type, data, actions, onActionClick, onSaved }: Con
               placeholder="Cost"
             />
           </div>
-          {data.startTime && (
-            <div className="text-xs opacity-80">
-              {new Date(data.startTime).toLocaleString('en-US', { 
-                month: 'short', 
-                day: 'numeric', 
-                hour: 'numeric', 
-                minute: '2-digit' 
-              })}
+          {(data.startTime || data.endTime) && (
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 opacity-70" />
+              <div className="text-xs opacity-80">
+                {formatDateRange(data.startTime, data.endTime)}
+              </div>
             </div>
           )}
         </div>

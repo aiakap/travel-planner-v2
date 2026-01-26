@@ -63,7 +63,7 @@ interface TimelineViewProps {
 
 export function TimelineView({ segments, heroImage, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TimelineViewProps) {
   const [collapsedSegments, setCollapsedSegments] = useState<Set<number>>(new Set())
-  const [openContactMenu, setOpenContactMenu] = useState<number | null>(null)
+  const [openContactMenu, setOpenContactMenu] = useState<string | null>(null)
   const contactMenuRef = useRef<HTMLDivElement>(null)
 
   // Close contact menu when clicking outside

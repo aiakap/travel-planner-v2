@@ -3,7 +3,7 @@ import { ElementType } from "react"
 export type ReservationStatus = "suggested" | "planned" | "confirmed"
 
 export interface V0Reservation {
-  id: number
+  id: string  // Changed from number to preserve actual database ID
   vendor: string
   text: string
   status: ReservationStatus

@@ -83,6 +83,9 @@ export type MessageSegment =
       currency?: string;
       location?: string;
       startTime?: string;
+      endTime?: string;
+      imageUrl?: string;
+      vendor?: string;
     }
   | {
       type: "context_card";

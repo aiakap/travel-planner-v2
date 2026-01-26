@@ -56,7 +56,7 @@ interface TableViewProps {
   onEditItem?: (reservation: Reservation) => void
 }
 
-export function TableView({ segments, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TableViewProps) {  const [openContactMenu, setOpenContactMenu] = useState<number | null>(null)
+export function TableView({ segments, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TableViewProps) {  const [openContactMenu, setOpenContactMenu] = useState<string | null>(null)
   const contactMenuRef = useRef<HTMLDivElement>(null)
 
   // Close contact menu when clicking outside

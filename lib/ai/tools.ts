@@ -410,7 +410,7 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
 
         return {
           success: true,
-          reservationId: reservation.id,
+          reservationId: String(reservation.id),
           message: `Added ${category.toLowerCase()} suggestion: ${name}`,
         };
       },

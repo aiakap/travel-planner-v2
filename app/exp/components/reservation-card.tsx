@@ -23,11 +23,12 @@ interface ReservationCardProps {
   imageUrl?: string;
   vendor?: string;
   onOpenModal?: () => void;
+  onEdit?: () => void;
   onSaved?: () => void;
 }
 
 export function ReservationCard({
-  reservationId,
+  reservationId: rawReservationId,
   name: initialName,
   category,
   type,
@@ -40,8 +41,12 @@ export function ReservationCard({
   imageUrl,
   vendor: initialVendor,
   onOpenModal,
+  onEdit,
   onSaved,
 }: ReservationCardProps) {
+  // Ensure reservationId is always a string (defensive type conversion)
+  const reservationId = String(rawReservationId);
+  
   // Local state for editable fields
   const [name, setName] = useState(initialName);
   const [vendor, setVendor] = useState(initialVendor || initialName);
@@ -383,25 +388,36 @@ export function ReservationCard({
 
       {/* Footer Actions */}
       <div className="border-t border-slate-200 px-4 py-3 bg-slate-50 flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onOpenModal}
-          className="text-xs hover:bg-slate-100"
-        >
-          <Edit2 className="h-3 w-3 mr-1" />
-          Edit All Details
-        </Button>
-        {location && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(location)}`, '_blank')}
-            className="text-xs hover:bg-slate-100"
-          >
-            <ExternalLink className="h-3 w-3 mr-1" />
-            View Map
-          </Button>
+        <div className="flex gap-2">
+          {onEdit && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onEdit}
+              className="text-xs"
+            >
+              <Edit2 className="h-3 w-3 mr-1" />
+              Edit
+            </Button>
+          )}
+          {location && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(location)}`, '_blank')}
+              className="text-xs hover:bg-slate-100"
+            >
+              <ExternalLink className="h-3 w-3 mr-1" />
+              Map
+            </Button>
+          )}
+        </div>
+        {saveState !== 'idle' && (
+          <div className="text-xs text-slate-500">
+            {saveState === 'saving' && 'Saving...'}
+            {saveState === 'saved' && 'Saved'}
+            {saveState === 'error' && 'Error'}
+          </div>
         )}
       </div>
     </div>

@@ -141,7 +141,7 @@ export function ObjectIndexClient({ firstTripId }: ObjectIndexClientProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-20">
       {/* Hero Section */}
       <div className="border-b bg-card/50 backdrop-blur">
         <div className="container mx-auto px-4 py-12">

@@ -15,6 +15,7 @@ interface MessageSegmentsRendererProps {
   tripId?: string; // Optional trip ID for adding to itinerary
   onReservationAdded?: () => void; // Callback when reservation is successfully added
   onActionClick?: (prompt: string) => void; // Callback when context card action is clicked
+  onEditItem?: (reservation: any) => void; // Callback to edit a reservation (opens modal)
 }
 
 /**
@@ -27,6 +28,7 @@ export function MessageSegmentsRenderer({
   tripId,
   onReservationAdded,
   onActionClick,
+  onEditItem,
 }: MessageSegmentsRendererProps) {
   return (
     <div className="whitespace-pre-wrap leading-relaxed">
@@ -81,9 +83,21 @@ export function MessageSegmentsRenderer({
                 endTime={segment.endTime}
                 imageUrl={segment.imageUrl}
                 vendor={segment.vendor}
-                onOpenModal={() => {
-                  // Open reservation detail modal
-                }}
+                onEdit={onEditItem ? () => {
+                  // Construct V0Reservation object from segment data
+                  const v0Reservation = {
+                    id: segment.reservationId,
+                    vendor: segment.vendor || segment.name,
+                    text: segment.type,
+                    status: segment.status as any,
+                    cost: segment.cost || 0,
+                    address: segment.location,
+                    image: segment.imageUrl,
+                    startTime: segment.startTime,
+                    endTime: segment.endTime,
+                  };
+                  onEditItem(v0Reservation);
+                } : undefined}
                 onSaved={onReservationAdded}
               />
             </div>

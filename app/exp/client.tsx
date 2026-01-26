@@ -544,13 +544,15 @@ What would you like to change about this plan, or should I create it as is?`;
   const refetchTrip = async () => {
     if (!selectedTripId) return;
     
-    console.log('🔄 [EXP] Refetching trips after adding place');
+    console.log('🔄 [EXP] Refetching trips after update');
     try {
       const response = await fetch(`/api/trips?userId=${userId}`);
       if (response.ok) {
         const updatedTrips = await response.json();
         setTrips(updatedTrips);
-        console.log('✅ [EXP] Trips refreshed');
+        
+        // selectedTrip will automatically update since it's computed from trips
+        console.log('✅ [EXP] Trips refreshed (selectedTrip will auto-update)');
       }
     } catch (error) {
       console.error("❌ [EXP] Error refetching trips:", error);
@@ -691,6 +693,11 @@ What would you like to change about this plan, or should I create it as is?`;
     setHasStartedPlanning(true);
     
     try {
+      // Find the actual DB reservation from selectedTrip to get raw dates
+      const dbReservation = selectedTrip?.segments
+        .flatMap(s => s.reservations)
+        .find(r => r.id === reservation.id);
+      
       const response = await fetch('/api/chat/context', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -703,8 +710,12 @@ What would you like to change about this plan, or should I create it as is?`;
             status: reservation.status,
             confirmationNumber: reservation.confirmationNumber,
             cost: reservation.cost,
-            startTime: reservation.startTime,
-            endTime: reservation.endTime,
+            startTime: dbReservation?.startTime instanceof Date 
+              ? dbReservation.startTime.toISOString() 
+              : dbReservation?.startTime,
+            endTime: dbReservation?.endTime instanceof Date 
+              ? dbReservation.endTime.toISOString() 
+              : dbReservation?.endTime,
             text: reservation.text,
             contactPhone: reservation.contactPhone,
             contactEmail: reservation.contactEmail,
@@ -731,8 +742,12 @@ What would you like to change about this plan, or should I create it as is?`;
             status: reservation.status,
             confirmationNumber: reservation.confirmationNumber,
             cost: reservation.cost,
-            startTime: reservation.startTime,
-            endTime: reservation.endTime,
+            startTime: dbReservation?.startTime instanceof Date 
+              ? dbReservation.startTime.toISOString() 
+              : dbReservation?.startTime,
+            endTime: dbReservation?.endTime instanceof Date 
+              ? dbReservation.endTime.toISOString() 
+              : dbReservation?.endTime,
             text: reservation.text
           },
           actions,
@@ -755,22 +770,16 @@ What would you like to change about this plan, or should I create it as is?`;
 
   // Handler for editing an item
   const handleEditItem = (v0Reservation: any) => {
-    // Find the actual database reservation from selectedTrip
+    // Find the actual database reservation from selectedTrip using the ID
     if (!selectedTrip) return
     
-    // Search through all segments to find the matching reservation
-    // V0 reservations have random IDs, so we need to match by other fields
+    // Now that V0 reservations preserve the actual database ID, we can find by ID directly
     let dbReservation = null
     let segmentName = ""
     let dayDate = ""
     
     for (const segment of selectedTrip.segments) {
-      // Try to find by name/vendor match
-      const found = segment.reservations.find(r => 
-        r.name === v0Reservation.vendor || 
-        r.vendor === v0Reservation.vendor ||
-        (r.location === v0Reservation.address && r.location)
-      )
+      const found = segment.reservations.find(r => r.id === v0Reservation.id)
       
       if (found) {
         dbReservation = found
@@ -781,7 +790,7 @@ What would you like to change about this plan, or should I create it as is?`;
     }
     
     if (!dbReservation) {
-      console.error("Could not find database reservation for:", v0Reservation)
+      console.error("Could not find database reservation with ID:", v0Reservation.id)
       return
     }
     
@@ -937,6 +946,7 @@ What would you like to change about this plan, or should I create it as is?`;
                               tripId={selectedTripId || undefined}
                               onReservationAdded={refetchTrip}
                               onActionClick={handleContextAction}
+                              onEditItem={handleEditItem}
                             />
                           ) : (
                             msg.content
@@ -1140,6 +1150,7 @@ What would you like to change about this plan, or should I create it as is?`;
                               tripId={selectedTripId || undefined}
                               onReservationAdded={refetchTrip}
                               onActionClick={handleContextAction}
+                              onEditItem={handleEditItem}
                             />
                           ) : (
                             msg.content
@@ -1339,22 +1350,22 @@ What would you like to change about this plan, or should I create it as is?`;
               const { updateReservationSimple } = await import("@/lib/actions/update-reservation-simple");
               await updateReservationSimple(reservation.id, {
                 name: reservation.name,
-                vendor: reservation.vendor,
-                confirmationNumber: reservation.confirmationNumber,
-                contactPhone: reservation.contactPhone,
-                contactEmail: reservation.contactEmail,
-                website: reservation.url,
-                cost: reservation.cost,
-                notes: reservation.notes,
-                cancellationPolicy: reservation.cancellationPolicy,
+                vendor: reservation.vendor ?? undefined,
+                confirmationNumber: reservation.confirmationNumber ?? undefined,
+                contactPhone: reservation.contactPhone ?? undefined,
+                contactEmail: reservation.contactEmail ?? undefined,
+                website: reservation.url ?? undefined,
+                cost: reservation.cost ?? undefined,
+                notes: reservation.notes ?? undefined,
+                cancellationPolicy: reservation.cancellationPolicy ?? undefined,
                 startTime: reservation.startTime instanceof Date ? reservation.startTime.toISOString() : reservation.startTime ? new Date(reservation.startTime).toISOString() : undefined,
                 endTime: reservation.endTime instanceof Date ? reservation.endTime.toISOString() : reservation.endTime ? new Date(reservation.endTime).toISOString() : undefined,
-                location: reservation.location,
-                latitude: reservation.latitude,
-                longitude: reservation.longitude,
-                timeZoneId: reservation.timeZoneId,
-                timeZoneName: reservation.timeZoneName,
-                imageUrl: reservation.imageUrl,
+                location: reservation.location ?? undefined,
+                latitude: reservation.latitude ?? undefined,
+                longitude: reservation.longitude ?? undefined,
+                timeZoneId: reservation.timeZoneId ?? undefined,
+                timeZoneName: reservation.timeZoneName ?? undefined,
+                imageUrl: reservation.imageUrl ?? undefined,
                 imageIsCustom: reservation.imageIsCustom,
               });
               router.refresh();
