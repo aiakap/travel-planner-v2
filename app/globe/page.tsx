@@ -36,11 +36,7 @@ export default function GlobePage() {
     const fetchTrips = async () => {
       try {
         const response = await fetch("/api/trips");
-        const data: GlobeTripData[] = await response.json();
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:40',message:'GlobePage received trips data',data:{tripCount:data.length,firstTripId:data[0]?.id,firstTripSegments:data[0]?.segments?.length,firstTripHasSegmentsArray:Array.isArray(data[0]?.segments),sampleTrip:{id:data[0]?.id,title:data[0]?.title,segmentsCount:data[0]?.segments?.length}},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H3'})}).catch(()=>{});
-        // #endregion
-        setTrips(data);
+        const data: GlobeTripData[] = await response.json();        setTrips(data);
 
         // Calculate stats
         const allCountries = new Set<string>();

@@ -17,11 +17,7 @@ export function TripSegmentsDetail({
   selectedReservationId,
   onSegmentClick,
   onReservationClick 
-}: TripSegmentsDetailProps) {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'trip-segments-detail.tsx:21',message:'TripSegmentsDetail rendering',data:{tripId:trip?.id,segmentsCount:trip?.segments?.length,hasSegments:!!trip?.segments,isSegmentsArray:Array.isArray(trip?.segments),segmentsType:typeof trip?.segments,segments:trip?.segments},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2,H4,H5'})}).catch(()=>{});
-  // #endregion
-  return (
+}: TripSegmentsDetailProps) {  return (
     <div className="space-y-3">
       <h3 className="text-base font-semibold">Segments & Reservations</h3>
       

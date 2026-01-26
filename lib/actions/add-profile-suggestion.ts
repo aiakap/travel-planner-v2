@@ -15,18 +15,7 @@ interface ProfileSuggestion {
 }
 
 export async function addProfileSuggestion(suggestion: ProfileSuggestion) {
-  console.log('🔵 addProfileSuggestion CALLED with:', suggestion);
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-profile-suggestion.ts:18',message:'addProfileSuggestion called',data:{suggestion},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H5'})}).catch(()=>{});
-  // #endregion
-  
-  const session = await auth();
-  
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-profile-suggestion.ts:24',message:'Auth check',data:{hasSession:!!session,userId:session?.user?.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
-  
-  if (!session?.user?.id) {
+  console.log('🔵 addProfileSuggestion CALLED with:', suggestion);  const session = await auth();  if (!session?.user?.id) {
     throw new Error("Not authenticated");
   }
 
@@ -34,13 +23,7 @@ export async function addProfileSuggestion(suggestion: ProfileSuggestion) {
     // Get existing graph data (XML)
     const profileGraph = await prisma.userProfileGraph.findUnique({
       where: { userId: session.user.id },
-    });
-
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-profile-suggestion.ts:39',message:'Fetched profile graph',data:{hasGraph:!!profileGraph,xmlLength:profileGraph?.graphData?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
-
-    let xmlData = profileGraph?.graphData || createEmptyProfileXml();
+    });    let xmlData = profileGraph?.graphData || createEmptyProfileXml();
 
     // Add item to XML using the profile-graph-xml utility
     // The subcategory is the suggestion type (hobby/preference)
@@ -52,13 +35,7 @@ export async function addProfileSuggestion(suggestion: ProfileSuggestion) {
       {
         addedAt: new Date().toISOString(),
       }
-    );
-
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-profile-suggestion.ts:54',message:'XML updated',data:{updatedXmlLength:updatedXml?.length,xmlChanged:updatedXml!==xmlData},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
-
-    // Save back to database
+    );    // Save back to database
     const upsertResult = await prisma.userProfileGraph.upsert({
       where: { userId: session.user.id },
       create: {
@@ -116,32 +93,16 @@ export async function addProfileSuggestion(suggestion: ProfileSuggestion) {
       upsertedLength: upsertResult.graphData.length,
       localLength: updatedXml.length,
       match: upsertResult.graphData === updatedXml
-    });
-
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-profile-suggestion.ts:81',message:'Graph data parsed',data:{nodeCount:graphData?.nodes?.length,edgeCount:graphData?.edges?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
-
-    revalidatePath("/profile/graph", "page");
+    });    revalidatePath("/profile/graph", "page");
     revalidatePath("/object/profile_attribute", "page");
-    revalidatePath("/", "layout");
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-profile-suggestion.ts:89',message:'Returning success',data:{success:true,hasGraphData:!!graphData,hasXmlData:!!upsertResult.graphData},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
-    
-    return { 
+    revalidatePath("/", "layout");    return { 
       success: true, 
       message: "Added to profile graph",
       graphData,
       xmlData: upsertResult.graphData
     };
   } catch (error) {
-    console.error('🔴 ERROR in addProfileSuggestion:', error);
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'add-profile-suggestion.ts:100',message:'ERROR in addProfileSuggestion',data:{error:error instanceof Error?error.message:String(error),stack:error instanceof Error?error.stack:undefined},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
-    console.error("Error adding to profile graph:", error);
+    console.error('🔴 ERROR in addProfileSuggestion:', error);    console.error("Error adding to profile graph:", error);
     throw new Error("Failed to add suggestion to profile");
   }
 }

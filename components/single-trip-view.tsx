@@ -13,11 +13,7 @@ interface SingleTripViewProps {
   onBack: () => void;
 }
 
-export function SingleTripView({ trip, onBack }: SingleTripViewProps) {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'single-trip-view.tsx:17',message:'SingleTripView received trip prop',data:{tripId:trip?.id,tripTitle:trip?.title,segmentsCount:trip?.segments?.length,hasSegments:!!trip?.segments,isSegmentsArray:Array.isArray(trip?.segments),segments:trip?.segments},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H2,H5'})}).catch(()=>{});
-  // #endregion
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+export function SingleTripView({ trip, onBack }: SingleTripViewProps) {  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
 
   // Find selected segment and reservation for breadcrumb

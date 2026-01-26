@@ -56,11 +56,7 @@ interface TableViewProps {
   onEditItem?: (reservation: Reservation) => void
 }
 
-export function TableView({ segments, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TableViewProps) {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'table-view.tsx:54',message:'TableView rendering',data:{segmentsCount:segments?.length,hasSegments:!!segments,firstSegment:segments?.[0],firstSegmentDays:segments?.[0]?.days?.length,firstSegmentFirstDay:segments?.[0]?.days?.[0]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2,H5'})}).catch(()=>{});
-  // #endregion
-  const [openContactMenu, setOpenContactMenu] = useState<number | null>(null)
+export function TableView({ segments, onSelectReservation, onChatAboutItem, onChatAboutSegment, onEditItem }: TableViewProps) {  const [openContactMenu, setOpenContactMenu] = useState<number | null>(null)
   const contactMenuRef = useRef<HTMLDivElement>(null)
 
   // Close contact menu when clicking outside

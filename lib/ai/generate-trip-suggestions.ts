@@ -102,23 +102,11 @@ Examples of diversity:
 - "Week in Kyoto: Temples, Tea & Kaiseki" ($2,000, 7 days, plane)
 - "3-Week South America Adventure: Lima → Cusco → Patagonia" ($4,500, 21 days, planes + buses)
 
-Be specific and personal in the reasoning. Don't use generic phrases.`;
-
-  // #region agent log
-  await fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate-trip-suggestions.ts:beforeAI',message:'About to call OpenAI',data:{promptLength:prompt.length,hasHobbies:hobbiesList.length>0,hasPrefs:preferencesList.length>0},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
-
-  const result = await generateObject({
+Be specific and personal in the reasoning. Don't use generic phrases.`;  const result = await generateObject({
     model: openai("gpt-4o"),
     schema: z.object({
       suggestions: z.array(TripSuggestionSchema).length(4),
     }),
     prompt,
-  });
-
-  // #region agent log
-  await fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate-trip-suggestions.ts:afterAI',message:'OpenAI response received',data:{hasResult:!!result,hasObject:!!result?.object,hasSuggestions:!!result?.object?.suggestions,count:result?.object?.suggestions?.length,firstHasLat:!!(result?.object?.suggestions?.[0]?.destinationLat)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
-
-  return result.object.suggestions;
+  });  return result.object.suggestions;
 }

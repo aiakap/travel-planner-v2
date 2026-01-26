@@ -9,12 +9,7 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/error.tsx:14',message:'Error boundary caught error',data:{errorName:error.name,errorMessage:error.message,isChunkError:error.name==='ChunkLoadError'||error.message.includes('Loading chunk')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1,H2,H3'})}).catch(()=>{});
-    // #endregion
-    
-    console.error('Error caught by error boundary:', error);
+  useEffect(() => {    console.error('Error caught by error boundary:', error);
   }, [error]);
 
   return (

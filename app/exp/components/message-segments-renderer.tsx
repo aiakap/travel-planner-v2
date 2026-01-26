@@ -78,9 +78,13 @@ export function MessageSegmentsRenderer({
                 currency={segment.currency}
                 location={segment.location}
                 startTime={segment.startTime}
+                endTime={segment.endTime}
+                imageUrl={segment.imageUrl}
+                vendor={segment.vendor}
                 onOpenModal={() => {
                   // Open reservation detail modal
                 }}
+                onSaved={onReservationAdded}
               />
             </div>
           );

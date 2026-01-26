@@ -294,24 +294,9 @@ export function ExpClient({
           console.log("✅ [Refetch] URL updated to:", `/exp?tripId=${newestTrip.id}`)
           
           // Fetch conversations for the new trip
-          console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)
-          
-          // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:246',message:'Before fetch conversations',data:{tripId:newestTrip.id,url:`/api/conversations?tripId=${newestTrip.id}`},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
-          // #endregion
-          
-          let convResponse
+          console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)          let convResponse
           try {
-            convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:252',message:'Fetch completed',data:{status:convResponse.status,ok:convResponse.ok,statusText:convResponse.statusText},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-            // #endregion
-          } catch (fetchError: any) {
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:258',message:'Fetch error caught',data:{errorMessage:fetchError.message,errorName:fetchError.name,errorStack:fetchError.stack},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-            // #endregion
-            throw fetchError
+            convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)          } catch (fetchError: any) {            throw fetchError
           }
           
           console.log("🔄 [Refetch] Conversations API response:", convResponse.status, convResponse.ok)

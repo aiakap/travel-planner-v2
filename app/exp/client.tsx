@@ -334,22 +334,10 @@ export function ExpClient({
           
           // Fetch conversations for the new trip
           console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)
-          
-          // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:246',message:'Before fetch conversations',data:{tripId:newestTrip.id,url:`/api/conversations?tripId=${newestTrip.id}`},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
-          // #endregion
-          
           let convResponse
           try {
             convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:252',message:'Fetch completed',data:{status:convResponse.status,ok:convResponse.ok,statusText:convResponse.statusText},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-            // #endregion
           } catch (fetchError: any) {
-            // #region agent log
-            fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.tsx:258',message:'Fetch error caught',data:{errorMessage:fetchError.message,errorName:fetchError.name,errorStack:fetchError.stack},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-            // #endregion
             throw fetchError
           }
           
@@ -831,7 +819,7 @@ What would you like to change about this plan, or should I create it as is?`;
   }
 
   return (
-    <div ref={containerRef} className="bg-slate-50 flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 80px)' }}>
+    <div ref={containerRef} className="bg-slate-50 flex flex-col overflow-hidden pt-20 h-screen">
       {/* Mobile Bottom Tabs */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 flex">
         <button
@@ -863,7 +851,7 @@ What would you like to change about this plan, or should I create it as is?`;
                 </div>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 pb-24 md:pb-8">
               {!hasStartedPlanning && messages.length === 0 ? (
                 <div className="space-y-4">
                   <div className="max-w-2xl mx-auto py-8 px-4">
@@ -1027,7 +1015,7 @@ What would you like to change about this plan, or should I create it as is?`;
                         </div>
                       </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-2">
+                    <div className="flex-1 overflow-y-auto p-2 pb-24 md:pb-8">
                       <TimelineView
                         segments={transformedTrip.segments}
                         heroImage={transformedTrip.heroImage}
@@ -1093,7 +1081,7 @@ What would you like to change about this plan, or should I create it as is?`;
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 overscroll-contain">
+          <div className="flex-1 overflow-y-auto p-6 overscroll-contain pb-24 md:pb-8">
             {!hasStartedPlanning && messages.length === 0 ? (
               selectedTripId && transformedTrip ? (
                 // Show context-aware welcome for existing trips
@@ -1297,7 +1285,7 @@ What would you like to change about this plan, or should I create it as is?`;
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto p-3 overscroll-contain">
+              <div className="flex-1 overflow-y-auto p-3 overscroll-contain pb-24 md:pb-8">
                 {transformedTrip ? (
                   <>
                     {viewMode === "table" && (

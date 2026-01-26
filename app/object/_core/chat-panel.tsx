@@ -155,22 +155,14 @@ export function ChatPanel({
     }
   };
 
-  const handleCardAction = (action: string, cardData: any) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-panel.tsx:155',message:'handleCardAction called',data:{action,hasOnDataUpdate:!!onDataUpdate},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
-    console.log("🎬 [CHAT PANEL] Card action received:", {
+  const handleCardAction = (action: string, cardData: any) => {    console.log("🎬 [CHAT PANEL] Card action received:", {
       action,
       cardData,
       hasOnDataUpdate: !!onDataUpdate,
       timestamp: new Date().toISOString()
     });
     
-    if (action === "refresh" || action === "reload") {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/4125d33c-4a62-4eec-868a-42aadac31dd8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat-panel.tsx:163',message:'Calling onDataUpdate with reload_data',data:{action:'reload_data'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
-      // #endregion
-      console.log("🔄 [CHAT PANEL] Triggering data reload");
+    if (action === "refresh" || action === "reload") {      console.log("🔄 [CHAT PANEL] Triggering data reload");
       onDataUpdate({ action: 'reload_data', _refresh: Date.now() });
     }
   };

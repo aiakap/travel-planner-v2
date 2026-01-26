@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Outfit, Inter } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
+import NavigationMain from "@/components/navigation-main";
 import { auth } from "@/auth";
 
 const playfair = Playfair_Display({
@@ -39,7 +39,7 @@ export default async function RootLayout({
       <body
         className={`${playfair.variable} ${outfit.variable} ${inter.variable} antialiased`}
       >
-        <Navbar session={session} />
+        <NavigationMain session={session} />
         {children}
       </body>
     </html>
