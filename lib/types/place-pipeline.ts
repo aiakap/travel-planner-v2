@@ -2,6 +2,8 @@
  * Type definitions for the 3-stage place suggestion pipeline
  */
 
+import type { Card } from "@/lib/schemas/exp-response-schema";
+
 export interface PlaceSuggestion {
   suggestedName: string; // Exact name as it appears in the text
   category: "Stay" | "Eat" | "Do" | "Transport";
@@ -56,39 +58,6 @@ export type MessageSegment =
       display?: string;
     }
   | {
-      type: "trip_card";
-      tripId: string;
-      title: string;
-      startDate: string;
-      endDate: string;
-      description?: string;
-    }
-  | {
-      type: "segment_card";
-      segmentId: string;
-      name: string;
-      segmentType: string;
-      startLocation: string;
-      endLocation: string;
-      startTime?: string;
-      endTime?: string;
-    }
-  | {
-      type: "reservation_card";
-      reservationId: string;
-      name: string;
-      category: string;
-      type: string;
-      status: string;
-      cost?: number;
-      currency?: string;
-      location?: string;
-      startTime?: string;
-      endTime?: string;
-      imageUrl?: string;
-      vendor?: string;
-    }
-  | {
       type: "context_card";
       contextType: "trip" | "segment" | "reservation";
       data: any;
@@ -100,75 +69,22 @@ export type MessageSegment =
       onSaved?: () => void;
     }
   | {
-      type: "hotel_reservation_card";
-      reservationId?: string;
-      hotelName: string;
-      confirmationNumber?: string;
-      checkInDate: string;
-      checkInTime?: string;
-      checkOutDate: string;
-      checkOutTime?: string;
-      nights?: number;
-      guests?: number;
-      rooms?: number;
-      roomType?: string;
-      address?: string;
-      totalCost?: number;
-      currency?: string;
-      contactPhone?: string;
-      contactEmail?: string;
-      cancellationPolicy?: string;
-      imageUrl?: string;
-      url?: string;
-    }
-  | {
       type: "extraction_progress";
       step: number;
       totalSteps: number;
       message: string;
     }
   | {
-      type: "dining_schedule_card";
-      tripId: string;
-      segmentId?: string;
+      type: "chat_loading";
+      conversationId: string;
     }
-  | {
-      type: "activity_table_card";
-      location: string;
-      segmentId?: string;
-      categories?: string;
-    }
-  | {
-      type: "flight_comparison_card";
-      origin: string;
-      destination: string;
-      departDate: string;
-      returnDate?: string;
-      passengers?: number;
-    }
-  | {
-      type: "budget_breakdown_card";
-      tripId: string;
-    }
-  | {
-      type: "day_plan_card";
-      tripId: string;
-      date: string;
-      segmentId?: string;
-    }
-  | {
-      type: "places_map_card";
-      centerLat: number;
-      centerLng: number;
-      centerName: string;
-      placeType?: string;
-      radius?: number;
-    };
+  | Card; // All structured card types from exp-response-schema
 
 // Stage outputs
 export interface Stage1Output {
   text: string; // Full AI response text
   places: PlaceSuggestion[]; // Structured place suggestions
+  cards?: Card[]; // Structured cards from AI (when using exp prompt)
   tripSuggestion?: any; // Optional trip metadata for trip suggestion mode
 }
 

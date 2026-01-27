@@ -96,7 +96,7 @@ export default function ActivitiesAPIPage() {
         },
         { destination: searchDestination, category: categoryFilter },
         CacheTTL.ACTIVITIES
-      );
+      ) as { activities?: any[]; mock?: boolean; message?: string };
 
       setSearchResults(data.activities || []);
       if (data.mock) {

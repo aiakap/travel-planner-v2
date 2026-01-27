@@ -16,6 +16,7 @@ import { TimelineView } from "@/app/exp/components/timeline-view"
 import { TableView } from "@/app/exp/components/table-view"
 import { PhotosView } from "@/app/exp/components/photos-view"
 import { ReservationDetailModal } from "@/app/exp/components/reservation-detail-modal"
+import { ReservationTypeSelector } from "@/app/exp/components/reservation-type-selector"
 import { ExistingChatDialog } from "@/app/exp/components/existing-chat-dialog"
 import { MultiCityTripModal } from "@/app/exp/components/multi-city-trip-modal"
 import { TimelineCollapsedView } from "@/app/exp/components/timeline-collapsed-view"
@@ -169,6 +170,11 @@ export function ExpClient({
   const [isMultiCityModalOpen, setIsMultiCityModalOpen] = useState(false)
   const [isTimelineVisible, setIsTimelineVisible] = useState(true) // Default visible for existing trips
   const [timelineVisibility, setTimelineVisibility] = useState<Record<string, boolean>>({})
+  const [pendingPaste, setPendingPaste] = useState<{
+    text: string;
+    detectedType: string;
+    confidence: number;
+  } | null>(null)
 
   // Refs
   const isDragging = useRef(false)
@@ -210,7 +216,11 @@ export function ExpClient({
     if (!currentConversationId || !text.trim()) return;
 
     // Check if this might be a pasted reservation (long text with keywords)
+    console.log(`[sendMessage] Text length: ${text.length}, checking for reservation...`);
+    
     if (text.length > 200) {
+      console.log(`[sendMessage] Text length > 200, calling detection API...`);
+      
       try {
         const detection = await fetch('/api/chat/detect-paste', {
           method: 'POST',
@@ -218,19 +228,45 @@ export function ExpClient({
           body: JSON.stringify({ text })
         });
         
+        console.log(`[sendMessage] Detection API status: ${detection.status}`);
+        
         if (detection.ok) {
           const result = await detection.json();
           
-          if (result.isReservation && result.confidence > 0.7) {
-            console.log(`[sendMessage] Detected reservation paste: ${result.detectedType}, confidence: ${result.confidence}`);
+          console.log(`[sendMessage] Detection result:`, result);
+          console.log(`[sendMessage] - isReservation: ${result.isReservation}`);
+          console.log(`[sendMessage] - suggestedAction: ${result.suggestedAction}`);
+          console.log(`[sendMessage] - detectedType: ${result.detectedType}`);
+          console.log(`[sendMessage] - confidence: ${result.confidence}`);
+          console.log(`[sendMessage] - category: ${result.category}`);
+          console.log(`[sendMessage] - handler: ${result.handler}`);
+          
+          if (result.suggestedAction === "extract") {
+            console.log(`[sendMessage] ✅ Auto-extracting: ${result.detectedType} (confidence: ${result.confidence})`);
             await handleReservationPaste(text, result.detectedType);
             return; // Don't send as normal message
+          } else if (result.suggestedAction === "ask_user") {
+            console.log(`[sendMessage] ⚠️ Medium confidence - asking user to confirm type`);
+            setPendingPaste({
+              text,
+              detectedType: result.detectedType,
+              confidence: result.confidence
+            });
+            return; // Don't send as normal message, wait for user confirmation
+          } else {
+            console.log(`[sendMessage] ⏭️ Suggested action is "${result.suggestedAction}", continuing as normal message`);
           }
+          // If suggestedAction === "ignore", continue with normal message
+        } else {
+          const errorText = await detection.text();
+          console.error(`[sendMessage] Detection API error: ${detection.status}`, errorText);
         }
       } catch (error) {
         console.error('[sendMessage] Detection error:', error);
         // Continue with normal message if detection fails
       }
+    } else {
+      console.log(`[sendMessage] Text too short (${text.length} chars), skipping detection`);
     }
 
     // Add user message immediately
@@ -260,6 +296,30 @@ export function ExpClient({
       }
 
       const data = await response.json();
+
+      // DEBUG: Log received data
+      console.log("📨 [Client] Received response:");
+      console.log("   Content length:", data.content?.length || 0);
+      console.log("   Segments:", data.segments?.length || 0);
+      if (data.segments) {
+        console.log("   Segment breakdown:");
+        const breakdown = data.segments.reduce((acc: any, seg: any) => {
+          acc[seg.type] = (acc[seg.type] || 0) + 1;
+          return acc;
+        }, {});
+        console.log("   ", breakdown);
+        
+        // Log place segments specifically
+        const placeSegments = data.segments.filter((s: any) => s.type === "place");
+        if (placeSegments.length > 0) {
+          console.log("   Place segments:");
+          placeSegments.forEach((seg: any, idx: number) => {
+            console.log(`     ${idx + 1}. "${seg.display}" (hasData: ${!!seg.placeData})`);
+          });
+        } else {
+          console.log("   ⚠️  NO PLACE SEGMENTS!");
+        }
+      }
 
       // Check if trip was created by AI
       if (data.tripCreated && data.tripId && !selectedTripId) {
@@ -365,10 +425,37 @@ export function ExpClient({
     }
   }
 
+  // Handle user confirming the paste type
+  const handlePasteTypeConfirm = async (selectedType: string) => {
+    if (!pendingPaste) return;
+    
+    console.log(`[handlePasteTypeConfirm] User confirmed type: ${selectedType}`);
+    setPendingPaste(null); // Clear pending state
+    await handleReservationPaste(pendingPaste.text, selectedType);
+  };
+
+  // Handle user canceling paste extraction
+  const handlePasteTypeCancel = () => {
+    if (!pendingPaste) return;
+    
+    console.log(`[handlePasteTypeCancel] User canceled - sending as normal message`);
+    const text = pendingPaste.text;
+    setPendingPaste(null); // Clear pending state
+    
+    // Send as normal message
+    sendMessage(text);
+  };
+
   // Handle pasted reservation extraction
   const handleReservationPaste = async (text: string, detectedType?: string) => {
+    console.log(`[handleReservationPaste] 🚀 CALLED!`);
+    console.log(`[handleReservationPaste] - detectedType: ${detectedType}`);
+    console.log(`[handleReservationPaste] - text length: ${text.length}`);
+    console.log(`[handleReservationPaste] - selectedTripId: ${selectedTripId}`);
+    
     if (!selectedTripId) {
       // No trip selected - show error
+      console.log(`[handleReservationPaste] ❌ No trip selected, showing error`);
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
@@ -378,6 +465,7 @@ export function ExpClient({
       return;
     }
 
+    console.log(`[handleReservationPaste] ✅ Trip selected, starting extraction...`);
     setIsLoading(true);
     setHasStartedPlanning(true);
 
@@ -419,10 +507,32 @@ export function ExpClient({
 
       // Step 2: Extract data
       updateProgress(2, progressSteps[1]);
+      
+      // Map detected type to extraction type
+      const typeMapping: Record<string, string> = {
+        'Flight': 'flight',
+        'Hotel': 'hotel',
+        'Car Rental': 'car-rental',
+        'Private Driver': 'car-rental', // Transfers use car-rental schema
+        'Ride Share': 'car-rental',
+        'Taxi': 'car-rental',
+        'Train': 'train',
+        'Restaurant': 'restaurant',
+        'Event': 'event',
+        'Activity': 'event',
+        'Cruise': 'cruise'
+      };
+      
+      const extractionType = detectedType ? typeMapping[detectedType] || 'generic' : undefined;
+      console.log(`[handleReservationPaste] Detected type: ${detectedType}, Extraction type: ${extractionType}`);
+      
       const extractionResponse = await fetch('/api/admin/email-extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailText: text })
+        body: JSON.stringify({ 
+          emailText: text,
+          detectedType: extractionType // Pass the detected type to skip pattern matching
+        })
       });
 
       if (!extractionResponse.ok) {
@@ -864,6 +974,9 @@ What would you like to change about this plan, or should I create it as is?`;
     const chatType = conversation.chatType;
     
     try {
+      // Remove loading message if it exists
+      setMessages(prev => prev.filter(m => m.id !== `loading-${conversation.id}`));
+      
       if (chatType === 'SEGMENT' && conversation.segmentId) {
         // Find the segment from selectedTrip
         const dbSegment = selectedTrip?.segments.find(s => s.id === conversation.segmentId);
@@ -1104,6 +1217,9 @@ What would you like to change about this plan, or should I create it as is?`;
       }
     } catch (error) {
       console.error('Error appending context card:', error);
+      // Remove loading message and show error
+      setMessages(prev => prev.filter(m => m.id !== `loading-${conversation.id}`));
+      toast.error('Failed to load chat context');
     }
   };
 
@@ -1243,7 +1359,7 @@ What would you like to change about this plan, or should I create it as is?`;
       
       console.log('[createNewSegmentChat] Creating conversation for segment:', segmentDbId);
       
-      // 1. Create the conversation
+      // 1. Create the conversation in DB immediately
       const conversation = await createSegmentConversation(
         segmentDbId,
         segment.name,
@@ -1252,25 +1368,33 @@ What would you like to change about this plan, or should I create it as is?`;
       
       console.log('[createNewSegmentChat] Conversation created:', conversation.id);
       
-      // 2. Add to state and switch to it (empty initially)
+      // 2. Add to state and switch to it
       const fullConversation = { 
         ...conversation, 
         messages: [], 
         chatType: 'SEGMENT' as const,
-        segmentId: conversation.segmentId  // Include segmentId for context card loading
+        segmentId: conversation.segmentId
       };
       setConversations(prev => [fullConversation, ...prev]);
       setCurrentConversationId(conversation.id);
-      setMessages([]); // Start empty
       
-      // 3. Append context card after brief delay
-      setTimeout(() => {
-        console.log('[createNewSegmentChat] Appending context card');
-        appendContextCardForConversation(fullConversation);
-      }, 100);
+      // 3. Show loading message immediately
+      setMessages([{
+        id: `loading-${conversation.id}`,
+        role: 'assistant' as const,
+        content: '',
+        segments: [{
+          type: 'chat_loading' as const,
+          conversationId: conversation.id
+        }]
+      }]);
+      
+      // 4. Asynchronously fetch context and render card (removes loading message inside)
+      await appendContextCardForConversation(fullConversation);
       
     } catch (error) {
       console.error('Error creating segment chat:', error);
+      toast.error('Failed to create segment chat');
     } finally {
       setIsLoading(false);
     }
@@ -1289,12 +1413,13 @@ What would you like to change about this plan, or should I create it as is?`;
       
       if (!dbReservation) {
         console.error("Could not find database reservation with ID:", reservation.id);
+        toast.error('Reservation not found');
         return;
       }
       
       console.log('[createNewReservationChat] Creating conversation for reservation:', reservation.id);
       
-      // 1. Create the conversation
+      // 1. Create the conversation in DB immediately
       const conversation = await createReservationConversation(
         reservation.id,
         reservation.name || itemTitle,
@@ -1304,20 +1429,85 @@ What would you like to change about this plan, or should I create it as is?`;
       
       console.log('[createNewReservationChat] Conversation created:', conversation.id);
       
-      // 2. Add to state and switch to it (empty initially)
-      const fullConversation = { ...conversation, messages: [], chatType: 'RESERVATION' as const, reservationId: reservation.id, segmentId: dbReservation.segmentId };
+      // 2. Add to state and switch to it
+      const fullConversation = { 
+        ...conversation, 
+        messages: [], 
+        chatType: 'RESERVATION' as const, 
+        reservationId: reservation.id, 
+        segmentId: dbReservation.segmentId 
+      };
       setConversations(prev => [fullConversation, ...prev]);
       setCurrentConversationId(conversation.id);
-      setMessages([]); // Start empty
       
-      // 3. Append context card after brief delay
-      setTimeout(() => {
-        console.log('[createNewReservationChat] Appending context card');
-        appendContextCardForConversation(fullConversation);
-      }, 100);
+      // 3. Show loading message immediately
+      setMessages([{
+        id: `loading-${conversation.id}`,
+        role: 'assistant' as const,
+        content: '',
+        segments: [{
+          type: 'chat_loading' as const,
+          conversationId: conversation.id
+        }]
+      }]);
+      
+      // 4. Asynchronously fetch context and render card (removes loading message inside)
+      await appendContextCardForConversation(fullConversation);
       
     } catch (error) {
       console.error('Error creating reservation chat:', error);
+      toast.error('Failed to create reservation chat');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Helper function to create a new trip chat
+  const createNewTripChat = async () => {
+    if (!selectedTripId) {
+      console.error('No trip selected');
+      toast.error('Please select a trip first');
+      return;
+    }
+    
+    setIsLoading(true);
+    setHasStartedPlanning(true);
+    
+    try {
+      console.log('[createNewTripChat] Creating conversation for trip:', selectedTripId);
+      
+      // 1. Create the conversation in DB immediately
+      const conversation = await createTripConversation(selectedTripId);
+      
+      console.log('[createNewTripChat] Conversation created:', conversation.id);
+      
+      // 2. Add to state and switch to it
+      const fullConversation = { 
+        ...conversation, 
+        messages: [], 
+        chatType: 'TRIP' as const,
+        tripId: selectedTripId
+      };
+      setConversations(prev => [fullConversation, ...prev]);
+      setCurrentConversationId(conversation.id);
+      
+      // 3. Show loading message immediately
+      setMessages([{
+        id: `loading-${conversation.id}`,
+        role: 'assistant' as const,
+        content: '',
+        segments: [{
+          type: 'chat_loading' as const,
+          conversationId: conversation.id
+        }]
+      }]);
+      
+      // 4. Asynchronously fetch context and render card (removes loading message inside)
+      await appendContextCardForConversation(fullConversation);
+      
+    } catch (error) {
+      console.error('Error creating trip chat:', error);
+      toast.error('Failed to create trip chat');
     } finally {
       setIsLoading(false);
     }
@@ -1358,11 +1548,20 @@ What would you like to change about this plan, or should I create it as is?`;
         content: m.content,
       })) || []);
       
-      // 2. THEN append context card (after a brief delay to show history first)
-      setTimeout(() => {
-        console.log('[handleOpenExistingChat] Appending context card for chatType:', fullConversation.chatType);
-        appendContextCardForConversation(fullConversation);
-      }, 100);
+      // 2. Add loading message
+      setMessages(prev => [...prev, {
+        id: `loading-${conversationId}`,
+        role: 'assistant' as const,
+        content: '',
+        segments: [{
+          type: 'chat_loading' as const,
+          conversationId: conversationId
+        }]
+      }]);
+      
+      // 3. Asynchronously append context card (removes loading message inside)
+      console.log('[handleOpenExistingChat] Appending context card for chatType:', fullConversation.chatType);
+      await appendContextCardForConversation(fullConversation);
       
     } catch (error) {
       console.error('[handleOpenExistingChat] Error loading existing chat:', error);
@@ -1516,10 +1715,14 @@ What would you like to change about this plan, or should I create it as is?`;
     }
     
     if (dbReservation) {
+      // Properly structure the data for ReservationDetailModal
       setSelectedReservation({
-        ...dbReservation,
-        segmentName,
-        dayDate
+        reservation: dbReservation,
+        itemTitle: v0Reservation.vendor || dbReservation.name,
+        itemTime: v0Reservation.startTime || '',
+        itemType: dbReservation.reservationType?.category?.name || '',
+        dayDate,
+        segmentName
       })
     }
   }
@@ -1675,6 +1878,18 @@ What would you like to change about this plan, or should I create it as is?`;
                       </div>
                     </div>
                   ))}
+                  {pendingPaste && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[90%]">
+                        <ReservationTypeSelector
+                          detectedType={pendingPaste.detectedType as any}
+                          confidence={pendingPaste.confidence}
+                          onConfirm={handlePasteTypeConfirm}
+                          onCancel={handlePasteTypeCancel}
+                        />
+                      </div>
+                    </div>
+                  )}
                   {isLoading && <AILoadingAnimation />}
                 </>
               )}
@@ -1786,6 +2001,7 @@ What would you like to change about this plan, or should I create it as is?`;
                         tripId={selectedTripId}
                         onConversationsChange={(newConversations) => setConversations(newConversations)}
                         onMessagesReset={() => setMessages([])}
+                        onCreateNewChat={createNewTripChat}
                       />
                     )}
                   </div>
@@ -1890,6 +2106,18 @@ What would you like to change about this plan, or should I create it as is?`;
                       </div>
                     </div>
                   ))}
+                {pendingPaste && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[90%]">
+                      <ReservationTypeSelector
+                        detectedType={pendingPaste.detectedType as any}
+                        confidence={pendingPaste.confidence}
+                        onConfirm={handlePasteTypeConfirm}
+                        onCancel={handlePasteTypeCancel}
+                      />
+                    </div>
+                  </div>
+                )}
                 {isLoading && <AILoadingAnimation />}
                 <div ref={messagesEndRef} />
               </>

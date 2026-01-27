@@ -93,7 +93,7 @@ export function ReservationDetailModal({
   
   // Fetch timezone when coordinates are available
   useEffect(() => {
-    if (selectedReservation?.reservation.latitude && selectedReservation?.reservation.longitude) {
+    if (selectedReservation?.reservation?.latitude && selectedReservation?.reservation?.longitude) {
       getTimeZoneForLocation(
         selectedReservation.reservation.latitude,
         selectedReservation.reservation.longitude
@@ -101,14 +101,14 @@ export function ReservationDetailModal({
         if (tz) setLocalTimezone(tz)
       })
     }
-  }, [selectedReservation?.reservation.latitude, selectedReservation?.reservation.longitude])
+  }, [selectedReservation?.reservation?.latitude, selectedReservation?.reservation?.longitude])
   
   // Format time display
   useEffect(() => {
     if (selectedReservation?.reservation) {
       formatTimeDisplay(selectedReservation.reservation).then(setDisplayTime)
     }
-  }, [selectedReservation?.reservation.startTime, selectedReservation?.reservation.endTime, selectedReservation?.reservation.timeZoneId])
+  }, [selectedReservation?.reservation?.startTime, selectedReservation?.reservation?.endTime, selectedReservation?.reservation?.timeZoneId])
 
   // Auto-resolve on modal open
   useEffect(() => {
@@ -116,7 +116,7 @@ export function ReservationDetailModal({
       attemptAutoResolve()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedReservation?.reservation.id])
+  }, [selectedReservation?.reservation?.id])
 
   // Helper function to merge resolved data with reservation
   const mergeResolvedData = (reservation: DBReservation, resolved: ResolvedData): DBReservation => {
@@ -358,6 +358,11 @@ export function ReservationDetailModal({
     }
   }
 
+  // Guard: Don't render if no reservation data
+  if (!selectedReservation?.reservation) {
+    return null;
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -369,10 +374,10 @@ export function ReservationDetailModal({
       >
         {/* Fixed Header with Image */}
         <div className="relative shrink-0">
-          {(editedReservation?.imageUrl || selectedReservation.reservation.imageUrl) ? (
+          {(editedReservation?.imageUrl || selectedReservation?.reservation?.imageUrl) ? (
             <img
-              src={editedReservation?.imageUrl || selectedReservation.reservation.imageUrl || "/placeholder.svg"}
-              alt={editedReservation?.name || selectedReservation.reservation.name}
+              src={editedReservation?.imageUrl || selectedReservation?.reservation?.imageUrl || "/placeholder.svg"}
+              alt={editedReservation?.name || selectedReservation?.reservation?.name}
               className="w-full h-40 object-cover rounded-t-lg"
             />
           ) : (
@@ -435,9 +440,9 @@ export function ReservationDetailModal({
                     <label className="text-xs font-medium text-muted-foreground">Start Date</label>
                     <Input
                       type="date"
-                      value={formatDateForInput(editedReservation.startTime?.toISOString())}
+                      value={formatDateForInput(editedReservation.startTime)}
                       onChange={(e) => {
-                        const time = formatTimeForInput(editedReservation.startTime?.toISOString()) || "12:00"
+                        const time = formatTimeForInput(editedReservation.startTime) || "12:00"
                         updateField('startTime', combineDateAndTime(e.target.value, time))
                       }}
                       className="mt-1"
@@ -447,9 +452,9 @@ export function ReservationDetailModal({
                     <label className="text-xs font-medium text-muted-foreground">Start Time</label>
                     <Input
                       type="time"
-                      value={formatTimeForInput(editedReservation.startTime?.toISOString())}
+                      value={formatTimeForInput(editedReservation.startTime)}
                       onChange={(e) => {
-                        const date = formatDateForInput(editedReservation.startTime?.toISOString()) || new Date().toISOString().split('T')[0]
+                        const date = formatDateForInput(editedReservation.startTime) || new Date().toISOString().split('T')[0]
                         updateField('startTime', combineDateAndTime(date, e.target.value))
                       }}
                       className="mt-1"
@@ -461,9 +466,9 @@ export function ReservationDetailModal({
                     <label className="text-xs font-medium text-muted-foreground">End Date</label>
                     <Input
                       type="date"
-                      value={formatDateForInput(editedReservation.endTime?.toISOString())}
+                      value={formatDateForInput(editedReservation.endTime)}
                       onChange={(e) => {
-                        const time = formatTimeForInput(editedReservation.endTime?.toISOString()) || "12:00"
+                        const time = formatTimeForInput(editedReservation.endTime) || "12:00"
                         updateField('endTime', combineDateAndTime(e.target.value, time))
                       }}
                       className="mt-1"
@@ -473,9 +478,9 @@ export function ReservationDetailModal({
                     <label className="text-xs font-medium text-muted-foreground">End Time</label>
                     <Input
                       type="time"
-                      value={formatTimeForInput(editedReservation.endTime?.toISOString())}
+                      value={formatTimeForInput(editedReservation.endTime)}
                       onChange={(e) => {
-                        const date = formatDateForInput(editedReservation.endTime?.toISOString()) || new Date().toISOString().split('T')[0]
+                        const date = formatDateForInput(editedReservation.endTime) || new Date().toISOString().split('T')[0]
                         updateField('endTime', combineDateAndTime(date, e.target.value))
                       }}
                       className="mt-1"

@@ -27,6 +27,7 @@ interface ChatNameDropdownProps {
   tripId: string
   onConversationsChange: (conversations: Conversation[]) => void
   onMessagesReset: () => void
+  onCreateNewChat?: () => Promise<void> // Optional callback for creating new chat
 }
 
 export function ChatNameDropdown({ 
@@ -35,7 +36,8 @@ export function ChatNameDropdown({
   onSelectConversation,
   tripId,
   onConversationsChange,
-  onMessagesReset
+  onMessagesReset,
+  onCreateNewChat
 }: ChatNameDropdownProps) {
   const [isCreating, setIsCreating] = useState(false)
   const currentConversation = conversations.find(c => c.id === currentConversationId)
@@ -74,10 +76,16 @@ export function ChatNameDropdown({
   const handleNewChat = async () => {
     setIsCreating(true)
     try {
-      const newConversation = await createTripConversation(tripId)
-      onConversationsChange([newConversation, ...conversations])
-      onMessagesReset() // Clear messages when switching to new chat
-      onSelectConversation(newConversation.id, newConversation) // Pass the conversation directly
+      // If parent provides a callback, use that (for loading state management)
+      if (onCreateNewChat) {
+        await onCreateNewChat()
+      } else {
+        // Fallback to default behavior
+        const newConversation = await createTripConversation(tripId)
+        onConversationsChange([newConversation, ...conversations])
+        onMessagesReset() // Clear messages when switching to new chat
+        onSelectConversation(newConversation.id, newConversation) // Pass the conversation directly
+      }
     } catch (error) {
       console.error("Error creating conversation:", error)
     } finally {

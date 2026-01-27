@@ -15,6 +15,7 @@ import { FlightComparisonCard } from "@/app/exp/components/flight-comparison-car
 import { BudgetBreakdownCard } from "@/app/exp/components/budget-breakdown-card";
 import { DayPlanCard } from "@/app/exp/components/day-plan-card";
 import { PlacesMapCard } from "@/app/exp/components/places-map-card";
+import { ChatLoadingMessage } from "@/app/exp/components/chat-loading-message";
 
 interface MessageSegmentsRendererProps {
   segments: MessageSegment[];
@@ -41,6 +42,10 @@ export function MessageSegmentsRenderer({
     <div className="whitespace-pre-wrap leading-relaxed">
       {segments.map((segment, idx) => {
         if (segment.type === "text") {
+          // Check if content contains HTML (debug segments with <details>)
+          if (segment.content?.includes('<details>') || segment.content?.includes('<summary>')) {
+            return <span key={idx} dangerouslySetInnerHTML={{ __html: segment.content }} />;
+          }
           return <span key={idx}>{segment.content}</span>;
         } else if (segment.type === "trip_card") {
           return (
@@ -223,6 +228,12 @@ export function MessageSegmentsRenderer({
                 tripId={tripId}
                 segmentId={segmentId}
               />
+            </div>
+          );
+        } else if (segment.type === "chat_loading") {
+          return (
+            <div key={idx} className="my-3">
+              <ChatLoadingMessage conversationId={segment.conversationId} />
             </div>
           );
         } else {
