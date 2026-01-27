@@ -241,8 +241,14 @@ export async function generatePlaceSuggestions(
   // Validate and type the places array
   const places: PlaceSuggestion[] = (parsed.places || []).map((place, idx) => {
     if (!place.suggestedName || !place.category || !place.type || !place.searchQuery) {
-      console.warn(`⚠️  [Stage 1] Place ${idx} missing required fields:`, place);
-      throw new Error(`Place ${idx} is missing required fields`);
+      const missingFields = [];
+      if (!place.suggestedName) missingFields.push('suggestedName');
+      if (!place.category) missingFields.push('category');
+      if (!place.type) missingFields.push('type');
+      if (!place.searchQuery) missingFields.push('searchQuery');
+      console.warn(`⚠️  [Stage 1] Place ${idx} missing required fields: ${missingFields.join(', ')}`);
+      console.warn(`   Place data:`, place);
+      throw new Error(`Place ${idx} is missing required fields: ${missingFields.join(', ')}`);
     }
 
     return {
@@ -251,52 +257,84 @@ export async function generatePlaceSuggestions(
       type: place.type,
       searchQuery: place.searchQuery,
       context: place.context || {},
+      segmentId: place.segmentId, // Preserve segmentId if present (though shouldn't be at this stage)
     };
   });
 
-  // Validate and type the transport array
-  const transport: TransportSuggestion[] = (parsed.transport || []).map((item, idx) => {
-    if (!item.suggestedName || !item.type || !item.origin || !item.destination || !item.departureDate) {
-      console.warn(`⚠️  [Stage 1] Transport ${idx} missing required fields:`, item);
-      throw new Error(`Transport ${idx} is missing required fields`);
-    }
+  // Validate and type the transport array - defensive approach
+  const transport: TransportSuggestion[] = (parsed.transport || [])
+    .map((item, idx) => {
+      // Check for required fields
+      const missingFields: string[] = [];
+      if (!item.suggestedName) missingFields.push('suggestedName');
+      if (!item.type) missingFields.push('type');
+      if (!item.origin) missingFields.push('origin');
+      if (!item.destination) missingFields.push('destination');
+      if (!item.departureDate) missingFields.push('departureDate');
+      
+      if (missingFields.length > 0) {
+        console.warn(`⚠️  [Stage 1] Skipping transport ${idx} - missing required fields:`, {
+          missing: missingFields,
+          provided: Object.keys(item),
+          item
+        });
+        return null;
+      }
 
-    return {
-      suggestedName: item.suggestedName,
-      type: item.type,
-      origin: item.origin,
-      destination: item.destination,
-      departureDate: item.departureDate,
-      departureTime: item.departureTime,
-      returnDate: item.returnDate,
-      adults: item.adults || 1,
-      travelClass: item.travelClass,
-      transferType: item.transferType,
-    };
-  });
+      return {
+        suggestedName: item.suggestedName,
+        type: item.type,
+        origin: item.origin,
+        destination: item.destination,
+        departureDate: item.departureDate,
+        departureTime: item.departureTime,
+        returnDate: item.returnDate,
+        adults: item.adults || 1,
+        travelClass: item.travelClass,
+        transferType: item.transferType,
+      };
+    })
+    .filter((item): item is TransportSuggestion => item !== null);
 
-  // Validate and type the hotels array
-  const hotels: HotelSuggestion[] = (parsed.hotels || []).map((hotel, idx) => {
-    if (!hotel.suggestedName || !hotel.location || !hotel.checkInDate || !hotel.checkOutDate) {
-      console.warn(`⚠️  [Stage 1] Hotel ${idx} missing required fields:`, hotel);
-      throw new Error(`Hotel ${idx} is missing required fields`);
-    }
+  // Validate and type the hotels array - defensive approach
+  const hotels: HotelSuggestion[] = (parsed.hotels || [])
+    .map((hotel, idx) => {
+      // Check for required fields
+      const missingFields: string[] = [];
+      if (!hotel.suggestedName) missingFields.push('suggestedName');
+      if (!hotel.location) missingFields.push('location');
+      if (!hotel.checkInDate) missingFields.push('checkInDate');
+      if (!hotel.checkOutDate) missingFields.push('checkOutDate');
+      
+      if (missingFields.length > 0) {
+        console.warn(`⚠️  [Stage 1] Skipping hotel ${idx} - missing required fields:`, {
+          missing: missingFields,
+          provided: Object.keys(hotel),
+          hotel
+        });
+        return null;
+      }
 
-    return {
-      suggestedName: hotel.suggestedName,
-      location: hotel.location,
-      checkInDate: hotel.checkInDate,
-      checkOutDate: hotel.checkOutDate,
-      guests: hotel.guests || 2,
-      rooms: hotel.rooms || 1,
-      searchQuery: hotel.searchQuery || `hotel in ${hotel.location}`,
-    };
-  });
+      return {
+        suggestedName: hotel.suggestedName,
+        location: hotel.location,
+        checkInDate: hotel.checkInDate,
+        checkOutDate: hotel.checkOutDate,
+        guests: hotel.guests || 2,
+        rooms: hotel.rooms || 1,
+        searchQuery: hotel.searchQuery || `hotel in ${hotel.location}`,
+      };
+    })
+    .filter((item): item is HotelSuggestion => item !== null);
 
+  // Calculate skipped items
+  const transportSkipped = (parsed.transport?.length || 0) - transport.length;
+  const hotelsSkipped = (parsed.hotels?.length || 0) - hotels.length;
+  
   console.log(`✅ [Stage 1] Successfully generated:`);
   console.log(`   - ${places.length} place suggestions`);
-  console.log(`   - ${transport.length} transport suggestions`);
-  console.log(`   - ${hotels.length} hotel suggestions`);
+  console.log(`   - ${transport.length} transport suggestions${transportSkipped > 0 ? ` (${transportSkipped} skipped due to missing fields)` : ''}`);
+  console.log(`   - ${hotels.length} hotel suggestions${hotelsSkipped > 0 ? ` (${hotelsSkipped} skipped due to missing fields)` : ''}`);
 
   return {
     text: parsed.text,

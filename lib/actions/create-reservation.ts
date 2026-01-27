@@ -115,6 +115,7 @@ export async function createReservationFromSuggestion({
   category,
   type,
   status: statusType = "suggested",
+  segmentId,
 }: {
   tripId: string;
   placeName: string;
@@ -126,6 +127,7 @@ export async function createReservationFromSuggestion({
   category: string;
   type: string;
   status?: "suggested" | "planned" | "confirmed";
+  segmentId?: string;
 }) {
   const session = await auth();
 
@@ -159,23 +161,59 @@ export async function createReservationFromSuggestion({
   const [startHour, startMinute] = startTime.split(":").map(Number);
   const [endHour, endMinute] = endTime.split(":").map(Number);
 
-  const startDateTime = new Date(targetDate);
-  startDateTime.setHours(startHour, startMinute, 0, 0);
+  let startDateTime: Date;
+  let endDateTime: Date;
 
-  const endDateTime = new Date(targetDate);
-  endDateTime.setHours(endHour, endMinute, 0, 0);
+  // For hotels (Stay category), span the entire segment if segmentId is provided
+  if (category === "Stay" && segmentId) {
+    // Find the segment to get its start and end dates
+    const segment = trip.segments.find((s) => s.id === segmentId);
+    
+    if (segment && segment.startTime && segment.endTime) {
+      // Use segment start date for check-in
+      startDateTime = new Date(segment.startTime);
+      startDateTime.setHours(startHour, startMinute, 0, 0);
+      
+      // Use segment end date for check-out
+      endDateTime = new Date(segment.endTime);
+      endDateTime.setHours(endHour, endMinute, 0, 0);
+    } else {
+      // Fallback to same-day if segment dates not available
+      startDateTime = new Date(targetDate);
+      startDateTime.setHours(startHour, startMinute, 0, 0);
+      
+      endDateTime = new Date(targetDate);
+      endDateTime.setHours(endHour, endMinute, 0, 0);
+    }
+  } else {
+    // For non-hotel items, use same-day reservation
+    startDateTime = new Date(targetDate);
+    startDateTime.setHours(startHour, startMinute, 0, 0);
+    
+    endDateTime = new Date(targetDate);
+    endDateTime.setHours(endHour, endMinute, 0, 0);
+  }
 
-  // Find appropriate segment for this day
-  // Try to find a segment that overlaps with this day
-  let targetSegment = trip.segments.find((segment) => {
-    if (!segment.startTime) return false;
-    const segmentDate = new Date(segment.startTime);
-    return (
-      segmentDate.getFullYear() === targetDate.getFullYear() &&
-      segmentDate.getMonth() === targetDate.getMonth() &&
-      segmentDate.getDate() === targetDate.getDate()
-    );
-  });
+  // Find appropriate segment for this reservation
+  let targetSegment;
+  
+  // For hotels with segmentId, use the specified segment
+  if (category === "Stay" && segmentId) {
+    targetSegment = trip.segments.find((s) => s.id === segmentId);
+  }
+  
+  // If no segment specified or not found, find a segment for this day
+  if (!targetSegment) {
+    targetSegment = trip.segments.find((segment) => {
+      if (!segment.startTime) return false;
+      const segmentDate = new Date(segment.startTime);
+      return (
+        segmentDate.getFullYear() === targetDate.getFullYear() &&
+        segmentDate.getMonth() === targetDate.getMonth() &&
+        segmentDate.getDate() === targetDate.getDate()
+      );
+    });
+  }
 
   // If no segment found for this day, use the first segment
   if (!targetSegment && trip.segments.length > 0) {

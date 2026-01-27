@@ -13,6 +13,17 @@ export interface ViewReservation {
   image: string
   price: number
   notes: string
+  // Enhanced fields for mapping and chat
+  latitude?: number
+  longitude?: number
+  departureLocation?: string
+  arrivalLocation?: string
+  categoryName: string
+  startTime?: string
+  endTime?: string
+  // Status fields for to-do list
+  status: "pending" | "confirmed" | "cancelled" | "completed" | "waitlisted"
+  statusName: string
 }
 
 export interface ViewSegment {
@@ -22,6 +33,16 @@ export interface ViewSegment {
   endDate: string
   destination: string
   reservations: ViewReservation[]
+  // Enhanced fields for mapping
+  startLat: number
+  startLng: number
+  endLat: number
+  endLng: number
+  startTitle: string
+  endTitle: string
+  segmentType: string
+  color?: string
+  imageUrl?: string
 }
 
 export interface ViewItinerary {
@@ -32,6 +53,10 @@ export interface ViewItinerary {
   endDate: string
   coverImage: string
   segments: ViewSegment[]
+  // Enhanced calculated fields
+  dayCount: number
+  segmentColors: Record<string, string>
+  pendingCount: number
 }
 
 export const reservationTypeIcons: Record<ViewReservation["type"], string> = {
@@ -64,6 +89,55 @@ export function mapCategoryToType(categoryName: string): ViewReservation["type"]
     "Food": "restaurant",
   }
   return mapping[categoryName] || "activity"
+}
+
+// Helper to map reservation status from DB to view type
+export function mapReservationStatus(statusName: string): ViewReservation["status"] {
+  const normalized = statusName.toLowerCase()
+  if (normalized.includes("confirm")) return "confirmed"
+  if (normalized.includes("cancel")) return "cancelled"
+  if (normalized.includes("complete")) return "completed"
+  if (normalized.includes("waitlist")) return "waitlisted"
+  return "pending"
+}
+
+// Weather and packing types
+export interface WeatherData {
+  location: string
+  country: string
+  forecast: WeatherForecast[]
+}
+
+export interface WeatherForecast {
+  date: string
+  temp: number
+  feels_like: number
+  temp_min: number
+  temp_max: number
+  humidity: number
+  description: string
+  icon: string
+  wind_speed: number
+  precipitation: number
+}
+
+export interface PackingList {
+  clothing: PackingItem[]
+  footwear: PackingItem[]
+  gear: PackingItem[]
+  toiletries: PackingItem[]
+  documents: PackingItem[]
+  clothingReasons?: string
+  footwearReasons?: string
+  gearReasons?: string
+  toiletriesReasons?: string
+  documentsReasons?: string
+}
+
+export interface PackingItem {
+  name: string
+  quantity?: string
+  reason?: string
 }
 
 

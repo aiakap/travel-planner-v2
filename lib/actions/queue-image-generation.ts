@@ -25,19 +25,40 @@ export async function queueTripImageGeneration(tripId: string, specificPromptId?
 
     // Select prompt
     console.log(`[queueTripImageGeneration] Importing image-generation module...`);
-    const { buildContextualPrompt, selectBestPromptForTrip } = await import("@/lib/image-generation");
+    const { buildContextualPrompt, selectBestPromptForTrip, logImageGeneration } = await import("@/lib/image-generation");
     
     console.log(`[queueTripImageGeneration] Selecting best prompt...`);
-    const prompt = await selectBestPromptForTrip(trip, specificPromptId);
+    const selectionResult = await selectBestPromptForTrip(trip, specificPromptId);
+    const prompt = selectionResult.prompt;
     console.log(`[queueTripImageGeneration] Selected prompt: ${prompt.name}`);
     
     console.log(`[queueTripImageGeneration] Building contextual prompt...`);
     const fullPrompt = buildContextualPrompt(prompt, trip, "trip");
     console.log(`[queueTripImageGeneration] Prompt built, length: ${fullPrompt.length} chars`);
 
+    // Log the generation attempt
+    console.log(`[queueTripImageGeneration] Creating image generation log...`);
+    const log = await logImageGeneration({
+      entityType: "trip",
+      entityId: trip.id,
+      entityName: trip.title,
+      promptId: prompt.id,
+      promptName: prompt.name,
+      promptStyle: prompt.style || undefined,
+      fullPrompt: fullPrompt,
+      aiReasoning: selectionResult.reasoning,
+      selectionReason: specificPromptId ? "Manually selected" : `AI selected for trip: ${trip.title}`,
+      availablePrompts: selectionResult.availablePrompts.map(p => p.name),
+      callerFunction: "queueTripImageGeneration",
+      callerSource: specificPromptId ? "regenerate" : "trip-creation",
+      status: "in_progress",
+      imageProvider: process.env.IMAGE_PROVIDER || "imagen",
+    });
+    console.log(`[queueTripImageGeneration] Log created with ID: ${log.id}`);
+
     // Queue the generation
     console.log(`[queueTripImageGeneration] Calling queueImageGeneration...`);
-    const queueId = await queueImageGeneration("trip", tripId, fullPrompt, prompt.id);
+    const queueId = await queueImageGeneration("trip", tripId, fullPrompt, prompt.id, log.id);
     console.log(`[queueTripImageGeneration] Successfully queued with ID: ${queueId}`);
     
     return queueId;
@@ -75,19 +96,40 @@ export async function queueSegmentImageGeneration(segmentId: string) {
 
     // Select prompt and build full prompt
     console.log(`[queueSegmentImageGeneration] Importing image-generation module...`);
-    const { buildContextualPrompt, selectBestPromptForSegment } = await import("@/lib/image-generation");
+    const { buildContextualPrompt, selectBestPromptForSegment, logImageGeneration } = await import("@/lib/image-generation");
     
     console.log(`[queueSegmentImageGeneration] Selecting best prompt...`);
-    const prompt = await selectBestPromptForSegment(segment);
+    const selectionResult = await selectBestPromptForSegment(segment);
+    const prompt = selectionResult.prompt;
     console.log(`[queueSegmentImageGeneration] Selected prompt: ${prompt.name}`);
     
     console.log(`[queueSegmentImageGeneration] Building contextual prompt...`);
     const fullPrompt = buildContextualPrompt(prompt, segment, "segment");
     console.log(`[queueSegmentImageGeneration] Prompt built, length: ${fullPrompt.length} chars`);
 
+    // Log the generation attempt
+    console.log(`[queueSegmentImageGeneration] Creating image generation log...`);
+    const log = await logImageGeneration({
+      entityType: "segment",
+      entityId: segment.id,
+      entityName: segment.name,
+      promptId: prompt.id,
+      promptName: prompt.name,
+      promptStyle: prompt.style || undefined,
+      fullPrompt: fullPrompt,
+      aiReasoning: selectionResult.reasoning,
+      selectionReason: `AI selected for segment: ${segment.name}`,
+      availablePrompts: selectionResult.availablePrompts.map(p => p.name),
+      callerFunction: "queueSegmentImageGeneration",
+      callerSource: "segment-creation",
+      status: "in_progress",
+      imageProvider: process.env.IMAGE_PROVIDER || "imagen",
+    });
+    console.log(`[queueSegmentImageGeneration] Log created with ID: ${log.id}`);
+
     // Queue the generation
     console.log(`[queueSegmentImageGeneration] Calling queueImageGeneration...`);
-    const queueId = await queueImageGeneration("segment", segmentId, fullPrompt, prompt.id);
+    const queueId = await queueImageGeneration("segment", segmentId, fullPrompt, prompt.id, log.id);
     console.log(`[queueSegmentImageGeneration] Successfully queued with ID: ${queueId}`);
     
     return queueId;
@@ -125,19 +167,40 @@ export async function queueReservationImageGeneration(reservationId: string) {
 
     // Select prompt and build full prompt
     console.log(`[queueReservationImageGeneration] Importing image-generation module...`);
-    const { buildContextualPrompt, selectBestPromptForReservation } = await import("@/lib/image-generation");
+    const { buildContextualPrompt, selectBestPromptForReservation, logImageGeneration } = await import("@/lib/image-generation");
     
     console.log(`[queueReservationImageGeneration] Selecting best prompt...`);
-    const prompt = await selectBestPromptForReservation(reservation);
+    const selectionResult = await selectBestPromptForReservation(reservation);
+    const prompt = selectionResult.prompt;
     console.log(`[queueReservationImageGeneration] Selected prompt: ${prompt.name}`);
     
     console.log(`[queueReservationImageGeneration] Building contextual prompt...`);
     const fullPrompt = buildContextualPrompt(prompt, reservation, "reservation");
     console.log(`[queueReservationImageGeneration] Prompt built, length: ${fullPrompt.length} chars`);
 
+    // Log the generation attempt
+    console.log(`[queueReservationImageGeneration] Creating image generation log...`);
+    const log = await logImageGeneration({
+      entityType: "reservation",
+      entityId: reservation.id,
+      entityName: reservation.name,
+      promptId: prompt.id,
+      promptName: prompt.name,
+      promptStyle: prompt.style || undefined,
+      fullPrompt: fullPrompt,
+      aiReasoning: selectionResult.reasoning,
+      selectionReason: `AI selected for reservation: ${reservation.name}`,
+      availablePrompts: selectionResult.availablePrompts.map(p => p.name),
+      callerFunction: "queueReservationImageGeneration",
+      callerSource: "reservation-creation",
+      status: "in_progress",
+      imageProvider: process.env.IMAGE_PROVIDER || "imagen",
+    });
+    console.log(`[queueReservationImageGeneration] Log created with ID: ${log.id}`);
+
     // Queue the generation
     console.log(`[queueReservationImageGeneration] Calling queueImageGeneration...`);
-    const queueId = await queueImageGeneration("reservation", reservationId, fullPrompt, prompt.id);
+    const queueId = await queueImageGeneration("reservation", reservationId, fullPrompt, prompt.id, log.id);
     console.log(`[queueReservationImageGeneration] Successfully queued with ID: ${queueId}`);
     
     return queueId;

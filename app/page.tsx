@@ -50,7 +50,10 @@ export default async function HomePage() {
 
   // Logged in - fetch user's trips and show dashboard
   const trips = await prisma.trip.findMany({
-    where: { userId: session.user.id },
+    where: { 
+      userId: session.user.id,
+      status: { not: 'DRAFT' },
+    },
     include: {
       segments: {
         orderBy: { order: "asc" },

@@ -241,11 +241,54 @@ model ImageQueue {
   imageUrl   String?
   attempts   Int      @default(0)
   promptId   String?
+  logId      String?  // Link to ImageGenerationLog
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@index([status, createdAt])
   @@index([entityType, entityId])
+}
+
+model ImageGenerationLog {
+  id               String   @id @default(cuid())
+  
+  // What was generated
+  entityType       String   // "trip" | "segment" | "reservation"
+  entityId         String
+  entityName       String?  // Cached name for easy reference
+  
+  // Prompt details
+  promptId         String?
+  promptName       String?
+  promptStyle      String?  // e.g., "scrapbook_collage"
+  fullPrompt       String   @db.Text // The complete prompt sent to AI
+  
+  // Selection reasoning
+  aiReasoning      String?  @db.Text // Full GPT-4o response explaining choice
+  selectionReason  String?  // Simplified reason (e.g., "Beach destination match")
+  availablePrompts String?  @db.Text // JSON array of prompts that were available
+  
+  // Caller context
+  callerFunction   String?  // e.g., "queueTripImageGeneration"
+  callerSource     String?  // e.g., "create-trip", "update-trip", "regenerate"
+  userId           String?  // If available
+  
+  // Result
+  status           String   // "success" | "failed" | "in_progress"
+  imageUrl         String?
+  errorMessage     String?  @db.Text
+  
+  // Metadata
+  generationTimeMs Int?     // How long generation took
+  imageProvider    String?  // "imagen" | "dalle"
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@index([entityType, entityId])
+  @@index([promptId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model UserProfile {

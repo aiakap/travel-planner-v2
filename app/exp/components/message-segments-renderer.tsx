@@ -9,6 +9,12 @@ import { ReservationCard } from "@/app/exp/components/reservation-card";
 import { ContextCard } from "@/app/exp/components/context-card";
 import { HotelReservationCard } from "@/app/exp/components/hotel-reservation-card";
 import { ExtractionLoadingAnimation } from "@/app/exp/components/extraction-loading-animation";
+import { DiningScheduleCard } from "@/app/exp/components/dining-schedule-card";
+import { ActivityTableCard } from "@/app/exp/components/activity-table-card";
+import { FlightComparisonCard } from "@/app/exp/components/flight-comparison-card";
+import { BudgetBreakdownCard } from "@/app/exp/components/budget-breakdown-card";
+import { DayPlanCard } from "@/app/exp/components/day-plan-card";
+import { PlacesMapCard } from "@/app/exp/components/places-map-card";
 
 interface MessageSegmentsRendererProps {
   segments: MessageSegment[];
@@ -153,6 +159,69 @@ export function MessageSegmentsRenderer({
                 step={segment.step}
                 totalSteps={segment.totalSteps}
                 message={segment.message}
+              />
+            </div>
+          );
+        } else if (segment.type === "dining_schedule_card") {
+          return (
+            <div key={idx} className="my-3">
+              <DiningScheduleCard
+                tripId={segment.tripId}
+                segmentId={segment.segmentId}
+              />
+            </div>
+          );
+        } else if (segment.type === "activity_table_card") {
+          return (
+            <div key={idx} className="my-3">
+              <ActivityTableCard
+                location={segment.location}
+                segmentId={segment.segmentId}
+                categories={segment.categories}
+              />
+            </div>
+          );
+        } else if (segment.type === "flight_comparison_card") {
+          return (
+            <div key={idx} className="my-3">
+              <FlightComparisonCard
+                origin={segment.origin}
+                destination={segment.destination}
+                departDate={segment.departDate}
+                returnDate={segment.returnDate}
+                passengers={segment.passengers}
+              />
+            </div>
+          );
+        } else if (segment.type === "budget_breakdown_card") {
+          return (
+            <div key={idx} className="my-3">
+              <BudgetBreakdownCard
+                tripId={segment.tripId}
+              />
+            </div>
+          );
+        } else if (segment.type === "day_plan_card") {
+          return (
+            <div key={idx} className="my-3">
+              <DayPlanCard
+                tripId={segment.tripId}
+                date={segment.date}
+                segmentId={segment.segmentId}
+              />
+            </div>
+          );
+        } else if (segment.type === "places_map_card") {
+          return (
+            <div key={idx} className="my-3">
+              <PlacesMapCard
+                centerLat={segment.centerLat}
+                centerLng={segment.centerLng}
+                centerName={segment.centerName}
+                placeType={segment.placeType}
+                radius={segment.radius}
+                tripId={tripId}
+                segmentId={segmentId}
               />
             </div>
           );

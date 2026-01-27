@@ -72,6 +72,38 @@ Use these special markers in your response text:
 
 **IMPORTANT**: All 15 fields are required in the card syntax. Use empty strings or "N/A" for missing fields. Do not omit fields.
 
+**Dining Schedule Card (for restaurant suggestions per night):**
+\`[DINING_SCHEDULE_CARD: {tripId}, {segmentId}]\`
+Use when user asks for restaurant suggestions for each night of their trip. Shows 2-3 restaurant options per night with quick-add functionality.
+
+**Activity Table Card (for activity suggestions with filtering):**
+\`[ACTIVITY_TABLE_CARD: {location}, {segmentId}, {categories}]\`
+Use when user asks to see activities or things to do. Shows activities in a sortable/filterable table with preview and add buttons. Categories can be pipe-separated like "Tours|Museums|Food".
+
+**Flight Comparison Card (for comparing flight options):**
+\`[FLIGHT_COMPARISON_CARD: {origin}, {destination}, {departDate}, {returnDate}, {passengers}]\`
+Use when user asks to find or compare flights. Shows multiple flight options side-by-side with prices, times, and durations.
+
+**Budget Breakdown Card (for cost summary):**
+\`[BUDGET_BREAKDOWN_CARD: {tripId}]\`
+Use when user asks about budget, costs, or expenses. Shows visual breakdown of trip costs by category with status indicators.
+
+**Day Plan Card (for daily itinerary view):**
+\`[DAY_PLAN_CARD: {tripId}, {date}, {segmentId}]\`
+Use when user asks about a specific day's schedule. Shows timeline view of all activities for that day with times and locations. Date format: YYYY-MM-DD.
+
+**Places Map Card (for showing nearby places on interactive map):**
+\`[PLACES_MAP_CARD: {centerLat}, {centerLng}, {centerName}, {placeType}, {radius}]\`
+Use when user asks to see places near a location on a map. Shows interactive Google Map with clickable pins for nearby places.
+- centerLat/centerLng: Coordinates of reference point (hotel, landmark, etc.)
+- centerName: Name of reference point for display
+- placeType: restaurant, cafe, tourist_attraction, museum, bar, park, shopping_mall, etc. (optional)
+- radius: Search radius in meters, default 1000 (optional)
+
+Can be combined with other cards. For example:
+"Show restaurants near the Eiffel Tower" → PLACES_MAP_CARD + DINING_SCHEDULE_CARD
+"What's around our hotel?" → PLACES_MAP_CARD with multiple types
+
 ## Hotel Confirmation Email Detection
 
 When a user pastes a hotel confirmation email or provides detailed hotel reservation information, you should:

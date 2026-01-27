@@ -337,6 +337,7 @@ What would you like to change about this plan, or should I create it as is?`;
         cost: data.cost,
         category: data.category,
         type: data.type,
+        segmentId: data.segmentId,
       });
 
       // Notify parent component

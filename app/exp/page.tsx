@@ -40,11 +40,13 @@ export default async function ExpPage({
   let selectedTrip = null
   let selectedConversation = null
   let conversations: any[] = []
+  let showModalByDefault = false
 
   // Fetch all trips for the selector
   const allTrips = await prisma.trip.findMany({
     where: {
       userId: session.user.id,
+      status: { not: 'DRAFT' },
     },
     include: {
       segments: {
@@ -68,44 +70,56 @@ export default async function ExpPage({
     orderBy: { createdAt: "desc" },
   })
 
-  if (tripId) {
-    // Load specific trip with full relations
-    selectedTrip = allTrips.find(t => t.id === tripId) || null
+  // Determine which trip to load
+  const mostRecentTrip = allTrips[0] // Already sorted by createdAt desc
+  let tripToLoad = null
 
-    if (selectedTrip) {
-      // Get all conversations for this trip
-      conversations = await prisma.chatConversation.findMany({
-        where: {
-          tripId,
-          userId: session.user.id,
-        },
-        orderBy: { updatedAt: "desc" },
-        include: {
-          messages: {
-            orderBy: {
-              createdAt: "asc",
-            },
+  if (tripId) {
+    // Load specific trip from URL
+    tripToLoad = allTrips.find(t => t.id === tripId) || null
+  } else if (mostRecentTrip) {
+    // No tripId but user has trips - use most recent
+    tripToLoad = mostRecentTrip
+  } else {
+    // No trips at all - flag to show modal
+    showModalByDefault = true
+  }
+
+  if (tripToLoad) {
+    selectedTrip = tripToLoad
+
+    // Get all conversations for this trip
+    conversations = await prisma.chatConversation.findMany({
+      where: {
+        tripId: tripToLoad.id,
+        userId: session.user.id,
+      },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        messages: {
+          orderBy: {
+            createdAt: "asc",
           },
+        },
+      },
+    })
+
+    // Get latest conversation or create first one
+    selectedConversation = conversations[0]
+
+    if (!selectedConversation) {
+      selectedConversation = await prisma.chatConversation.create({
+        data: {
+          userId: session.user.id,
+          tripId: tripToLoad.id,
+          chatType: 'TRIP',
+          title: `${tripToLoad.title} - ${formatChatTimestamp(new Date())}`,
+        },
+        include: {
+          messages: true,
         },
       })
-
-      // Get latest conversation or create first one
-      selectedConversation = conversations[0]
-
-      if (!selectedConversation) {
-        selectedConversation = await prisma.chatConversation.create({
-          data: {
-            userId: session.user.id,
-            tripId,
-            chatType: 'TRIP',
-            title: `${selectedTrip.title} - ${formatChatTimestamp(new Date())}`,
-          },
-          include: {
-            messages: true,
-          },
-        })
-        conversations = [selectedConversation]
-      }
+      conversations = [selectedConversation]
     }
   }
 
@@ -128,6 +142,7 @@ export default async function ExpPage({
       userId={session.user.id}
       profileData={profileData}
       quickActions={quickActions}
+      showModalByDefault={showModalByDefault}
     />
   )
 }

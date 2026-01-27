@@ -148,6 +148,7 @@ export function PlaceHoverCard({ placeData, placeName, children, tripId, suggest
         notes: suggestion.context.notes,
       } : undefined,
       tripId,
+      segmentId: suggestion.segmentId,
     };
   };
 
@@ -418,6 +419,7 @@ export function PlaceHoverCard({ placeData, placeName, children, tripId, suggest
               category: data.category,
               type: data.type,
               status: data.status,
+              segmentId: data.segmentId,
             });
             
             setShowAddModal(false);

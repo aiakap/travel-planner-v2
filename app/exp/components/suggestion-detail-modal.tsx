@@ -42,6 +42,7 @@ interface SuggestionDetailModalProps {
     category: string;
     type: string;
     status?: "suggested" | "planned" | "confirmed";
+    segmentId?: string;
   }) => Promise<void>;
 }
 
@@ -176,8 +177,8 @@ export function SuggestionDetailModal({
           if (segInfo) {
             setSegmentInfo(segInfo);
             // Set dates to span the entire segment
-            setStartTime("15:00"); // Standard check-in time
-            setEndTime("11:00"); // Standard check-out time
+            setStartTime("16:00"); // Standard check-in time (4:00 PM)
+            setEndTime("12:00"); // Standard check-out time (noon)
             setSchedulingReason(
               `Hotel stay for entire ${segInfo.segmentTitle} segment (${segInfo.startDate} to ${segInfo.endDate})`
             );
@@ -275,6 +276,7 @@ export function SuggestionDetailModal({
         category: suggestion.category,
         type: suggestion.type,
         status, // Include status in the data sent
+        segmentId: suggestion.segmentId, // Pass segmentId for hotels
       });
       onClose();
     } catch (error) {
@@ -478,30 +480,48 @@ export function SuggestionDetailModal({
               </div>
             )}
 
-            {/* Day Selection */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">
-                Day
-              </label>
-              <select
-                value={selectedDay}
-                onChange={(e) => setSelectedDay(Number(e.target.value))}
-                className="w-full border border-gray-300 px-3 py-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {tripDays.map((day) => (
-                  <option key={day.day} value={day.day}>
-                    Day {day.day} - {day.dayOfWeek}, {day.date}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Day Selection - Different for Hotels */}
+            {suggestion.category === "Stay" && segmentInfo ? (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">
+                  Stay Duration
+                </label>
+                <div className="w-full border border-gray-300 px-3 py-2 rounded-md text-sm bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Check-in:</span>
+                    <span>{segmentInfo.startDate}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="font-medium">Check-out:</span>
+                    <span>{segmentInfo.endDate}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">
+                  Day
+                </label>
+                <select
+                  value={selectedDay}
+                  onChange={(e) => setSelectedDay(Number(e.target.value))}
+                  className="w-full border border-gray-300 px-3 py-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {tripDays.map((day) => (
+                    <option key={day.day} value={day.day}>
+                      Day {day.day} - {day.dayOfWeek}, {day.date}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Time Selection */}
             <div className="space-y-2">
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
                   <Clock className="h-3 w-3 inline mr-1" />
-                  Start Time
+                  {suggestion.category === "Stay" && segmentInfo ? "Check-in Time" : "Start Time"}
                 </label>
                 <input
                   type="time"
@@ -533,7 +553,7 @@ export function SuggestionDetailModal({
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-medium text-muted-foreground">
                       <Clock className="h-3 w-3 inline mr-1" />
-                      End Time
+                      {suggestion.category === "Stay" && segmentInfo ? "Check-out Time" : "End Time"}
                     </label>
                     <Button
                       type="button"

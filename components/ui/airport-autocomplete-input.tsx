@@ -10,6 +10,7 @@ interface Airport {
   city: string;
   country: string;
   displayName: string;
+  hasIATA?: boolean;
 }
 
 interface AirportAutocompleteInputProps {
@@ -28,6 +29,7 @@ export function AirportAutocompleteInput({
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [error, setError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<NodeJS.Timeout>();
@@ -37,6 +39,7 @@ export function AirportAutocompleteInput({
     if (query.trim().length < 2) {
       setResults([]);
       setShowDropdown(false);
+      setError(null);
       return;
     }
 
@@ -48,18 +51,63 @@ export function AirportAutocompleteInput({
     // Set new timer
     debounceTimer.current = setTimeout(async () => {
       setLoading(true);
+      setError(null);
       try {
-        const response = await fetch(`/api/airports/search?q=${encodeURIComponent(query)}`);
-        if (response.ok) {
-          const data = await response.json();
-          setResults(data.airports || []);
-          setShowDropdown(true);
+        console.log("Searching airports for:", query);
+        
+        // Try Google Places first (more reliable)
+        const googleResponse = await fetch(`/api/airports/search-google?q=${encodeURIComponent(query)}`);
+        console.log("Google Places airport search status:", googleResponse.status);
+        
+        if (googleResponse.ok) {
+          const googleData = await googleResponse.json();
+          console.log("Google Places airport search data:", googleData);
+          
+          if (googleData.airports && googleData.airports.length > 0) {
+            setResults(googleData.airports);
+            setShowDropdown(true);
+          } else {
+            // Fallback to Amadeus if Google returns no results
+            console.log("No Google results, trying Amadeus...");
+            const amadeusResponse = await fetch(`/api/airports/search?q=${encodeURIComponent(query)}`);
+            
+            if (amadeusResponse.ok) {
+              const amadeusData = await amadeusResponse.json();
+              console.log("Amadeus fallback data:", amadeusData);
+              setResults(amadeusData.airports || []);
+              setShowDropdown(true);
+              if (!amadeusData.airports || amadeusData.airports.length === 0) {
+                setError("No airports found");
+              }
+            } else {
+              setError("No airports found");
+              setResults([]);
+              setShowDropdown(true);
+            }
+          }
         } else {
-          setResults([]);
+          // If Google fails, try Amadeus
+          console.log("Google failed, trying Amadeus...");
+          const amadeusResponse = await fetch(`/api/airports/search?q=${encodeURIComponent(query)}`);
+          
+          if (amadeusResponse.ok) {
+            const amadeusData = await amadeusResponse.json();
+            setResults(amadeusData.airports || []);
+            setShowDropdown(true);
+            if (!amadeusData.airports || amadeusData.airports.length === 0) {
+              setError("No airports found");
+            }
+          } else {
+            setError("Failed to search airports");
+            setResults([]);
+            setShowDropdown(true);
+          }
         }
       } catch (error) {
         console.error("Airport search error:", error);
+        setError("Network error - please try again");
         setResults([]);
+        setShowDropdown(true);
       } finally {
         setLoading(false);
       }
@@ -149,7 +197,7 @@ export function AirportAutocompleteInput({
         >
           {results.map((airport, index) => (
             <button
-              key={airport.iataCode}
+              key={`${airport.iataCode}-${index}`}
               onClick={() => handleSelect(airport)}
               className={`w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 ${
                 index === selectedIndex ? "bg-gray-100" : ""
@@ -157,8 +205,13 @@ export function AirportAutocompleteInput({
             >
               <Plane className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">
-                  {airport.name} ({airport.iataCode})
+                <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                  <span>{airport.name} ({airport.iataCode})</span>
+                  {airport.hasIATA === false && (
+                    <span className="text-[10px] bg-orange-100 text-orange-700 px-1 py-0.5 rounded">
+                      estimated
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500 truncate">
                   {airport.city}, {airport.country}
@@ -169,12 +222,14 @@ export function AirportAutocompleteInput({
         </div>
       )}
 
-      {showDropdown && !loading && results.length === 0 && query.trim().length >= 2 && (
+      {showDropdown && !loading && query.trim().length >= 2 && (results.length === 0 || error) && (
         <div
           ref={dropdownRef}
           className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-3"
         >
-          <p className="text-sm text-gray-500 text-center">No airports found</p>
+          <p className={`text-sm text-center ${error ? 'text-red-500' : 'text-gray-500'}`}>
+            {error || "No airports found"}
+          </p>
         </div>
       )}
     </div>

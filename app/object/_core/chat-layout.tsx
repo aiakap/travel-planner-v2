@@ -145,7 +145,7 @@ export function ChatLayout({
   }, []);
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 80px)", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", paddingTop: "73px" }}>
       {/* Left Panel - Chat */}
       {!panelState.isLeftCollapsed && (
         <div

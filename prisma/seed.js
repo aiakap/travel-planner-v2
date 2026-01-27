@@ -530,6 +530,239 @@ ABSOLUTE RULES
 
 TRAVEL CONTEXT TO VISUALIZE:`
     },
+
+    // 4. Travel Scrapbook - TRIP
+    {
+      name: "Travel Scrapbook - Trip",
+      category: "trip",
+      style: "scrapbook_collage",
+      lightness: "light",
+      prompt: `Create a rich, textured travel scrapbook page featuring a collage of photos and textures inspired by the destinations listed below.
+
+VISUAL STYLE & MEDIUM
+- Create a busy, layered scrapbook page with vintage travel ephemera
+- Include overlapping vintage photos (slightly faded, warm tones)
+- Add map fragments, postage stamps, ticket stubs, and travel stickers
+- Show visible paper textures with torn or deckled edges
+- Include washi tape, photo corners, and adhesive marks for authenticity
+- Warm, nostalgic color palette with aged paper tones (cream, sepia, warm whites)
+- Subtle shadows and depth to show physical layering of elements
+
+THE LAYOUT (CRITICAL)
+In the center of this busy scrapbook page, place a CLEAN, WHITE, RECTANGULAR CARD made of smooth, high-quality paper. This card should look like it is physically taped or glued onto the scrapbook page with visible corner attachments (tape pieces or photo corners).
+
+The white card should be:
+- Perfectly centered in the composition
+- Large enough to be prominent but leaving scrapbook elements visible around the edges
+- Pristine white with subtle shadow underneath to show elevation
+- Clearly separate from the busy background
+
+THE CONTENT (RENDERED ON THE WHITE CARD ONLY)
+Inside the clean white card, render this content in a sharp, dark serif font:
+- Journey dates (at the top)
+- Journey title (prominent, centered or left-aligned)
+- Journey duration (subtle, smaller text)
+
+And include one simple, minimalist line-art icon representing the journey character (beach umbrella for beach journeys, mountain peak for mountain journeys, city skyline for city journeys, etc.)
+
+The text and icon must be strictly confined to the white card and must NOT bleed into the scrapbook background.
+
+SCRAPBOOK BACKGROUND DETAILS
+- Layered vintage travel photos showing abstract destination imagery (beaches, mountains, cities - non-specific)
+- Fragments of vintage maps with visible geographic features
+- Colorful vintage postage stamps from various countries
+- Ticket stubs and boarding passes (aged, weathered look)
+- Travel stickers and destination badges
+- Handwritten-style decorative elements (NO readable text, just decorative loops and marks)
+- Warm color palette: sepia tones, faded blues, vintage reds, cream, tan, dusty yellow
+- Elements should frame the white card, creating visual interest without competing
+
+COMPOSITION
+- Vertical format (9:16 or 2:3 aspect ratio)
+- White card positioned in center third of the image
+- Scrapbook elements distributed around the card, denser at edges
+- Some elements may slightly overlap the card edges but NOT the text area
+- Create visual balance with layers and textures
+- Maintain breathing room around the white card
+
+LIGHTING & ATMOSPHERE
+- Soft, even lighting as if photographed from above
+- Warm, nostalgic mood suggesting cherished memories
+- Subtle shadows creating depth between layers
+- Aged, vintage feel with slightly faded colors in background
+- Clean, crisp white card contrasts with warm, textured background
+
+ABSOLUTE RULES
+- NO readable text anywhere except on the white card (dates, title, duration)
+- White card must be centered, prominent, and unobstructed
+- Scrapbook background elements are decorative only - NO actual readable words on stamps, tickets, or photos
+- Must be vertical orientation
+- NO corporate logos or modern branding
+- NO digital/modern elements (smartphones, QR codes, etc.)
+- The white card must remain the clear focal point
+- Background should enhance but not overwhelm
+
+TRAVEL CONTEXT TO VISUALIZE:`
+    },
+
+    // 4. Travel Scrapbook - SEGMENT
+    {
+      name: "Travel Scrapbook - Segment",
+      category: "segment",
+      style: "scrapbook_collage",
+      lightness: "medium",
+      prompt: `Create a rich, textured travel scrapbook page featuring a collage focused on the journey between two destinations.
+
+VISUAL STYLE & MEDIUM
+- Layered scrapbook aesthetic focused on travel and transportation
+- Include vintage photos of transportation modes (planes, trains, roads, boats - non-specific, artistic)
+- Add route maps (stylized, decorative), compass roses, and directional elements
+- Show ticket stubs, boarding passes, and travel documents (aged look)
+- Include vintage travel stamps and transportation-themed stickers
+- Warm, adventurous color palette suggesting movement and journey
+- Visible paper textures, torn edges, and layered ephemera
+- Medium saturation with more energy than trip-level scrapbooks
+
+THE LAYOUT (CRITICAL)
+In the center of this busy scrapbook page, place a CLEAN, WHITE, RECTANGULAR CARD made of smooth, high-quality paper. This card should look like it is physically taped or glued onto the scrapbook page.
+
+The white card should be:
+- Centered in the composition
+- Prominent and elevated above the busy background
+- Clean, crisp white with subtle shadow for depth
+- Corners may show tape or photo corner attachments
+
+THE CONTENT (RENDERED ON THE WHITE CARD ONLY)
+Inside the clean white card, render this content in a sharp, dark serif font:
+- Chapter name/description (prominent)
+- Departure city → Arrival city (with arrow or vs.)
+- Departure and arrival times
+- Chapter duration
+
+And include one simple, minimalist line-art icon representing the transportation mode (airplane silhouette, train, car, ship, etc.)
+
+All text and icon must be confined to the white card only.
+
+SCRAPBOOK BACKGROUND DETAILS
+- Focus on chapter-themed ephemera: route maps, compass imagery, directional arrows
+- Vintage transportation photos (abstract, artistic - no specific identifiable vehicles)
+- Boarding passes, tickets, luggage tags (aged, weathered)
+- Travel stamps showing movement between locations
+- Map fragments highlighting routes and paths (decorative, not literal)
+- Warm color palette: vintage blues (aviation), warm reds (rail), earthy tones (road travel)
+- Elements suggest motion, adventure, and transition
+- More dynamic composition than journey-level to show movement
+
+COMPOSITION
+- Vertical format (9:16 or 2:3 aspect ratio)
+- White card centered with chapter details
+- Background elements suggest directionality (top to bottom, or left to right flow)
+- Transportation-themed elements distributed around the card
+- Slightly more energetic arrangement than journey-level
+
+LIGHTING & ATMOSPHERE
+- Bright, optimistic lighting suggesting adventure
+- Time-of-day appropriate to the journey timing
+- Dynamic feel with sense of movement
+- Warm, nostalgic tones mixed with travel excitement
+- Clean white card contrasts with textured background
+
+ABSOLUTE RULES
+- NO readable text except on the white card
+- White card must be centered and prominent
+- Background elements are decorative only
+- Must be vertical orientation
+- NO modern technology visible (no smartphones, digital displays)
+- NO corporate airline/train logos or branding
+- Transportation icons should be vintage/timeless silhouettes
+- Background maps and routes should be artistic, not literal GPS paths
+
+TRAVEL CONTEXT TO VISUALIZE:`
+    },
+
+    // 4. Travel Scrapbook - RESERVATION
+    {
+      name: "Travel Scrapbook - Reservation",
+      category: "reservation",
+      style: "scrapbook_collage",
+      lightness: "dark",
+      prompt: `Create a rich, textured travel scrapbook page featuring a collage focused on a specific activity or venue.
+
+VISUAL STYLE & MEDIUM
+- Intimate, detailed scrapbook page focused on moment type
+- Layered vintage photos suggesting the activity or venue type
+- Include venue-specific ephemera: restaurant menus (decorative), hotel keys, activity tickets, attraction passes
+- Rich, warm textures with deeper tones than journey/chapter levels
+- Visible paper layering with sophisticated, curated feel
+- Darker, more saturated color palette suggesting special moments
+- Elements specific to moment category (dining, lodging, activities)
+
+THE LAYOUT (CRITICAL)
+In the center of this scrapbook page, place a CLEAN, WHITE, RECTANGULAR CARD made of smooth, high-quality paper. This card should look like it is physically attached to the scrapbook page with corner details.
+
+The white card should be:
+- Prominently centered
+- Clean, bright white contrasting with richer background
+- Elevated with visible shadow for depth
+- Corners showing attachment method (tape, corners, or pins)
+
+THE CONTENT (RENDERED ON THE WHITE CARD ONLY)
+Inside the clean white card, render this content in a sharp, dark serif font:
+- Moment name (prominent)
+- Venue or provider name
+- Date and time of moment
+- Duration (if applicable)
+
+And include one simple, minimalist line-art icon representing the moment type:
+- Hotel/Stay: bed or building icon
+- Dining: fork and knife or plate icon
+- Activity: relevant activity icon (hiking boot, theater mask, museum column, etc.)
+- Attraction: landmark or ticket icon
+
+All content must be confined to the white card only.
+
+SCRAPBOOK BACKGROUND DETAILS
+- Category-specific imagery:
+  * Hotel/Stay: vintage hotel photos, room keys, postcards, city views
+  * Dining: menu fragments, recipe cards, food photography (artistic), wine labels
+  * Activity: equipment photos, trail maps, adventure stamps, activity badges
+  * Attraction: vintage attraction posters, entry tickets, souvenir stamps
+- Rich, warm color palette appropriate to category:
+  * Hotel: deep blues, warm golds, evening tones
+  * Dining: burgundy, amber, rich food tones
+  * Activity: environment-specific (ocean blues, forest greens, mountain grays)
+- Deeper saturation and richer tones than journey/chapter levels
+- More intimate scale showing venue details
+- Layered ephemera creating sophisticated, curated look
+
+COMPOSITION
+- Vertical format (9:16 or 2:3 aspect ratio)
+- White card centered with moment details
+- Background elements focused on venue character and experience type
+- More intimate, close-up perspective than journey/chapter
+- Dense, rich layering suggesting special experience
+- Elements frame the white card, creating visual richness
+
+LIGHTING & ATMOSPHERE
+- Warmer, more intimate lighting than journey/chapter levels
+- Evening or golden hour preferred for sophisticated mood
+- Richer shadows and deeper tones creating visual weight
+- Special occasion feel - romantic, exciting, or adventurous depending on type
+- Time-of-day appropriate to moment timing when provided
+- Clean white card provides bright focal point against rich background
+
+ABSOLUTE RULES
+- NO readable text except on the white card (name, venue, time, duration)
+- White card must be centered, prominent, and easily readable
+- Background elements are decorative only - NO actual readable menu items, signs, or labels
+- Must be vertical orientation
+- NO corporate logos or recognizable branding
+- NO modern technology (no smartphones, digital screens)
+- Category-specific elements must be clearly suggested but remain artistic/abstract
+- Background should create ambiance without competing with card content
+
+TRAVEL CONTEXT TO VISUALIZE:`
+    },
   ];
 
   for (const prompt of imagePrompts) {

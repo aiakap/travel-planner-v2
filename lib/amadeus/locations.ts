@@ -93,11 +93,16 @@ export async function getCityCode(keyword: string): Promise<string | null> {
  * @param max Maximum number of results (default: 10)
  */
 export async function searchAirports(keyword: string, max: number = 10): Promise<any[]> {
-  const amadeus = getAmadeusClient();
-
   try {
     console.log(`✈️  Searching airports: "${keyword}"`);
+    console.log(`🔑 Amadeus credentials check:`, {
+      clientId: process.env.AMADEUS_CLIENT_ID ? 'Set' : 'Missing',
+      clientSecret: process.env.AMADEUS_CLIENT_SECRET ? 'Set' : 'Missing',
+    });
     
+    const amadeus = getAmadeusClient();
+    
+    console.log('📡 Making Amadeus API call...');
     const response = await amadeus.referenceData.locations.get({
       keyword,
       subType: 'AIRPORT',
@@ -106,8 +111,14 @@ export async function searchAirports(keyword: string, max: number = 10): Promise
 
     console.log(`✅ Found ${response.data.length} airports`);
     return response.data;
-  } catch (error) {
-    console.error('Airport search failed:', error);
+  } catch (error: any) {
+    console.error('❌ Airport search failed:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      description: error.description,
+      response: error.response?.result,
+    });
     const parsedError = parseAmadeusError(error);
     throw parsedError;
   }

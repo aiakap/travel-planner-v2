@@ -1,29 +1,30 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { updateUserProfile } from "@/lib/actions/profile-actions";
-import { User, Pencil, Check, X } from "lucide-react";
+import { PlacesAutocompleteInput } from "@/components/ui/places-autocomplete-input";
+import { updateUserProfile, addMultipleHomeAirports } from "@/lib/actions/profile-actions";
+import { User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoSave } from "@/hooks/use-auto-save";
+import { SaveStatusIndicator } from "@/components/ui/save-status-indicator";
 
 interface PersonalInfoSectionProps {
   userName: string;
   userEmail: string;
   userImage: string;
   initialProfile: any;
+  onNearestAirportsFound?: (airports: any[]) => void;
 }
-
-type EditingField = "firstName" | "lastName" | "dateOfBirth" | "address" | "city" | "country" | null;
 
 export function PersonalInfoSection({
   userName,
   userEmail,
   userImage,
   initialProfile,
+  onNearestAirportsFound,
 }: PersonalInfoSectionProps) {
-  const [editingField, setEditingField] = useState<EditingField>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   
@@ -36,47 +37,215 @@ export function PersonalInfoSection({
     country: initialProfile?.country || "",
   });
 
-  const [tempValue, setTempValue] = useState("");
+  // Auto-save handlers for each field
+  const saveFirstName = useCallback(async (value: string) => {
+    await updateUserProfile({ firstName: value });
+  }, []);
 
-  const startEditing = (field: EditingField) => {
-    if (field) {
-      setTempValue(formData[field]);
-      setEditingField(field);
-    }
-  };
+  const saveLastName = useCallback(async (value: string) => {
+    await updateUserProfile({ lastName: value });
+  }, []);
 
-  const cancelEditing = () => {
-    setEditingField(null);
-    setTempValue("");
-  };
+  const saveDateOfBirth = useCallback(async (value: string) => {
+    await updateUserProfile({ dateOfBirth: value ? new Date(value) : undefined });
+  }, []);
 
-  const saveField = async (field: EditingField) => {
-    if (!field) return;
-    
+  const saveCity = useCallback(async (value: string) => {
+    await updateUserProfile({ city: value });
+  }, []);
+
+  const saveCountry = useCallback(async (value: string) => {
+    await updateUserProfile({ country: value });
+  }, []);
+
+  // Auto-save hooks
+  const firstNameAutoSave = useAutoSave({
+    value: formData.firstName,
+    onSave: saveFirstName,
+    enabled: formData.firstName !== initialProfile?.firstName,
+  });
+
+  const lastNameAutoSave = useAutoSave({
+    value: formData.lastName,
+    onSave: saveLastName,
+    enabled: formData.lastName !== initialProfile?.lastName,
+  });
+
+  const dateOfBirthAutoSave = useAutoSave({
+    value: formData.dateOfBirth,
+    onSave: saveDateOfBirth,
+    enabled: formData.dateOfBirth !== (initialProfile?.dateOfBirth ? new Date(initialProfile.dateOfBirth).toISOString().split('T')[0] : ""),
+  });
+
+  const cityAutoSave = useAutoSave({
+    value: formData.city,
+    onSave: saveCity,
+    enabled: formData.city !== initialProfile?.city,
+  });
+
+  const countryAutoSave = useAutoSave({
+    value: formData.country,
+    onSave: saveCountry,
+    enabled: formData.country !== initialProfile?.country,
+  });
+
+  // Determine overall save status
+  const overallSaveStatus = [
+    firstNameAutoSave.saveStatus,
+    lastNameAutoSave.saveStatus,
+    dateOfBirthAutoSave.saveStatus,
+    cityAutoSave.saveStatus,
+    countryAutoSave.saveStatus,
+  ].includes("saving") ? "saving" : [
+    firstNameAutoSave.saveStatus,
+    lastNameAutoSave.saveStatus,
+    dateOfBirthAutoSave.saveStatus,
+    cityAutoSave.saveStatus,
+    countryAutoSave.saveStatus,
+  ].includes("saved") ? "saved" : [
+    firstNameAutoSave.saveStatus,
+    lastNameAutoSave.saveStatus,
+    dateOfBirthAutoSave.saveStatus,
+    cityAutoSave.saveStatus,
+    countryAutoSave.saveStatus,
+  ].includes("error") ? "error" : "idle";
+
+  // Handle place selection from autocomplete
+  const handlePlaceSelect = async (placeDetails: any) => {
     setLoading(true);
     try {
-      const updateData: any = {};
+      console.log("Place details received:", placeDetails);
+      console.log("All address components:", placeDetails.addressComponents);
       
-      if (field === "dateOfBirth") {
-        updateData[field] = tempValue ? new Date(tempValue) : undefined;
-      } else {
-        updateData[field] = tempValue;
+      // Parse address components
+      const addressComponents = placeDetails.addressComponents || [];
+      
+      let streetAddress = "";
+      let city = "";
+      let state = "";
+      let country = "";
+      
+      for (const component of addressComponents) {
+        const types = component.types || [];
+        
+        if (types.includes("street_number")) {
+          streetAddress = component.long_name + " ";
+        } else if (types.includes("route")) {
+          streetAddress += component.long_name;
+        } else if (types.includes("locality")) {
+          city = component.long_name;
+        } else if (types.includes("administrative_area_level_1")) {
+          state = component.long_name;
+        } else if (types.includes("country")) {
+          country = component.long_name;
+          console.log("Country found:", country, "Component:", component);
+        }
       }
-
+      
+      // Debug log for country
+      const countryComponent = addressComponents.find((c: any) => c.types.includes("country"));
+      console.log("Country component:", countryComponent);
+      
+      // If no city found, try using state or first part of formatted address
+      if (!city && state) {
+        city = state;
+      } else if (!city && placeDetails.formattedAddress) {
+        const parts = placeDetails.formattedAddress.split(',');
+        if (parts.length > 1) {
+          city = parts[parts.length - 2].trim();
+        }
+      }
+      
+      // Use formatted address if no street address was found
+      const finalAddress = streetAddress.trim() || placeDetails.formattedAddress || "";
+      
+      console.log("Parsed address data:", { finalAddress, city, country });
+      
+      // ALWAYS update all three fields, even if they already have values
+      const updateData = {
+        address: finalAddress,
+        city: city || "",
+        country: country || "",
+      };
+      
       await updateUserProfile(updateData);
-      setFormData({ ...formData, [field]: tempValue });
-      setEditingField(null);
-      setTempValue("");
+      
+      setFormData({
+        ...formData,
+        address: finalAddress,
+        city: city || "",
+        country: country || "",
+      });
+      
+      // Mark auto-save fields as saved to prevent double-saving
+      cityAutoSave.markAsSaved();
+      countryAutoSave.markAsSaved();
       
       toast({
-        title: "Profile updated",
-        description: "Your information has been saved",
+        title: "Address updated",
+        description: "Your address and location details have been saved",
       });
+
+      // Find and auto-add nearest airports
+      if (placeDetails.location) {
+        console.log("Finding nearest airports for location:", placeDetails.location);
+        
+        try {
+          const airportResponse = await fetch(
+            `/api/airports/nearest?lat=${placeDetails.location.lat}&lng=${placeDetails.location.lng}&limit=2`
+          );
+          
+          if (airportResponse.ok) {
+            const airportData = await airportResponse.json();
+            console.log("Nearest airports found:", airportData.airports);
+            
+            if (airportData.airports && airportData.airports.length > 0) {
+              // Auto-add the airports
+              const airportsToAdd = airportData.airports.map((a: any) => ({
+                iataCode: a.iataCode,
+                name: a.name,
+                city: a.city,
+                country: a.country,
+              }));
+              
+              const result = await addMultipleHomeAirports(airportsToAdd);
+              console.log("Airports added result:", result);
+              
+              if (result.added > 0) {
+                // Notify parent component about the newly added airports
+                if (onNearestAirportsFound) {
+                  onNearestAirportsFound(airportData.airports);
+                }
+                
+                // Show toast with airport info
+                const airportNames = result.airports
+                  .map((a: any) => `${a.iataCode} (${airportData.airports.find((ap: any) => ap.iataCode === a.iataCode)?.distance}km)`)
+                  .join(", ");
+                
+                toast({
+                  title: "Home airports added",
+                  description: `${airportNames} have been automatically added to your home airports`,
+                  duration: 6000,
+                });
+              } else {
+                toast({
+                  title: "Airports already added",
+                  description: "The nearest airports are already in your home airports",
+                  duration: 4000,
+                });
+              }
+            }
+          }
+        } catch (airportError) {
+          console.error("Error finding nearest airports:", airportError);
+          // Don't show error to user - this is a nice-to-have feature
+        }
+      }
     } catch (error) {
-      console.error("Error updating profile:", error);
+      console.error("Error updating address:", error);
       toast({
         title: "Error",
-        description: "Failed to update profile",
+        description: "Failed to update address",
         variant: "destructive",
       });
     } finally {
@@ -84,68 +253,14 @@ export function PersonalInfoSection({
     }
   };
 
-  const renderField = (
-    field: EditingField,
-    label: string,
-    value: string,
-    type: string = "text",
-    fullWidth: boolean = false
-  ) => {
-    const isEditing = editingField === field;
-    
-    return (
-      <div className={`space-y-2 ${fullWidth ? "" : ""}`}>
-        <Label className="text-sm text-gray-600">{label}</Label>
-        {isEditing ? (
-          <div className="flex items-center gap-2">
-            <Input
-              type={type}
-              value={tempValue}
-              onChange={(e) => setTempValue(e.target.value)}
-              disabled={loading}
-              className="flex-1"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") saveField(field);
-                if (e.key === "Escape") cancelEditing();
-              }}
-            />
-            <Button
-              onClick={() => saveField(field)}
-              disabled={loading}
-              size="sm"
-              className="h-9"
-            >
-              <Check className="w-4 h-4" />
-            </Button>
-            <Button
-              onClick={cancelEditing}
-              disabled={loading}
-              size="sm"
-              variant="ghost"
-              className="h-9"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        ) : (
-          <div
-            onClick={() => startEditing(field)}
-            className="group flex items-center justify-between px-3 py-2 border rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
-          >
-            <span className={value ? "text-gray-900" : "text-gray-400"}>
-              {value || `Add ${label.toLowerCase()}`}
-            </span>
-            <Pencil className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-        )}
-      </div>
-    );
-  };
+  const inlineInputClass = "px-3 py-2 border-none bg-transparent hover:bg-gray-50 focus:bg-white focus:border focus:border-gray-300 focus:shadow-sm rounded-md transition-all cursor-text";
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Personal Information</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Personal Information</h2>
+        <SaveStatusIndicator status={overallSaveStatus} />
+      </div>
 
       <div className="flex items-center gap-3 pb-3 border-b">
         {userImage ? (
@@ -163,16 +278,82 @@ export function PersonalInfoSection({
 
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-4">
-          {renderField("firstName", "First Name", formData.firstName)}
-          {renderField("lastName", "Last Name", formData.lastName)}
+          {/* First Name */}
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-600">First Name</Label>
+            <Input
+              type="text"
+              value={formData.firstName}
+              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              onBlur={firstNameAutoSave.saveImmediately}
+              placeholder="Enter first name"
+              className={inlineInputClass}
+            />
+          </div>
+
+          {/* Last Name */}
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-600">Last Name</Label>
+            <Input
+              type="text"
+              value={formData.lastName}
+              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+              onBlur={lastNameAutoSave.saveImmediately}
+              placeholder="Enter last name"
+              className={inlineInputClass}
+            />
+          </div>
         </div>
 
-        {renderField("dateOfBirth", "Date of Birth", formData.dateOfBirth, "date", true)}
-        {renderField("address", "Address", formData.address, "text", true)}
+        {/* Date of Birth */}
+        <div className="space-y-2">
+          <Label className="text-sm text-gray-600">Date of Birth</Label>
+          <Input
+            type="date"
+            value={formData.dateOfBirth}
+            onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+            onBlur={dateOfBirthAutoSave.saveImmediately}
+            className={inlineInputClass}
+          />
+        </div>
+
+        {/* Address - uses autocomplete */}
+        <div className="space-y-2">
+          <Label className="text-sm text-gray-600">Address (optional)</Label>
+          <PlacesAutocompleteInput
+            onSelect={handlePlaceSelect}
+            placeholder="Search for an address, city, or country..."
+            value={formData.address}
+            onChange={(val) => setFormData({ ...formData, address: val })}
+          />
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
-          {renderField("city", "City", formData.city)}
-          {renderField("country", "Country", formData.country)}
+          {/* City */}
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-600">City (optional)</Label>
+            <Input
+              type="text"
+              value={formData.city}
+              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              onBlur={cityAutoSave.saveImmediately}
+              placeholder="Enter city"
+              className={inlineInputClass}
+            />
+          </div>
+
+          {/* Country */}
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-600">Country (optional)</Label>
+            <Input
+              type="text"
+              value={formData.country}
+              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+              onBlur={countryAutoSave.saveImmediately}
+              placeholder="Enter country"
+              className={inlineInputClass}
+            />
+          </div>
         </div>
       </div>
     </div>

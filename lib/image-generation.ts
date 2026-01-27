@@ -39,16 +39,8 @@ export async function generateAndUploadImageImmediate(
   specificPromptId?: string
 ): Promise<GeneratedImageResult> {
   // 1. Select prompt theme - either specific one or AI picks best
-  let selectedPrompt: ImagePrompt;
-  if (specificPromptId) {
-    const prompt = await prisma.imagePrompt.findUnique({
-      where: { id: specificPromptId, category: entityType },
-    });
-    if (!prompt) throw new Error("Invalid prompt ID");
-    selectedPrompt = prompt;
-  } else {
-    selectedPrompt = await selectBestPromptForContent(entity, entityType);
-  }
+  const selectionResult = await selectBestPromptForContent(entity, entityType);
+  const selectedPrompt = selectionResult.prompt;
 
   // 2. Build complete prompt with all entity data
   const fullPrompt = buildContextualPrompt(selectedPrompt, entity, entityType);
@@ -75,33 +67,44 @@ export async function generateAndUploadImageImmediate(
 }
 
 // Helper functions to select prompts for specific entity types
-export async function selectBestPromptForTrip(trip: any, specificPromptId?: string) {
+export async function selectBestPromptForTrip(trip: any, specificPromptId?: string): Promise<PromptSelectionResult> {
   if (specificPromptId) {
     const prompt = await prisma.imagePrompt.findUnique({
       where: { id: specificPromptId, category: "trip" },
     });
     if (!prompt) throw new Error("Prompt not found");
-    return prompt;
+    const availablePrompts = await prisma.imagePrompt.findMany({
+      where: { category: "trip" },
+    });
+    return {
+      prompt,
+      reasoning: "Manually selected by user",
+      availablePrompts,
+    };
   }
-  const content = `Title: ${trip.title}\nDescription: ${trip.description || ""}`;
-  return await selectBestPromptForContent(content, "trip");
+  return await selectBestPromptForContent(trip, "trip");
 }
 
-export async function selectBestPromptForSegment(segment: any) {
-  const content = `Name: ${segment.name}\nFrom: ${segment.startTitle}\nTo: ${segment.endTitle}\nNotes: ${segment.notes || ""}`;
-  return await selectBestPromptForContent(content, "segment");
+export async function selectBestPromptForSegment(segment: any): Promise<PromptSelectionResult> {
+  return await selectBestPromptForContent(segment, "segment");
 }
 
-export async function selectBestPromptForReservation(reservation: any) {
-  const content = `Name: ${reservation.name}\nLocation: ${reservation.location || ""}\nNotes: ${reservation.notes || ""}`;
-  return await selectBestPromptForContent(content, "reservation");
+export async function selectBestPromptForReservation(reservation: any): Promise<PromptSelectionResult> {
+  return await selectBestPromptForContent(reservation, "reservation");
+}
+
+// Extended type for prompt selection with reasoning
+interface PromptSelectionResult {
+  prompt: ImagePrompt;
+  reasoning?: string;
+  availablePrompts: ImagePrompt[];
 }
 
 // AI analyzes trip/segment/reservation data to pick best theme
 async function selectBestPromptForContent(
   entity: any,
   entityType: "trip" | "segment" | "reservation"
-): Promise<ImagePrompt> {
+): Promise<PromptSelectionResult> {
   // Fetch all prompts for this category from database
   const availablePrompts = await prisma.imagePrompt.findMany({
     where: { category: entityType },
@@ -125,24 +128,66 @@ async function selectBestPromptForContent(
       messages: [
         {
           role: "system",
-          content: `You are a travel imagery expert. Analyze the travel details and select the most appropriate visual style from the available options. Consider: destination type (urban/nature/beach/mountains), travel dates (season), activity type, and destination character. Return only the prompt name exactly as provided.`,
+          content: `You are a travel imagery expert. Analyze the travel details and select the most appropriate visual style.
+
+Consider:
+- Destination type (urban/nature/beach/mountains)
+- Travel dates and season
+- Activity type and character
+- Number of destinations (multi-city trips work well with scrapbook collage)
+- Trip sentiment (personal/family trips suit nostalgic scrapbook style)
+
+Available styles:
+- Retro Gouache: Classic mid-century poster aesthetic
+- Golden Hour: Dramatic lighting and silhouettes
+- Map Journey: Artistic cartography
+- Travel Scrapbook: Nostalgic collage with layered memories (great for multi-destination or personal trips)
+
+Return JSON: {"promptName": "exact name from list", "reasoning": "1-2 sentence explanation why this style fits best"}`,
         },
         {
           role: "user",
-          content: `Travel Details:\n${analysisContext}\n\nAvailable Styles:\n${availablePrompts.map((p) => p.name).join("\n")}\n\nSelect the single best matching style name:`,
+          content: `Travel Details:\n${analysisContext}\n\nAvailable Styles:\n${availablePrompts.map((p) => p.name).join("\n")}\n\nSelect the single best matching style:`,
         },
       ],
       temperature: 0.3,
+      response_format: { type: "json_object" },
     });
 
-    const selectedName = completion.choices[0].message.content?.trim();
-    const selectedPrompt = availablePrompts.find((p) => p.name === selectedName);
+    const responseText = completion.choices[0].message.content?.trim();
+    if (responseText) {
+      try {
+        const response = JSON.parse(responseText);
+        const selectedName = response.promptName;
+        const reasoning = response.reasoning;
+        const selectedPrompt = availablePrompts.find((p) => p.name === selectedName);
 
-    return selectedPrompt || availablePrompts[0];
+        if (selectedPrompt) {
+          return {
+            prompt: selectedPrompt,
+            reasoning,
+            availablePrompts,
+          };
+        }
+      } catch (parseError) {
+        console.error("Error parsing AI response:", parseError);
+      }
+    }
+
+    // Fallback to first available prompt
+    return {
+      prompt: availablePrompts[0],
+      reasoning: "Fallback selection (AI response parse failed)",
+      availablePrompts,
+    };
   } catch (error) {
     console.error("Error selecting prompt with AI:", error);
     // Fallback to first available prompt
-    return availablePrompts[0];
+    return {
+      prompt: availablePrompts[0],
+      reasoning: "Fallback selection (AI call failed)",
+      availablePrompts,
+    };
   }
 }
 
@@ -182,6 +227,167 @@ Notes: ${entity.notes || "No notes"}`;
   }
 }
 
+// Scrapbook-specific helper functions
+function extractDestinations(segments: any[]): string {
+  if (!segments || segments.length === 0) return "various destinations";
+  const allLocations = segments.map((s: any) => s.startTitle).filter(Boolean);
+  const uniqueLocations = [...new Set(allLocations)];
+  return uniqueLocations.slice(0, 3).join(", ") + (uniqueLocations.length > 3 ? ` and ${uniqueLocations.length - 3} more` : "");
+}
+
+function extractTripCharacter(segments: any[]): string {
+  if (!segments || segments.length === 0) return "vacation";
+  
+  const types = segments.map((s: any) => s.segmentType?.name).filter(Boolean);
+  
+  if (types.includes("STAY") && types.includes("ROAD_TRIP")) return "road trip adventure";
+  if (types.includes("RETREAT")) return "retreat experience";
+  if (types.includes("TOUR")) return "guided tour";
+  if (types.includes("ROAD_TRIP")) return "road trip";
+  if (types.filter((t: string) => t === "STAY").length > 1) return "multi-city tour";
+  
+  // Infer from location names
+  const locations = segments.map((s: any) => s.startTitle?.toLowerCase() || "").filter(Boolean);
+  const locationText = locations.join(" ");
+  
+  if (locationText.includes("beach") || locationText.includes("coast") || locationText.includes("island")) return "beach vacation";
+  if (locationText.includes("mountain") || locationText.includes("alps") || locationText.includes("peak")) return "mountain adventure";
+  if (locationText.includes("city") || locations.length > 2) return "city exploration";
+  
+  return "journey";
+}
+
+function formatDateRange(startDate: Date | null | undefined, endDate: Date | null | undefined): string {
+  if (!startDate || !endDate) return "Dates TBD";
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  const startMonth = start.toLocaleDateString("en-US", { month: "short" });
+  const startDay = start.getDate();
+  const endMonth = end.toLocaleDateString("en-US", { month: "short" });
+  const endDay = end.getDate();
+  const year = start.getFullYear();
+  
+  if (startMonth === endMonth) {
+    return `${startMonth} ${startDay}-${endDay}, ${year}`;
+  }
+  return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${year}`;
+}
+
+function extractTransportationIcon(segmentType: string | null | undefined): string {
+  if (!segmentType) return "journey icon";
+  
+  const type = segmentType.toLowerCase();
+  if (type.includes("flight") || type.includes("air")) return "airplane silhouette";
+  if (type.includes("train") || type.includes("rail")) return "train icon";
+  if (type.includes("car") || type.includes("drive") || type.includes("road")) return "car icon";
+  if (type.includes("boat") || type.includes("ferry") || type.includes("cruise")) return "ship icon";
+  if (type.includes("bus")) return "bus icon";
+  
+  return "journey icon";
+}
+
+function formatSegmentRoute(entity: any): string {
+  const from = entity.startTitle || "Origin";
+  const to = entity.endTitle || "Destination";
+  return `${from} → ${to}`;
+}
+
+function formatReservationTime(entity: any): string {
+  if (!entity.startTime) return "Time TBD";
+  
+  const date = new Date(entity.startTime);
+  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  
+  return `${time}, ${dateStr}`;
+}
+
+function extractReservationIcon(entity: any): string {
+  const category = entity.reservationType?.category?.name?.toLowerCase() || "";
+  const type = entity.reservationType?.name?.toLowerCase() || "";
+  
+  if (category.includes("lodging") || type.includes("hotel") || type.includes("stay")) {
+    return "bed icon";
+  }
+  if (category.includes("dining") || type.includes("restaurant") || type.includes("food")) {
+    return "fork and knife icon";
+  }
+  if (type.includes("museum")) return "museum column icon";
+  if (type.includes("theater") || type.includes("show")) return "theater mask icon";
+  if (type.includes("tour")) return "guide flag icon";
+  if (type.includes("hike") || type.includes("outdoor")) return "hiking boot icon";
+  if (type.includes("beach")) return "beach umbrella icon";
+  if (type.includes("spa")) return "spa leaf icon";
+  
+  return "activity icon";
+}
+
+function buildScrapbookPromptForTrip(template: string, entity: any): string {
+  const segments = entity.segments || [];
+  const destinations = extractDestinations(segments);
+  const tripCharacter = extractTripCharacter(segments);
+  const dateRange = formatDateRange(entity.startDate, entity.endDate);
+  const duration = getDurationInDays(entity.startDate, entity.endDate);
+  
+  return template
+    .replace(/\[destinations\]/g, destinations)
+    .replace(/Journey dates/g, dateRange)
+    .replace(/Journey title/g, entity.title || "Untitled Journey")
+    .replace(/Journey duration/g, `${duration} day${duration !== 1 ? "s" : ""}`)
+    .replace(/\[journey character\]/g, tripCharacter)
+    + `\n\nTRAVEL CONTEXT TO VISUALIZE:
+Journey: ${entity.title}
+Dates: ${dateRange}
+Duration: ${duration} days
+Destinations: ${destinations}
+Character: ${tripCharacter}`;
+}
+
+function buildScrapbookPromptForSegment(template: string, entity: any): string {
+  const transportIcon = extractTransportationIcon(entity.segmentType?.name);
+  const route = formatSegmentRoute(entity);
+  const departureTime = entity.startTime ? formatDateTime(entity.startTime) : "Departure TBD";
+  const arrivalTime = entity.endTime ? formatDateTime(entity.endTime) : "Arrival TBD";
+  const duration = entity.startTime && entity.endTime ? getDuration(entity.startTime, entity.endTime) : "Duration TBD";
+  
+  return template
+    .replace(/Chapter name\/description/g, entity.name || "Chapter")
+    .replace(/Departure city → Arrival city/g, route)
+    .replace(/Departure and arrival times/g, `${departureTime} → ${arrivalTime}`)
+    .replace(/Chapter duration/g, duration)
+    .replace(/transportation mode \(.*?\)/g, transportIcon)
+    + `\n\nTRAVEL CONTEXT TO VISUALIZE:
+Chapter: ${entity.name}
+Route: ${route}
+Transportation: ${entity.segmentType?.name || "Travel"}
+Departure: ${departureTime}
+Arrival: ${arrivalTime}
+Duration: ${duration}
+Icon: ${transportIcon}`;
+}
+
+function buildScrapbookPromptForReservation(template: string, entity: any): string {
+  const icon = extractReservationIcon(entity);
+  const time = formatReservationTime(entity);
+  const duration = entity.startTime && entity.endTime ? getDuration(entity.startTime, entity.endTime) : "";
+  const venue = entity.location || "Venue TBD";
+  
+  return template
+    .replace(/Moment name/g, entity.name || "Moment")
+    .replace(/Venue or provider name/g, venue)
+    .replace(/Date and time of moment/g, time)
+    .replace(/Duration \(if applicable\)/g, duration || "Duration varies")
+    .replace(/moment type:.*?\)/g, `moment type: ${icon}`)
+    + `\n\nTRAVEL CONTEXT TO VISUALIZE:
+Moment: ${entity.name}
+Type: ${entity.reservationType?.name || "Activity"}
+Venue: ${venue}
+Time: ${time}
+${duration ? `Duration: ${duration}` : ""}
+Icon: ${icon}`;
+}
+
 // Combine template + actual entity data (exported for queue processor)
 export function buildContextualPrompt(
   promptTemplate: ImagePrompt,
@@ -189,8 +395,20 @@ export function buildContextualPrompt(
   entityType: "trip" | "segment" | "reservation"
 ): string {
   const template = promptTemplate.prompt;
+  const isScrapbook = promptTemplate.style === "scrapbook_collage";
 
-  // Build the TRAVEL CONTEXT section with actual data
+  // Special handling for scrapbook prompts
+  if (isScrapbook) {
+    if (entityType === "trip") {
+      return buildScrapbookPromptForTrip(template, entity);
+    } else if (entityType === "segment") {
+      return buildScrapbookPromptForSegment(template, entity);
+    } else {
+      return buildScrapbookPromptForReservation(template, entity);
+    }
+  }
+
+  // Build the TRAVEL CONTEXT section with actual data (for non-scrapbook prompts)
   let travelContext = "";
 
   if (entityType === "trip") {
@@ -492,4 +710,48 @@ function getDuration(startTime: Date, endTime: Date): string {
   }
 
   return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
+}
+
+// Image generation logging functions
+export async function logImageGeneration(data: {
+  entityType: "trip" | "segment" | "reservation";
+  entityId: string;
+  entityName?: string;
+  promptId?: string;
+  promptName?: string;
+  promptStyle?: string;
+  fullPrompt: string;
+  aiReasoning?: string;
+  selectionReason?: string;
+  availablePrompts?: string[];
+  callerFunction?: string;
+  callerSource?: string;
+  userId?: string;
+  status: "success" | "failed" | "in_progress";
+  imageUrl?: string;
+  errorMessage?: string;
+  generationTimeMs?: number;
+  imageProvider?: string;
+}) {
+  return await prisma.imageGenerationLog.create({
+    data: {
+      ...data,
+      availablePrompts: data.availablePrompts ? JSON.stringify(data.availablePrompts) : null,
+    },
+  });
+}
+
+export async function updateImageGenerationLog(
+  logId: string,
+  updates: {
+    status?: "success" | "failed" | "in_progress";
+    imageUrl?: string;
+    errorMessage?: string;
+    generationTimeMs?: number;
+  }
+) {
+  return await prisma.imageGenerationLog.update({
+    where: { id: logId },
+    data: updates,
+  });
 }

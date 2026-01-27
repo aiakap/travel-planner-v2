@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { TripBuilderClient } from '@/app/trip/new/components/trip-builder-client';
 
 interface TripBuilderModalProps {
@@ -74,6 +76,9 @@ export function TripBuilderModal({
         className="max-w-2xl w-[95vw] max-h-[95vh] p-0 overflow-hidden"
         showCloseButton={true}
       >
+        <VisuallyHidden>
+          <DialogTitle>Create New Trip</DialogTitle>
+        </VisuallyHidden>
         <div className="h-full flex flex-col overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center h-full min-h-[400px]">

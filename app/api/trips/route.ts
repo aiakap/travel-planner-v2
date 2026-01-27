@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     const trips = await prisma.trip.findMany({
       where: {
         userId: session.user.id,
+        status: { not: 'DRAFT' },
       },
       include: {
         segments: {

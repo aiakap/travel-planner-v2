@@ -93,6 +93,85 @@ export function parseCardsFromText(text: string): {
     cleanText = cleanText.replace(match[0], '');
   }
   
+  // Parse DINING_SCHEDULE_CARD
+  const diningScheduleRegex = /\[DINING_SCHEDULE_CARD: ([^,]+)(?:, ([^\]]+))?\]/g;
+  
+  while ((match = diningScheduleRegex.exec(text)) !== null) {
+    segments.push({
+      type: "dining_schedule_card",
+      tripId: match[1].trim(),
+      segmentId: match[2]?.trim(),
+    });
+    cleanText = cleanText.replace(match[0], '');
+  }
+  
+  // Parse ACTIVITY_TABLE_CARD
+  const activityTableRegex = /\[ACTIVITY_TABLE_CARD: ([^,]+)(?:, ([^,]+))?(?:, ([^\]]+))?\]/g;
+  
+  while ((match = activityTableRegex.exec(text)) !== null) {
+    segments.push({
+      type: "activity_table_card",
+      location: match[1].trim(),
+      segmentId: match[2]?.trim(),
+      categories: match[3]?.trim(),
+    });
+    cleanText = cleanText.replace(match[0], '');
+  }
+  
+  // Parse FLIGHT_COMPARISON_CARD
+  const flightComparisonRegex = /\[FLIGHT_COMPARISON_CARD: ([^,]+), ([^,]+), ([^,]+)(?:, ([^,]+))?(?:, ([^\]]+))?\]/g;
+  
+  while ((match = flightComparisonRegex.exec(text)) !== null) {
+    segments.push({
+      type: "flight_comparison_card",
+      origin: match[1].trim(),
+      destination: match[2].trim(),
+      departDate: match[3].trim(),
+      returnDate: match[4]?.trim(),
+      passengers: match[5] ? parseInt(match[5].trim()) : undefined,
+    });
+    cleanText = cleanText.replace(match[0], '');
+  }
+  
+  // Parse BUDGET_BREAKDOWN_CARD
+  const budgetBreakdownRegex = /\[BUDGET_BREAKDOWN_CARD: ([^\]]+)\]/g;
+  
+  while ((match = budgetBreakdownRegex.exec(text)) !== null) {
+    segments.push({
+      type: "budget_breakdown_card",
+      tripId: match[1].trim(),
+    });
+    cleanText = cleanText.replace(match[0], '');
+  }
+  
+  // Parse DAY_PLAN_CARD
+  const dayPlanRegex = /\[DAY_PLAN_CARD: ([^,]+), ([^,]+)(?:, ([^\]]+))?\]/g;
+  
+  while ((match = dayPlanRegex.exec(text)) !== null) {
+    segments.push({
+      type: "day_plan_card",
+      tripId: match[1].trim(),
+      date: match[2].trim(),
+      segmentId: match[3]?.trim(),
+    });
+    cleanText = cleanText.replace(match[0], '');
+  }
+  
+  // Parse PLACES_MAP_CARD
+  const placesMapRegex = /\[PLACES_MAP_CARD: ([^,]+), ([^,]+), ([^,]+)(?:, ([^,]+))?(?:, ([^\]]+))?\]/g;
+  
+  while ((match = placesMapRegex.exec(text)) !== null) {
+    segments.push({
+      type: "places_map_card",
+      centerLat: parseFloat(match[1].trim()),
+      centerLng: parseFloat(match[2].trim()),
+      centerName: match[3].trim(),
+      placeType: match[4]?.trim(),
+      radius: match[5] ? parseInt(match[5].trim()) : 1000,
+    });
+    cleanText = cleanText.replace(match[0], '');
+  }
+  
   // Clean up extra whitespace
   cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
   

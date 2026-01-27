@@ -13,6 +13,7 @@ export interface PlaceSuggestion {
     specificTime?: string; // e.g., "7:00 PM"
     notes?: string; // Additional context or recommendations
   };
+  segmentId?: string; // For hotels that span entire segments
 }
 
 export interface GooglePlaceData {
@@ -125,6 +126,43 @@ export type MessageSegment =
       step: number;
       totalSteps: number;
       message: string;
+    }
+  | {
+      type: "dining_schedule_card";
+      tripId: string;
+      segmentId?: string;
+    }
+  | {
+      type: "activity_table_card";
+      location: string;
+      segmentId?: string;
+      categories?: string;
+    }
+  | {
+      type: "flight_comparison_card";
+      origin: string;
+      destination: string;
+      departDate: string;
+      returnDate?: string;
+      passengers?: number;
+    }
+  | {
+      type: "budget_breakdown_card";
+      tripId: string;
+    }
+  | {
+      type: "day_plan_card";
+      tripId: string;
+      date: string;
+      segmentId?: string;
+    }
+  | {
+      type: "places_map_card";
+      centerLat: number;
+      centerLng: number;
+      centerName: string;
+      placeType?: string;
+      radius?: number;
     };
 
 // Stage outputs

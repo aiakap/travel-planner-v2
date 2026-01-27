@@ -9,10 +9,11 @@ export async function queueImageGeneration(
   entityType: "trip" | "segment" | "reservation",
   entityId: string,
   prompt: string,
-  promptId?: string
+  promptId?: string,
+  logId?: string
 ): Promise<string> {
   console.log(`[queueImageGeneration] Starting - entityType: ${entityType}, entityId: ${entityId}`);
-  console.log(`[queueImageGeneration] Prompt length: ${prompt.length}, promptId: ${promptId}`);
+  console.log(`[queueImageGeneration] Prompt length: ${prompt.length}, promptId: ${promptId}, logId: ${logId}`);
   
   try {
     // Check if there's already a pending/in-progress job for this entity
@@ -33,6 +34,7 @@ export async function queueImageGeneration(
         data: {
           prompt,
           promptId,
+          logId,
           updatedAt: new Date(),
         },
       });
@@ -47,6 +49,7 @@ export async function queueImageGeneration(
       entityId,
       promptLength: prompt.length,
       promptId,
+      logId,
       status: "waiting"
     });
     
@@ -56,6 +59,7 @@ export async function queueImageGeneration(
         entityId,
         prompt,
         promptId,
+        logId,
         status: "waiting",
         notes: `[${new Date().toISOString()}] Queued for processing`,
       },
@@ -66,7 +70,8 @@ export async function queueImageGeneration(
       id: queueEntry.id,
       entityType: queueEntry.entityType,
       entityId: queueEntry.entityId,
-      status: queueEntry.status
+      status: queueEntry.status,
+      logId: queueEntry.logId
     });
     
     return queueEntry.id;
@@ -159,12 +164,14 @@ export async function processQueueEntry(queueId: string) {
     throw new Error(`Cannot process entry with status: ${entry.status}`);
   }
 
+  const startTime = Date.now();
+
   try {
     // Mark as in progress
     await updateQueueStatus(queueId, "in_progress", "Starting image generation");
 
     // Import image generation functions (server-side only)
-    const { generateImageWithDALLE, uploadImageToStorage } = await import("./image-generation");
+    const { generateImageWithDALLE, uploadImageToStorage, updateImageGenerationLog } = await import("./image-generation");
 
     // Generate image with DALL-E
     const dalleImageUrl = await generateImageWithDALLE(entry.prompt);
@@ -186,9 +193,29 @@ export async function processQueueEntry(queueId: string) {
       permanentUrl
     );
 
+    // Update the generation log if logId exists
+    if (entry.logId) {
+      const generationTimeMs = Date.now() - startTime;
+      await updateImageGenerationLog(entry.logId, {
+        status: "success",
+        imageUrl: permanentUrl,
+        generationTimeMs,
+      });
+    }
+
     return { success: true, imageUrl: permanentUrl };
   } catch (error: any) {
     await updateQueueStatus(queueId, "failed", `Error: ${error.message}`);
+    
+    // Update the generation log if logId exists
+    if (entry.logId) {
+      const { updateImageGenerationLog } = await import("./image-generation");
+      await updateImageGenerationLog(entry.logId, {
+        status: "failed",
+        errorMessage: error.message,
+      });
+    }
+    
     throw error;
   }
 }

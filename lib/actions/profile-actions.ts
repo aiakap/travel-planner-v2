@@ -476,6 +476,49 @@ export async function addHomeAirport(airportData: {
   return updated;
 }
 
+export async function addMultipleHomeAirports(airportsData: Array<{
+  iataCode: string;
+  name: string;
+  city: string;
+  country: string;
+}>) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Not authenticated");
+  }
+
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+
+  const currentAirports = (profile?.homeAirports as any[]) || [];
+  
+  // Filter out duplicates
+  const newAirports = airportsData.filter(
+    (newAirport) => !currentAirports.some((a: any) => a.iataCode === newAirport.iataCode)
+  );
+  
+  if (newAirports.length === 0) {
+    return { added: 0, airports: currentAirports };
+  }
+
+  const updatedAirports = [...currentAirports, ...newAirports];
+
+  const updated = await prisma.userProfile.upsert({
+    where: { userId: session.user.id },
+    update: { homeAirports: updatedAirports },
+    create: {
+      userId: session.user.id,
+      homeAirports: updatedAirports,
+    },
+  });
+
+  revalidateTag(`user-profile-${session.user.id}`);
+  revalidatePath("/profile");
+  
+  return { added: newAirports.length, airports: newAirports };
+}
+
 export async function removeHomeAirport(iataCode: string) {
   const session = await auth();
   if (!session?.user?.id) {

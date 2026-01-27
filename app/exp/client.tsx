@@ -17,6 +17,8 @@ import { TableView } from "@/app/exp/components/table-view"
 import { PhotosView } from "@/app/exp/components/photos-view"
 import { ReservationDetailModal } from "@/app/exp/components/reservation-detail-modal"
 import { ExistingChatDialog } from "@/app/exp/components/existing-chat-dialog"
+import { MultiCityTripModal } from "@/app/exp/components/multi-city-trip-modal"
+import { TimelineCollapsedView } from "@/app/exp/components/timeline-collapsed-view"
 import { transformTripToV0Format } from "@/lib/v0-data-transform"
 import type { V0Itinerary } from "@/lib/v0-types"
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization"
@@ -124,6 +126,7 @@ interface ExpClientProps {
   userId: string
   profileData?: UserPersonalizationData | null
   quickActions?: ChatQuickAction[]
+  showModalByDefault?: boolean
 }
 
 type ViewMode = "table" | "timeline" | "photos"
@@ -137,6 +140,7 @@ export function ExpClient({
   userId,
   profileData = null,
   quickActions = [],
+  showModalByDefault = false,
 }: ExpClientProps) {
   // State
   const [trips, setTrips] = useState<DBTrip[]>(initialTrips)
@@ -162,6 +166,9 @@ export function ExpClient({
     entityName: string;
     existingChats: any[];
   } | null>(null)
+  const [isMultiCityModalOpen, setIsMultiCityModalOpen] = useState(false)
+  const [isTimelineVisible, setIsTimelineVisible] = useState(true) // Default visible for existing trips
+  const [timelineVisibility, setTimelineVisibility] = useState<Record<string, boolean>>({})
 
   // Refs
   const isDragging = useRef(false)
@@ -458,8 +465,8 @@ export function ExpClient({
           }
         );
       } else if (type === 'car-rental') {
-        const { addCarRentalsToTrip } = await import('@/lib/actions/add-car-rentals-to-trip');
-        result = await addCarRentalsToTrip({
+        const { addCarRentalToTrip } = await import('@/lib/actions/add-car-rentals-to-trip');
+        result = await addCarRentalToTrip({
           tripId: selectedTripId,
           segmentId: null,
           carRentalData: data,
@@ -782,24 +789,8 @@ What would you like to change about this plan, or should I create it as is?`;
       // Navigate to trip with URL parameter
       window.location.href = `/exp?tripId=${tripId}`
     } else {
-      // Create a new conversation for a new trip
-      try {
-        const newConversation = await createConversation("New Conversation", false)
-        
-        // Update state - add messages field to match Conversation type
-        setConversations([{ ...newConversation, messages: [] }, ...conversations])
-        setCurrentConversationId(newConversation.id)
-        setSelectedTripId(null)
-        setMessages([])
-        setHasStartedPlanning(false)
-        
-        // Navigate to new conversation
-        window.location.href = `/exp`
-      } catch (error) {
-        console.error("Error creating new conversation:", error)
-        // Fallback to simple navigation
-        window.location.href = `/exp`
-      }
+      // Open multi-city modal for new trip
+      setIsMultiCityModalOpen(true)
     }
   }
   
@@ -1262,7 +1253,12 @@ What would you like to change about this plan, or should I create it as is?`;
       console.log('[createNewSegmentChat] Conversation created:', conversation.id);
       
       // 2. Add to state and switch to it (empty initially)
-      const fullConversation = { ...conversation, messages: [], chatType: 'SEGMENT' as const };
+      const fullConversation = { 
+        ...conversation, 
+        messages: [], 
+        chatType: 'SEGMENT' as const,
+        segmentId: conversation.segmentId  // Include segmentId for context card loading
+      };
       setConversations(prev => [fullConversation, ...prev]);
       setCurrentConversationId(conversation.id);
       setMessages([]); // Start empty
@@ -1387,7 +1383,8 @@ What would you like to change about this plan, or should I create it as is?`;
       if (segment) {
         // Transform segment to V0 format for createNewSegmentChat
         const transformedTrip = selectedTrip ? transformTripToV0Format(selectedTrip) : null;
-        const v0Segment = transformedTrip?.segments.find(s => String(s.id) === entityId);
+        // Use dbId (UUID) instead of id (numeric index) for consistent ID handling
+        const v0Segment = transformedTrip?.segments.find(s => s.dbId === entityId);
         if (v0Segment) await createNewSegmentChat(v0Segment);
       }
     } else {
@@ -1403,6 +1400,93 @@ What would you like to change about this plan, or should I create it as is?`;
     sendMessage(prompt);
   };
 
+  // Handler for multi-city trip modal submission
+  const handleMultiCitySubmit = async (data: {
+    title?: string;
+    startDate: Date;
+    cities: Array<{ city: string; durationDays: number }>;
+  }) => {
+    try {
+      console.log('[Journey] Sending request:', {
+        cities: data.cities,
+        startDate: data.startDate.toISOString(),
+        conversationId: currentConversationId,
+      });
+
+      const response = await fetch('/api/trip/create-multi-city', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          startDate: data.startDate.toISOString(),
+          conversationId: currentConversationId,
+        }),
+      });
+
+      console.log('[Journey] Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Journey] API error response:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || 'Unknown error' };
+        }
+        throw new Error(errorData.error || 'Failed to create journey');
+      }
+
+      const result = await response.json();
+      console.log('[Journey] Trip created:', result.tripId);
+
+      // Finalize trip (update status to PLANNING and trigger image generation)
+      try {
+        const { finalizeTrip } = await import('@/app/trip/new/actions/finalize-trip');
+        await finalizeTrip(result.tripId);
+        console.log('[Journey] Trip finalized');
+      } catch (error) {
+        console.error('[Journey] Failed to finalize trip:', error);
+        // Continue anyway - trip was created successfully
+      }
+
+      // Navigate to the trip
+      window.location.href = `/exp?tripId=${result.tripId}`;
+    } catch (error: any) {
+      console.error('[Journey] Error:', error);
+      throw error;
+    }
+  };
+
+  // Handler for expanding timeline
+  const handleExpandTimeline = () => {
+    setIsTimelineVisible(true);
+    if (selectedTripId) {
+      setTimelineVisibility(prev => ({
+        ...prev,
+        [selectedTripId]: true
+      }));
+    }
+  };
+
+  // Update timeline visibility when trip changes
+  useEffect(() => {
+    if (selectedTripId) {
+      // Check if this trip has been viewed before, default to visible for existing trips
+      const isVisible = timelineVisibility[selectedTripId] ?? true;
+      setIsTimelineVisible(isVisible);
+    } else {
+      setIsTimelineVisible(true);
+    }
+  }, [selectedTripId, timelineVisibility]);
+
+  // Auto-show modal when user has no trips - DISABLED
+  // useEffect(() => {
+  //   if (showModalByDefault && !selectedTripId) {
+  //     setIsMultiCityModalOpen(true);
+  //   }
+  // }, [showModalByDefault, selectedTripId]);
+
   // Handler for editing an item
   const handleEditItem = (v0Reservation: any) => {
     // Find the actual database reservation from selectedTrip using the ID
@@ -1415,48 +1499,49 @@ What would you like to change about this plan, or should I create it as is?`;
     
     for (const segment of selectedTrip.segments) {
       const found = segment.reservations.find(r => r.id === v0Reservation.id)
-      
       if (found) {
         dbReservation = found
         segmentName = segment.name
-        dayDate = segment.startTime ? new Date(segment.startTime).toLocaleDateString() : ""
+        
+        // Get the day date from the segment
+        if (segment.startTime) {
+          dayDate = new Date(segment.startTime).toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+          })
+        }
         break
       }
     }
     
-    if (!dbReservation) {
-      console.error("Could not find database reservation with ID:", v0Reservation.id)
-      return
+    if (dbReservation) {
+      setSelectedReservation({
+        ...dbReservation,
+        segmentName,
+        dayDate
+      })
     }
-    
-    // Pass the database reservation to the modal
-    setSelectedReservation({
-      reservation: dbReservation,
-      itemTitle: dbReservation.vendor || dbReservation.name,
-      itemTime: dbReservation.startTime ? new Date(dbReservation.startTime).toLocaleTimeString() : '',
-      itemType: dbReservation.reservationType.category.name.toLowerCase(),
-      dayDate
-    })
   }
 
-  // Handler for deleting a reservation
   const handleDeleteReservation = async (reservationId: string) => {
-    setIsDeleting(true)
     try {
-      const { deleteReservation } = await import("@/lib/actions/delete-reservation");
-      await deleteReservation(reservationId);
-
-      // Close the modals
-      setIsDeleteDialogOpen(false)
+      setIsDeleting(true)
+      
+      // Import and call the delete action
+      const { deleteReservation } = await import("@/lib/actions/delete-reservation")
+      await deleteReservation(reservationId)
+      
+      // Refetch the trip data
+      await refetchTrip()
+      
+      // Close the modal and dialog
       setSelectedReservation(null)
+      setIsDeleteDialogOpen(false)
       setReservationToDelete(null)
-
-      // Refresh the page to reload data
-      router.refresh()
     } catch (error) {
-      console.error('Error deleting reservation:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to delete reservation: ${errorMessage}`);
+      console.error("Error deleting reservation:", error)
+      // TODO: Show error toast
     } finally {
       setIsDeleting(false)
     }
@@ -1723,6 +1808,17 @@ What would you like to change about this plan, or should I create it as is?`;
                   Edit
                 </Button>
               )}
+              
+              {/* New Journey button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 flex items-center gap-2"
+                onClick={() => setIsMultiCityModalOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                New Journey
+              </Button>
             </div>
           </div>
 
@@ -1934,27 +2030,41 @@ What would you like to change about this plan, or should I create it as is?`;
               <div className="flex-1 overflow-y-auto p-3 overscroll-contain pb-24 md:pb-8">
                 {transformedTrip ? (
                   <>
-                    {viewMode === "table" && (
-                      <TableView 
-                        segments={transformedTrip.segments} 
-                        onSelectReservation={setSelectedReservation}
-                        onChatAboutItem={handleChatAboutItem}
-                        onChatAboutSegment={handleChatAboutSegment}
-                        onEditItem={handleEditItem}
+                    {!isTimelineVisible ? (
+                      <TimelineCollapsedView
+                        tripTitle={transformedTrip.title}
+                        cityNames={transformedTrip.segments.map(s => s.name.replace(/^Stay in /, '').replace(/ → .*/, ''))}
+                        totalDays={Math.ceil((selectedTrip!.endDate.getTime() - selectedTrip!.startDate.getTime()) / (1000 * 60 * 60 * 24))}
+                        segmentCount={transformedTrip.segments.length}
+                        stayCount={transformedTrip.segments.filter(s => s.type !== 'Flight').length}
+                        travelCount={transformedTrip.segments.filter(s => s.type === 'Flight').length}
+                        onExpand={handleExpandTimeline}
                       />
-                    )}
-                    {viewMode === "timeline" && (
-                      <TimelineView
-                        segments={transformedTrip.segments}
-                        heroImage={transformedTrip.heroImage}
-                        onSelectReservation={setSelectedReservation}
-                        onChatAboutItem={handleChatAboutItem}
-                        onChatAboutSegment={handleChatAboutSegment}
-                        onEditItem={handleEditItem}
-                      />
-                    )}
-                    {viewMode === "photos" && (
-                      <PhotosView segments={transformedTrip.segments} onSelectReservation={setSelectedReservation} />
+                    ) : (
+                      <>
+                        {viewMode === "table" && (
+                          <TableView 
+                            segments={transformedTrip.segments} 
+                            onSelectReservation={setSelectedReservation}
+                            onChatAboutItem={handleChatAboutItem}
+                            onChatAboutSegment={handleChatAboutSegment}
+                            onEditItem={handleEditItem}
+                          />
+                        )}
+                        {viewMode === "timeline" && (
+                          <TimelineView
+                            segments={transformedTrip.segments}
+                            heroImage={transformedTrip.heroImage}
+                            onSelectReservation={setSelectedReservation}
+                            onChatAboutItem={handleChatAboutItem}
+                            onChatAboutSegment={handleChatAboutSegment}
+                            onEditItem={handleEditItem}
+                          />
+                        )}
+                        {viewMode === "photos" && (
+                          <PhotosView segments={transformedTrip.segments} onSelectReservation={setSelectedReservation} />
+                        )}
+                      </>
                     )}
                   </>
                 ) : (
@@ -2068,6 +2178,13 @@ What would you like to change about this plan, or should I create it as is?`;
           onCancel={() => setExistingChatsDialog(null)}
         />
       )}
+
+      {/* Multi-City Trip Modal */}
+      <MultiCityTripModal
+        isOpen={isMultiCityModalOpen}
+        onClose={() => setIsMultiCityModalOpen(false)}
+        onSubmit={handleMultiCitySubmit}
+      />
     </div>
   )
 }

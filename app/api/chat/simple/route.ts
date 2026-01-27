@@ -12,6 +12,74 @@ import { validateAIResponse, formatValidationErrors } from "@/lib/ai/validate-ai
 
 export const maxDuration = 60;
 
+// Helper functions for hotel-to-segment matching
+
+/**
+ * Calculate simple Euclidean distance between two coordinates
+ * Good enough for proximity matching within a region
+ */
+function calculateDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const dLat = lat2 - lat1;
+  const dLng = lng2 - lng1;
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+}
+
+/**
+ * Find the closest segment to a hotel based on coordinates
+ * Checks distance to both start and end points of each segment
+ */
+function findClosestSegment(
+  hotelLat: number,
+  hotelLng: number,
+  segments: Array<{
+    id: string;
+    startLat: number;
+    startLng: number;
+    endLat: number;
+    endLng: number;
+    startTitle: string;
+  }>
+): string | undefined {
+  if (!segments.length) return undefined;
+
+  let closestSegment = segments[0];
+  let minDistance = Infinity;
+
+  for (const segment of segments) {
+    // Check distance to both start and end locations
+    const distToStart = calculateDistance(
+      hotelLat,
+      hotelLng,
+      segment.startLat,
+      segment.startLng
+    );
+    const distToEnd = calculateDistance(
+      hotelLat,
+      hotelLng,
+      segment.endLat,
+      segment.endLng
+    );
+
+    // Use the closer of the two
+    const dist = Math.min(distToStart, distToEnd);
+
+    if (dist < minDistance) {
+      minDistance = dist;
+      closestSegment = segment;
+    }
+  }
+
+  console.log(
+    `   Hotel closest to segment: ${closestSegment.startTitle} (distance: ${minDistance.toFixed(4)})`
+  );
+  return closestSegment.id;
+}
+
 // Helper to get trip context for the conversation
 async function getTripContext(conversationId: string, userId: string): Promise<string | null> {
   try {
@@ -389,6 +457,62 @@ export async function POST(req: Request) {
       content: message,
     });
 
+    // Check for multi-city intent before AI processing
+    const { parseMultiCityIntent, extractStartDate, extractTripTitle } = await import("@/lib/ai/parse-multi-city-intent");
+    const multiCityIntent = parseMultiCityIntent(message);
+    
+    if (multiCityIntent.isMultiCity && multiCityIntent.cities.length >= 2) {
+      console.log(`[MultiCity] Detected multi-city intent: ${multiCityIntent.cities.length} cities`);
+      
+      try {
+        const startDate = extractStartDate(message) || (() => {
+          const date = new Date();
+          date.setDate(date.getDate() + 7);
+          return date;
+        })();
+        
+        const title = extractTripTitle(message);
+        
+        // Create multi-city trip
+        const { createMultiCityTrip } = await import("@/lib/actions/create-multi-city-trip");
+        const result = await createMultiCityTrip({
+          title,
+          startDate,
+          cities: multiCityIntent.cities,
+          conversationId,
+        });
+        
+        // Generate success message
+        const cityNames = multiCityIntent.cities.map(c => c.city.split(',')[0].trim());
+        const responseContent = `I've created your multi-city trip! Here's what I set up:
+
+${multiCityIntent.cities.map((c, i) => `${i + 1}. ${c.city} - ${c.durationDays} day${c.durationDays !== 1 ? 's' : ''}`).join('\n')}
+
+Total: ${result.totalDays} days across ${cityNames.length} cities
+Segments created: ${result.segments.length} (${result.segments.filter(s => s.type === 'Stay').length} stays, ${result.segments.filter(s => s.type === 'Flight').length} flights)
+
+Click "View Full Timeline" in the itinerary panel to see your complete journey. You can start adding hotels, activities, and other details to each city!`;
+
+        // Save assistant message
+        await saveMessageDirect({
+          conversationId,
+          userId,
+          role: "assistant",
+          content: responseContent,
+        });
+
+        return NextResponse.json({
+          content: responseContent,
+          segments: [],
+          tripCreated: true,
+          tripId: result.tripId,
+        });
+      } catch (error: any) {
+        console.error("[MultiCity] Error creating trip:", error);
+        // Fall through to normal AI processing if multi-city creation fails
+      }
+    }
+
     // Stage 1: Generate AI response (NO TOOLS - just text and place suggestions)
     console.log("\n📍 Running 3-stage pipeline with server actions...");
     const stage1Start = Date.now();
@@ -512,13 +636,59 @@ export async function POST(req: Request) {
     const stage2Start = Date.now();
     let stage2Output;
     try {
-      const places = (stage1Output as any).places || [];
+      let places = (stage1Output as any).places || [];
+      
+      // Enrich hotel suggestions with segmentId based on chat type
+      // For SEGMENT and RESERVATION chats, we can assign immediately (no coordinates needed)
+      if (chatType === 'SEGMENT' && focusedSegment) {
+        places = places.map((place: any) => {
+          if (place.category === "Stay") {
+            console.log(`   [SEGMENT CHAT] Enriching hotel "${place.suggestedName}" with segmentId: ${focusedSegment.id}`);
+            return { ...place, segmentId: focusedSegment.id };
+          }
+          return place;
+        });
+      } else if (chatType === 'RESERVATION' && focusedReservation?.segment) {
+        places = places.map((place: any) => {
+          if (place.category === "Stay") {
+            console.log(`   [RESERVATION CHAT] Enriching hotel "${place.suggestedName}" with parent segment: ${focusedReservation.segment.id}`);
+            return { ...place, segmentId: focusedReservation.segment.id };
+          }
+          return place;
+        });
+      }
+      // TRIP chat enrichment happens after Google Places resolution (need coordinates)
+      
       stage2Output = await resolvePlaces(places);
       console.log(`✅ Stage 2 complete (${Date.now() - stage2Start}ms)`);
       const successCount = Object.values(stage2Output.placeMap).filter(
         p => !p.notFound
       ).length;
       console.log(`   Resolved ${successCount}/${places.length} places`);
+      
+      // Stage 2.5: Post-resolution enrichment for TRIP chats
+      // Now that we have coordinates from Google Places, match hotels to closest segment
+      if ((chatType === 'TRIP' || !chatType) && trip.segments.length > 0) {
+        places = places.map((place: any) => {
+          if (place.category === "Stay" && !place.segmentId) {
+            const placeData = stage2Output.placeMap[place.suggestedName];
+            if (placeData?.location) {
+              const segmentId = findClosestSegment(
+                placeData.location.lat,
+                placeData.location.lng,
+                trip.segments
+              );
+              if (segmentId) {
+                console.log(`   [TRIP CHAT] Enriching hotel "${place.suggestedName}" with closest segment: ${segmentId}`);
+                return { ...place, segmentId };
+              }
+            } else {
+              console.log(`   [TRIP CHAT] No location data for hotel "${place.suggestedName}", skipping segment assignment`);
+            }
+          }
+          return place;
+        });
+      }
     } catch (error) {
       console.error("❌ Stage 2 failed:", error);
       return NextResponse.json(
@@ -527,7 +697,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Stage 2.5: Parse card syntax from AI response
+    // Stage 2.6: Parse card syntax from AI response
     const { segments: cardSegments, cleanText } = parseCardsFromText(stage1Output.text);
     console.log(`   Parsed ${cardSegments.length} card segments from AI response`);
     if (cardSegments.length > 0) {
@@ -541,7 +711,44 @@ export async function POST(req: Request) {
     const stage3Start = Date.now();
     let segments: MessageSegment[];
     try {
-      const places = (stage1Output as any).places || [];
+      // Use the enriched places from stage 2/2.5 (already have segmentId from previous stages)
+      // This ensures the place segments passed to assemblePlaceLinks have segmentId
+      let places = (stage1Output as any).places || [];
+      
+      // Re-apply enrichment to ensure consistency (places array is used in stage 3)
+      if (chatType === 'SEGMENT' && focusedSegment) {
+        places = places.map((place: any) => {
+          if (place.category === "Stay" && !place.segmentId) {
+            return { ...place, segmentId: focusedSegment.id };
+          }
+          return place;
+        });
+      } else if (chatType === 'RESERVATION' && focusedReservation?.segment) {
+        places = places.map((place: any) => {
+          if (place.category === "Stay" && !place.segmentId) {
+            return { ...place, segmentId: focusedReservation.segment.id };
+          }
+          return place;
+        });
+      } else if ((chatType === 'TRIP' || !chatType) && trip.segments.length > 0) {
+        places = places.map((place: any) => {
+          if (place.category === "Stay" && !place.segmentId) {
+            const placeData = stage2Output.placeMap[place.suggestedName];
+            if (placeData?.location) {
+              const segmentId = findClosestSegment(
+                placeData.location.lat,
+                placeData.location.lng,
+                trip.segments
+              );
+              if (segmentId) {
+                return { ...place, segmentId };
+              }
+            }
+          }
+          return place;
+        });
+      }
+      
       const stage3Output = assemblePlaceLinks(
         stage1Output.text,
         places,

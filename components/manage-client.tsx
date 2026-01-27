@@ -8,6 +8,7 @@ import {
   ReservationType,
   ReservationCategory,
   ReservationStatus,
+  TripStatus,
 } from "@/app/generated/prisma";
 import { useState, useTransition, useEffect } from "react";
 import {
@@ -26,6 +27,9 @@ import {
   Check,
   ExternalLink,
   Filter,
+  PlayCircle,
+  MoreVertical,
+  MessageCircle,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -34,6 +38,7 @@ import { formatDateTimeInTimeZone } from "@/lib/utils";
 import { deleteTrip } from "@/lib/actions/delete-trip";
 import { deleteSegment } from "@/lib/actions/delete-segment";
 import { deleteReservation } from "@/lib/actions/delete-reservation";
+import { updateTripStatus } from "@/lib/actions/update-trip-status";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +47,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { Toast } from "./ui/toast";
+import { useRouter } from "next/navigation";
 
 type ReservationWithRelations = Reservation & {
   reservationType: ReservationType & { category: ReservationCategory };
@@ -139,6 +152,7 @@ export default function ManageClient({
   trips,
   segmentTimeZones,
 }: ManageClientProps) {
+  const router = useRouter();
   const [expandedTrips, setExpandedTrips] = useState<Set<string>>(new Set());
   const [expandedSegments, setExpandedSegments] = useState<Set<string>>(
     new Set()
@@ -153,6 +167,11 @@ export default function ManageClient({
   const [isPending, startTransition] = useTransition();
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("non-draft"); // Show non-draft trips by default
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "warning" | "info";
+  } | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   // Close dialog after transition completes and UI updates
   useEffect(() => {
@@ -206,6 +225,26 @@ export default function ManageClient({
         setDeleteDialog(null);
       }
     });
+  };
+
+  const handleStatusChange = async (tripId: string, newStatus: TripStatus) => {
+    setUpdatingStatus(tripId);
+    try {
+      await updateTripStatus(tripId, newStatus);
+      setToast({
+        message: `Trip status updated to ${getTripStatusLabel(newStatus)}`,
+        type: "success",
+      });
+      router.refresh();
+    } catch (error) {
+      console.error("Status update failed:", error);
+      setToast({
+        message: "Failed to update trip status",
+        type: "error",
+      });
+    } finally {
+      setUpdatingStatus(null);
+    }
   };
 
   const today = new Date();
@@ -276,13 +315,65 @@ export default function ManageClient({
                     <h3 className="font-semibold text-lg text-slate-900 truncate">
                       {trip.title}
                     </h3>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded border ${getTripStatusBadgeColor(
-                        trip.status
-                      )}`}
-                    >
-                      {getTripStatusLabel(trip.status)}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded border ${getTripStatusBadgeColor(
+                          trip.status
+                        )}`}
+                      >
+                        {getTripStatusLabel(trip.status)}
+                      </span>
+                      {trip.status !== "DRAFT" && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              disabled={updatingStatus === trip.id}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem
+                              disabled={trip.status === TripStatus.PLANNING}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStatusChange(trip.id, TripStatus.PLANNING);
+                              }}
+                            >
+                              <span className={trip.status === TripStatus.PLANNING ? "font-semibold" : ""}>
+                                Planning
+                              </span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={trip.status === TripStatus.LIVE}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStatusChange(trip.id, TripStatus.LIVE);
+                              }}
+                            >
+                              <span className={trip.status === TripStatus.LIVE ? "font-semibold" : ""}>
+                                Live
+                              </span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={trip.status === TripStatus.ARCHIVED}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStatusChange(trip.id, TripStatus.ARCHIVED);
+                              }}
+                            >
+                              <span className={trip.status === TripStatus.ARCHIVED ? "font-semibold" : ""}>
+                                Archived
+                              </span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
                   <p className="text-sm text-slate-500">
                     {new Date(trip.startDate).toLocaleDateString()} –{" "}
@@ -304,35 +395,51 @@ export default function ManageClient({
                   className="flex items-center gap-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Link href={`/trips/${trip.id}`}>
-                    <Button variant="ghost" size="sm" title="View Trip">
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Link href={`/trips/${trip.id}/edit`}>
-                    <Button variant="ghost" size="sm" title="Edit Trip">
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Link href={`/trips/${trip.id}/itinerary/new`}>
-                    <Button variant="ghost" size="sm" title="Add Segment">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    title="Delete Trip"
-                    onClick={() =>
-                      setDeleteDialog({
-                        type: "trip",
-                        id: trip.id,
-                        name: trip.title,
-                      })
-                    }
-                  >
-                    <Trash2 className="h-4 w-4 text-rose-500" />
-                  </Button>
+                  {trip.status === "DRAFT" ? (
+                    <Link href="/trip/new">
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                        <PlayCircle className="h-4 w-4 mr-1" />
+                        Resume
+                      </Button>
+                    </Link>
+                  ) : (
+                    <>
+                      <Link href={`/exp?tripId=${trip.id}`}>
+                        <Button variant="ghost" size="sm" title="Chat with AI">
+                          <MessageCircle className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Link href={`/trips/${trip.id}`}>
+                        <Button variant="ghost" size="sm" title="View Trip">
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Link href={`/trips/${trip.id}/edit`}>
+                        <Button variant="ghost" size="sm" title="Edit Trip">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Link href={`/trips/${trip.id}/itinerary/new`}>
+                        <Button variant="ghost" size="sm" title="Add Segment">
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Delete Trip"
+                        onClick={() =>
+                          setDeleteDialog({
+                            type: "trip",
+                            id: trip.id,
+                            name: trip.title,
+                          })
+                        }
+                      >
+                        <Trash2 className="h-4 w-4 text-rose-500" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -859,6 +966,15 @@ export default function ManageClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
