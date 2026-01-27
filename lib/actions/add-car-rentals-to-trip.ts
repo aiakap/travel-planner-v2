@@ -6,6 +6,7 @@ import { CarRentalExtraction } from "@/lib/schemas/car-rental-extraction-schema"
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { createCarRentalCluster } from "@/lib/utils/car-rental-clustering";
 import { findBestSegmentForCarRental } from "@/lib/utils/segment-matching";
+import { getSegmentTimeZones } from "./timezone";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -41,6 +42,40 @@ async function geocodeLocation(location: string): Promise<{
 
   // Fallback to default coordinates
   return { lat: 0, lng: 0, formatted: location };
+}
+
+/**
+ * Safely parse date and time into a valid Date object
+ * Handles various date formats and provides fallbacks
+ */
+function parseDateTime(dateStr: string, timeStr: string, defaultTime: string = "12:00:00"): Date {
+  // Normalize the date string to ISO format if needed
+  let isoDate = dateStr;
+  
+  // If not already in ISO format (YYYY-MM-DD), try to parse it
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) {
+      // Successfully parsed, convert to ISO date
+      isoDate = parsed.toISOString().split('T')[0];
+    } else {
+      throw new Error(`Invalid date format: ${dateStr}`);
+    }
+  }
+  
+  // Get normalized time (convertTo24Hour handles empty strings)
+  const normalizedTime = convertTo24Hour(timeStr || "");
+  
+  // Construct the datetime string
+  const dateTimeStr = `${isoDate}T${normalizedTime}`;
+  const result = new Date(dateTimeStr);
+  
+  // Validate the result
+  if (isNaN(result.getTime())) {
+    throw new Error(`Invalid datetime: ${dateTimeStr} (from date: ${dateStr}, time: ${timeStr})`);
+  }
+  
+  return result;
 }
 
 interface AddCarRentalOptions {
@@ -124,6 +159,19 @@ export async function addCarRentalToTrip(params: {
         ? `Drive from ${pickupCity} to ${returnCity}`
         : `Drive in ${pickupCity}`;
       
+      const startTime = new Date(`${carRentalData.pickupDate}T${convertTo24Hour(carRentalData.pickupTime)}`);
+      const endTime = new Date(`${carRentalData.returnDate}T${convertTo24Hour(carRentalData.returnTime)}`);
+      
+      // Fetch timezone information for segment
+      const timezones = await getSegmentTimeZones(
+        startGeo.lat,
+        startGeo.lng,
+        endGeo.lat,
+        endGeo.lng,
+        startTime,
+        endTime
+      );
+      
       const newSegment = await prisma.segment.create({
         data: {
           tripId,
@@ -134,8 +182,12 @@ export async function addCarRentalToTrip(params: {
           endTitle: returnCity,
           endLat: endGeo.lat,
           endLng: endGeo.lng,
-          startTime: new Date(`${carRentalData.pickupDate}T${convertTo24Hour(carRentalData.pickupTime)}`),
-          endTime: new Date(`${carRentalData.returnDate}T${convertTo24Hour(carRentalData.returnTime)}`),
+          startTime,
+          endTime,
+          startTimeZoneId: timezones.start?.timeZoneId ?? null,
+          startTimeZoneName: timezones.start?.timeZoneName ?? null,
+          endTimeZoneId: timezones.end?.timeZoneId ?? null,
+          endTimeZoneName: timezones.end?.timeZoneName ?? null,
           order: trip.segments.length,
           segmentTypeId: driveType?.id
         }
@@ -160,7 +212,7 @@ export async function addCarRentalToTrip(params: {
   }
 
   // Get cached reservation type and status
-  const carRentalType = await getReservationType("Transport", "Car Rental");
+  const carRentalType = await getReservationType("Travel", "Car Rental");
   const confirmedStatus = await getReservationStatus("Confirmed");
 
   // Calculate rental duration in days
@@ -195,33 +247,60 @@ export async function addCarRentalToTrip(params: {
     bookingDate: carRentalData.bookingDate
   };
 
-  // Create the car rental reservation
-  const reservation = await prisma.reservation.create({
-    data: {
-      name: `${carRentalData.company} - ${carRentalData.vehicleClass || 'Car Rental'}`,
-      confirmationNumber: carRentalData.confirmationNumber,
-      reservationTypeId: carRentalType.id,
-      reservationStatusId: confirmedStatus.id,
-      segmentId: targetSegmentId,
-      startTime: new Date(`${carRentalData.pickupDate}T${convertTo24Hour(carRentalData.pickupTime)}`),
-      endTime: new Date(`${carRentalData.returnDate}T${convertTo24Hour(carRentalData.returnTime)}`),
-      startLocation: carRentalData.pickupLocation,
-      endLocation: carRentalData.returnLocation,
-      notes: notes || null,
-      metadata: metadata as any,
-      cost: carRentalData.totalCost > 0 ? carRentalData.totalCost : null,
-      currency: carRentalData.currency || null,
-    },
+  // Create the car rental reservation with detailed logging
+  console.log('📝 Creating car rental reservation with data:', {
+    name: `${carRentalData.company} - ${carRentalData.vehicleClass || 'Car Rental'}`,
+    pickupDate: carRentalData.pickupDate,
+    pickupTime: carRentalData.pickupTime,
+    returnDate: carRentalData.returnDate,
+    returnTime: carRentalData.returnTime,
   });
 
-  console.log(`✅ Car rental reservation created: ${reservation.id}`);
+  try {
+    const startDateTime = parseDateTime(carRentalData.pickupDate, carRentalData.pickupTime, "09:00:00");
+    const endDateTime = parseDateTime(carRentalData.returnDate, carRentalData.returnTime, "11:00:00");
+    
+    console.log('✅ Parsed datetimes:', {
+      startDateTime: startDateTime.toISOString(),
+      endDateTime: endDateTime.toISOString(),
+    });
 
-  return {
-    success: true,
-    reservationId: reservation.id,
-    segmentId: targetSegmentId,
-    segmentName: segment.name
-  };
+    const reservation = await prisma.reservation.create({
+      data: {
+        name: `${carRentalData.company} - ${carRentalData.vehicleClass || 'Car Rental'}`,
+        confirmationNumber: carRentalData.confirmationNumber,
+        reservationTypeId: carRentalType.id,
+        reservationStatusId: confirmedStatus.id,
+        segmentId: targetSegmentId,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        startLocation: carRentalData.pickupLocation,
+        endLocation: carRentalData.returnLocation,
+        notes: notes || null,
+        metadata: metadata as any,
+        cost: carRentalData.totalCost > 0 ? carRentalData.totalCost : null,
+        currency: carRentalData.currency || null,
+      },
+    });
+
+    console.log(`✅ Car rental reservation created: ${reservation.id}`);
+
+    return {
+      success: true,
+      reservationIds: [reservation.id],
+      segmentId: targetSegmentId,
+      message: "Car rental reservation added successfully"
+    };
+  } catch (error: any) {
+    console.error('❌ Failed to create car rental reservation:', error);
+    console.error('   Input data:', {
+      pickupDate: carRentalData.pickupDate,
+      pickupTime: carRentalData.pickupTime,
+      returnDate: carRentalData.returnDate,
+      returnTime: carRentalData.returnTime,
+    });
+    throw new Error(`Failed to create car rental reservation: ${error.message}`);
+  }
 }
 
 /**

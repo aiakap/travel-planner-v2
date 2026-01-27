@@ -178,6 +178,20 @@ export const OPENAI_MODELS: Record<string, ModelMetadata> = {
  * Google Vertex AI Imagen Pricing
  */
 export const IMAGEN_MODELS: Record<string, ImageModelMetadata> = {
+  "gemini-3-pro-image-preview": {
+    name: "gemini-3-pro-image-preview",
+    displayName: "Gemini 3 Pro Image (Preview)",
+    provider: "Google Vertex AI",
+    costPerImage: 0.05,
+    currency: "USD",
+    performance: {
+      speedTier: "balanced",
+      qualityTier: "highest",
+      maxResolution: "4096x4096",
+    },
+    description: "Excellent text rendering, advanced reasoning, multi-turn editing support",
+    aspectRatios: ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "9:16", "16:9", "21:9"],
+  },
   "imagen-4.0-generate-001": {
     name: "imagen-4.0-generate-001",
     displayName: "Imagen 4.0",

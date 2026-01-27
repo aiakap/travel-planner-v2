@@ -7,10 +7,23 @@ import { MessageSegment } from "@/lib/types/place-pipeline";
 import { prisma } from "@/lib/prisma";
 import { parseIntentFromResponse } from "@/lib/ai/parse-intent";
 import { createFullItinerary } from "@/lib/actions/create-full-itinerary";
-import { parseCardsFromText } from "@/app/exp/lib/parse-card-syntax";
-import { validateAIResponse, formatValidationErrors } from "@/lib/ai/validate-ai-response";
+// Card parsing is now handled by structured outputs - parseCardsFromText is obsolete
 
 export const maxDuration = 60;
+
+// DEBUG mode - set to true to enable in-chat debug messages
+const DEBUG_MODE = process.env.NODE_ENV === 'development' || process.env.DEBUG_CHAT === 'true';
+
+/**
+ * Create a debug message segment for in-chat display
+ */
+function createDebugSegment(message: string, data?: any): MessageSegment {
+  const debugContent = data ? JSON.stringify(data, null, 2) : '';
+  return {
+    type: "text",
+    content: `\n<details>\n<summary>🔧 DEBUG: ${message}</summary>\n\n\`\`\`json\n${debugContent}\n\`\`\`\n\n</details>\n`
+  };
+}
 
 // Helper functions for hotel-to-segment matching
 
@@ -449,6 +462,45 @@ export async function POST(req: Request) {
     // Get trip context
     const tripContext = await getTripContext(conversationId, userId);
 
+    // Fetch conversation data for stage 2/3 hotel enrichment logic
+    // (chatType, trip, focusedSegment, focusedReservation are needed outside getTripContext)
+    const conversation = await prisma.chatConversation.findFirst({
+      where: {
+        id: conversationId,
+        userId,
+      },
+      include: {
+        trip: {
+          include: {
+            segments: {
+              include: {
+                segmentType: true,
+              },
+            },
+          },
+        },
+        segment: {
+          include: {
+            segmentType: true,
+          },
+        },
+        reservation: {
+          include: {
+            segment: {
+              include: {
+                segmentType: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const chatType = conversation?.chatType;
+    const trip = conversation?.trip;
+    const focusedSegment = conversation?.segment;
+    const focusedReservation = conversation?.reservation;
+
     // Save user message
     await saveMessageDirect({
       conversationId,
@@ -568,23 +620,27 @@ Click "View Full Timeline" in the itinerary panel to see your complete journey. 
       console.log(`✅ Stage 1 complete (${Date.now() - stage1Start}ms)`);
       console.log(`   Text length: ${stage1Output.text.length} chars`);
       
-      // Validate AI response structure
-      const validation = validateAIResponse(stage1Output);
-      if (!validation.valid) {
-        console.error("❌ [AI] Response validation failed:", formatValidationErrors(validation));
-        console.error("   Response structure:", Object.keys(stage1Output));
-        throw new Error(`Invalid AI response: ${validation.errors.join(", ")}`);
-      }
-      if (validation.warnings.length > 0) {
-        console.warn("⚠️  [AI] Response warnings:", formatValidationErrors(validation));
+      // DEBUG: Log the actual text content (first 500 chars)
+      console.log(`   Text preview: "${stage1Output.text.substring(0, 500)}..."`);
+      
+      // DEBUG: Log detailed places array
+      if ((stage1Output as any).places && (stage1Output as any).places.length > 0) {
+        console.log(`   Places array (${(stage1Output as any).places.length} items):`);
+        (stage1Output as any).places.forEach((place: any, idx: number) => {
+          console.log(`     ${idx + 1}. suggestedName: "${place.suggestedName}"`);
+          console.log(`        category: ${place.category}, type: ${place.type}`);
+          console.log(`        searchQuery: "${place.searchQuery}"`);
+        });
+      } else {
+        console.log(`   ⚠️  NO PLACES in response!`);
       }
       
-      // Check if response looks like hotel info but missing card syntax
-      if (useExpPrompt && stage1Output.text.toLowerCase().includes('hotel') && 
-          stage1Output.text.toLowerCase().includes('confirmation') &&
-          !stage1Output.text.includes('[HOTEL_RESERVATION_CARD:')) {
-        console.warn("⚠️  [AI] Response mentions hotel confirmation but missing HOTEL_RESERVATION_CARD syntax");
-        console.warn("   Text preview:", stage1Output.text.substring(0, 300));
+      // DEBUG: Check if places array is actually reaching this point
+      console.log(`   Raw stage1Output keys: ${Object.keys(stage1Output).join(', ')}`);
+      
+      // Response is already validated by Zod schema in generatePlaceSuggestions
+      if ((stage1Output as any).cards) {
+        console.log(`   Cards: ${(stage1Output as any).cards.length}`);
       }
     } catch (error) {
       console.error("❌ Stage 1 failed:", error);
@@ -668,7 +724,7 @@ Click "View Full Timeline" in the itinerary panel to see your complete journey. 
       
       // Stage 2.5: Post-resolution enrichment for TRIP chats
       // Now that we have coordinates from Google Places, match hotels to closest segment
-      if ((chatType === 'TRIP' || !chatType) && trip.segments.length > 0) {
+      if ((chatType === 'TRIP' || !chatType) && trip?.segments && trip.segments.length > 0) {
         places = places.map((place: any) => {
           if (place.category === "Stay" && !place.segmentId) {
             const placeData = stage2Output.placeMap[place.suggestedName];
@@ -697,15 +753,49 @@ Click "View Full Timeline" in the itinerary panel to see your complete journey. 
       );
     }
 
-    // Stage 2.6: Parse card syntax from AI response
-    const { segments: cardSegments, cleanText } = parseCardsFromText(stage1Output.text);
-    console.log(`   Parsed ${cardSegments.length} card segments from AI response`);
+    // Stage 2.6: Hotel Price Lookup (Amadeus API)
+    let hotelDataMap = new Map();
+    const placesFromStage1 = (stage1Output as any).places || [];
+    const hotels = placesFromStage1.filter((p: any) => p.type?.toLowerCase() === 'hotel' || p.category === 'Stay');
+    if (hotels.length > 0) {
+      console.log(`\n🏨 Stage 2.6: Hotel Price Lookup`);
+      console.log(`   Found ${hotels.length} hotel(s), fetching prices...`);
+      
+      try {
+        const { enrichHotelsWithPricing } = await import('@/lib/ai/hotel-lookup-pipeline');
+        
+        // Build trip context for hotel searches
+        const tripContext = trip ? {
+          tripId: trip.id,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          segments: trip.segments?.map((s: any) => ({
+            id: s.id,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            startTitle: s.startTitle,
+            endTitle: s.endTitle,
+          })),
+        } : undefined;
+        
+        const stage2_6Start = Date.now();
+        hotelDataMap = await enrichHotelsWithPricing(hotels, tripContext);
+        console.log(`✅ Stage 2.6 complete (${Date.now() - stage2_6Start}ms)`);
+        console.log(`   Enriched ${hotelDataMap.size}/${hotels.length} hotels with pricing`);
+      } catch (error) {
+        console.error('❌ Hotel price lookup failed:', error);
+        // Continue without hotel prices - not a critical failure
+      }
+    }
+    
+    // Stage 2.7: Get structured cards from AI response (no parsing needed!)
+    const cardSegments: MessageSegment[] = ((stage1Output as any).cards || []).map((card: any) => card as MessageSegment);
+    console.log(`   Received ${cardSegments.length} structured card segments from AI`);
     if (cardSegments.length > 0) {
       console.log("   Card types:", cardSegments.map(s => s.type).join(", "));
     }
     
-    // Update text to remove card syntax
-    stage1Output.text = cleanText;
+    // Text is already clean (no embedded card syntax)
 
     // Stage 3: Assemble segments with clickable links
     const stage3Start = Date.now();
@@ -714,6 +804,18 @@ Click "View Full Timeline" in the itinerary panel to see your complete journey. 
       // Use the enriched places from stage 2/2.5 (already have segmentId from previous stages)
       // This ensures the place segments passed to assemblePlaceLinks have segmentId
       let places = (stage1Output as any).places || [];
+      
+      // DEBUG: Log what we're passing to assemblePlaceLinks
+      console.log(`\n🔨 [Pre-Stage 3] Inputs to assemblePlaceLinks:`);
+      console.log(`   Text: "${stage1Output.text.substring(0, 200)}..."`);
+      console.log(`   Places count: ${places.length}`);
+      places.forEach((place: any, idx: number) => {
+        console.log(`     ${idx + 1}. Looking for: "${place.suggestedName}"`);
+      });
+      console.log(`   PlaceMap keys: ${Object.keys(stage2Output.placeMap).join(', ')}`);
+      
+      // Continue with existing enrichment logic
+      places = places || [];
       
       // Re-apply enrichment to ensure consistency (places array is used in stage 3)
       if (chatType === 'SEGMENT' && focusedSegment) {
@@ -730,7 +832,7 @@ Click "View Full Timeline" in the itinerary panel to see your complete journey. 
           }
           return place;
         });
-      } else if ((chatType === 'TRIP' || !chatType) && trip.segments.length > 0) {
+      } else if ((chatType === 'TRIP' || !chatType) && trip?.segments && trip.segments.length > 0) {
         places = places.map((place: any) => {
           if (place.category === "Stay" && !place.segmentId) {
             const placeData = stage2Output.placeMap[place.suggestedName];
@@ -758,10 +860,55 @@ Click "View Full Timeline" in the itinerary panel to see your complete journey. 
       // Combine card segments with place segments
       segments = [...cardSegments, ...stage3Output.segments];
       
+      // Merge hotel pricing data into segments
+      if (hotelDataMap.size > 0) {
+        const { mergeHotelDataIntoSegments } = await import('@/lib/ai/hotel-lookup-pipeline');
+        segments = mergeHotelDataIntoSegments(segments, hotelDataMap);
+        console.log(`   Merged hotel pricing data into ${hotelDataMap.size} segments`);
+      }
+      
       console.log(`✅ Stage 3 complete (${Date.now() - stage3Start}ms)`);
       const placeSegments = segments.filter(s => s.type === "place").length;
       const cardCount = cardSegments.length;
       console.log(`   Created ${segments.length} segments (${placeSegments} places, ${cardCount} cards)`);
+      
+      // DEBUG: Add in-chat debug messages if enabled
+      if (DEBUG_MODE) {
+        const debugSegments: MessageSegment[] = [
+          createDebugSegment("Stage 1: AI Response", {
+            textLength: stage1Output.text.length,
+            placesCount: (stage1Output as any).places?.length || 0,
+            cardsCount: (stage1Output as any).cards?.length || 0,
+          }),
+          createDebugSegment("Stage 2: Google Places Resolution", {
+            resolved: Object.keys(stage2Output.placeMap).length,
+            total: (stage1Output as any).places?.length || 0,
+          }),
+          createDebugSegment("Stage 3: Segment Assembly", {
+            totalSegments: segments.length,
+            placeSegments: segments.filter(s => s.type === "place").length,
+            textSegments: segments.filter(s => s.type === "text").length,
+          }),
+          createDebugSegment("Places Array from AI", 
+            (stage1Output as any).places?.map((p: any) => ({
+              name: p.suggestedName,
+              category: p.category,
+              type: p.type
+            }))
+          ),
+          createDebugSegment("Segment Details", 
+            segments.map((s, idx) => ({
+              index: idx,
+              type: s.type,
+              display: s.type === "place" ? s.display : s.content?.substring(0, 50)
+            }))
+          ),
+        ];
+        
+        // Prepend debug segments to the response
+        segments = [...debugSegments, ...segments];
+        console.log(`   Added ${debugSegments.length} debug segments to response`);
+      }
     } catch (error) {
       console.error("❌ Stage 3 failed:", error);
       return NextResponse.json(

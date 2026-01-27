@@ -9,49 +9,49 @@ datasource db {
 }
 
 model User {
-  id                     String                    @id @default(cuid())
-  name                   String?
-  email                  String                    @unique
-  emailVerified          DateTime?
-  image                  String?
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
-  accounts               Account[]
-  conversations          ChatConversation[]
-  sessions               Session[]
-  trips                  Trip[]
-  contacts               UserContact[]
-  hobbies                UserHobby[]
-  profile                UserProfile?
-  profileGraph           UserProfileGraph?
-  profileValues          UserProfileValue[]
-  relatedTo              UserRelationship[]        @relation("RelatedToUser")
-  relationships          UserRelationship[]        @relation("UserRelationships")
-  travelPreferences      UserTravelPreference[]
-  travelExtractionQueue  TravelExtractionQueue[]
+  id                    String                  @id @default(cuid())
+  name                  String?
+  email                 String                  @unique
+  emailVerified         DateTime?
+  image                 String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  accounts              Account[]
+  conversations         ChatConversation[]
+  sessions              Session[]
+  travelExtractionQueue TravelExtractionQueue[]
+  trips                 Trip[]
+  contacts              UserContact[]
+  hobbies               UserHobby[]
+  profile               UserProfile?
+  profileGraph          UserProfileGraph?
+  profileValues         UserProfileValue[]
+  relatedTo             UserRelationship[]      @relation("RelatedToUser")
+  relationships         UserRelationship[]      @relation("UserRelationships")
+  travelPreferences     UserTravelPreference[]
 }
 
 model Account {
-  id                Int       @id @default(autoincrement())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
+  id                 Int       @id @default(autoincrement())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  canLogin           Boolean   @default(true)
+  isPrimaryLogin     Boolean   @default(false)
+  lastLoginAt        DateTime?
+  syncStatus         String    @default("active")
   oauth_profile_data Json?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  canLogin          Boolean   @default(true)
-  isPrimaryLogin    Boolean   @default(false)
-  lastLoginAt       DateTime?
-  syncStatus        String    @default("active")
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId, canLogin])
@@ -193,19 +193,19 @@ model Reservation {
 }
 
 model ChatConversation {
-  id            String       @id @default(cuid())
+  id            String        @id @default(cuid())
   userId        String
   title         String
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
   tripId        String?
-  chatType      ChatType     @default(TRIP)
-  segmentId     String?
+  chatType      ChatType      @default(TRIP)
   reservationId String?
-  trip          Trip?        @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  segment       Segment?     @relation(fields: [segmentId], references: [id], onDelete: Cascade)
-  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  segmentId     String?
+  reservation   Reservation?  @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  segment       Segment?      @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  trip          Trip?         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages      ChatMessage[]
 }
 
@@ -219,16 +219,39 @@ model ChatMessage {
   conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
+model ImagePromptStyle {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  slug        String        @unique
+  description String?
+  isDefault   Boolean       @default(false)
+  isActive    Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  prompts     ImagePrompt[]
+
+  @@index([isDefault])
+  @@index([isActive, sortOrder])
+}
+
 model ImagePrompt {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  prompt    String
+  id        String            @id @default(cuid())
+  name      String            @unique
+  prompt    String            @db.Text
   category  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
   lightness String?
-  style     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  styleId   String?
+  style     ImagePromptStyle? @relation(fields: [styleId], references: [id])
   trips     Trip[]
+  isActive  Boolean           @default(true)
+  sortOrder Int               @default(0)
+
+  @@unique([styleId, category])
+  @@index([styleId, category])
+  @@index([isActive])
 }
 
 model ImageQueue {
@@ -241,9 +264,9 @@ model ImageQueue {
   imageUrl   String?
   attempts   Int      @default(0)
   promptId   String?
-  logId      String?  // Link to ImageGenerationLog
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  logId      String?
 
   @@index([status, createdAt])
   @@index([entityType, entityId])
@@ -251,40 +274,27 @@ model ImageQueue {
 
 model ImageGenerationLog {
   id               String   @id @default(cuid())
-  
-  // What was generated
-  entityType       String   // "trip" | "segment" | "reservation"
+  entityType       String
   entityId         String
-  entityName       String?  // Cached name for easy reference
-  
-  // Prompt details
+  entityName       String?
   promptId         String?
   promptName       String?
-  promptStyle      String?  // e.g., "scrapbook_collage"
-  fullPrompt       String   @db.Text // The complete prompt sent to AI
-  
-  // Selection reasoning
-  aiReasoning      String?  @db.Text // Full GPT-4o response explaining choice
-  selectionReason  String?  // Simplified reason (e.g., "Beach destination match")
-  availablePrompts String?  @db.Text // JSON array of prompts that were available
-  
-  // Caller context
-  callerFunction   String?  // e.g., "queueTripImageGeneration"
-  callerSource     String?  // e.g., "create-trip", "update-trip", "regenerate"
-  userId           String?  // If available
-  
-  // Result
-  status           String   // "success" | "failed" | "in_progress"
+  promptStyle      String?
+  fullPrompt       String
+  aiReasoning      String?
+  selectionReason  String?
+  availablePrompts String?
+  callerFunction   String?
+  callerSource     String?
+  userId           String?
+  status           String
   imageUrl         String?
-  errorMessage     String?  @db.Text
-  
-  // Metadata
-  generationTimeMs Int?     // How long generation took
-  imageProvider    String?  // "imagen" | "dalle"
-  
+  errorMessage     String?
+  generationTimeMs Int?
+  imageProvider    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-  
+
   @@index([entityType, entityId])
   @@index([promptId])
   @@index([status])
@@ -434,14 +444,14 @@ model ProfileCategory {
   icon        String?
   color       String?
   parentId    String?
-  parent      ProfileCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    ProfileCategory[] @relation("CategoryHierarchy")
   level       Int               @default(0)
   sortOrder   Int               @default(0)
   isActive    Boolean           @default(true)
-  values      ProfileValue[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  parent      ProfileCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    ProfileCategory[] @relation("CategoryHierarchy")
+  values      ProfileValue[]
 
   @@index([parentId])
   @@index([level, sortOrder])
@@ -451,13 +461,13 @@ model ProfileValue {
   id          String             @id @default(cuid())
   value       String
   categoryId  String
-  category    ProfileCategory    @relation(fields: [categoryId], references: [id])
   description String?
   icon        String?
   aliases     String[]
-  userValues  UserProfileValue[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
+  category    ProfileCategory    @relation(fields: [categoryId], references: [id])
+  userValues  UserProfileValue[]
 
   @@unique([value, categoryId])
   @@index([categoryId])
@@ -466,17 +476,38 @@ model ProfileValue {
 model UserProfileValue {
   id        String       @id @default(cuid())
   userId    String
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   valueId   String
-  value     ProfileValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
   metadata  Json?
   notes     String?
   addedAt   DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  value     ProfileValue @relation(fields: [valueId], references: [id], onDelete: Cascade)
 
   @@unique([userId, valueId])
   @@index([userId])
   @@index([valueId])
+}
+
+model TravelExtractionQueue {
+  id            String           @id @default(cuid())
+  userId        String
+  fileName      String
+  fileType      String
+  fileSize      Int
+  fileUrl       String?
+  textContent   String?
+  status        ExtractionStatus @default(PENDING)
+  progress      Int              @default(0)
+  extractedData Json?
+  errorMessage  String?
+  tripId        String?
+  createdAt     DateTime         @default(now())
+  processedAt   DateTime?
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([createdAt])
 }
 
 enum TripStatus {
@@ -499,39 +530,47 @@ enum ChatType {
   RESERVATION
 }
 
-model TravelExtractionQueue {
-  id            String            @id @default(cuid())
-  userId        String
-  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // File info
-  fileName      String
-  fileType      String            // "eml", "text", "image", "pdf"
-  fileSize      Int
-  fileUrl       String?           // For images/PDFs stored temporarily
-  textContent   String?           @db.Text // For .eml/.txt files
-  
-  // Processing status
-  status        ExtractionStatus  @default(PENDING)
-  progress      Int               @default(0) // 0-100
-  
-  // Extraction results (JSON)
-  extractedData Json?             // Flights, hotels, cars, activities
-  errorMessage  String?
-  
-  // Metadata
-  tripId        String?
-  createdAt     DateTime          @default(now())
-  processedAt   DateTime?
-  
-  @@index([userId, status])
-  @@index([createdAt])
-}
-
 enum ExtractionStatus {
   PENDING
   PROCESSING
   COMPLETED
   FAILED
   REVIEWED
+}
+
+model ExtractionFeedback {
+  id              String   @id @default(cuid())
+  
+  // Email content
+  emailText       String   @db.Text
+  emailHash       String   @unique
+  emailLength     Int
+  
+  // AI Detection
+  aiTopType       String
+  aiCategory      String
+  aiConfidence    Float
+  aiScore         Float
+  aiScoring       Json
+  
+  // Alternative types
+  aiAlternatives  Json
+  
+  // User Decision
+  userSelectedType String
+  userCategory     String
+  wasOverridden    Boolean
+  userReason       String?
+  
+  // Metadata
+  userId          String?
+  createdAt       DateTime @default(now())
+  
+  // Learning flags
+  reviewed        Boolean  @default(false)
+  incorporated    Boolean  @default(false)
+  
+  @@index([wasOverridden, reviewed])
+  @@index([aiTopType, userSelectedType])
+  @@index([createdAt])
 }

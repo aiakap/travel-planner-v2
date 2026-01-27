@@ -12,7 +12,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, ArrowLeft, Play, ChevronDown, ChevronRight, Copy, Check, Database, X, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowLeft, Play, ChevronDown, ChevronRight, Copy, Check, Database, X, CheckCircle2, Sparkles } from "lucide-react";
+import { CardPreview } from "@/app/admin/cards/_components/card-preview";
 
 interface TestResult {
   prompt: string;
@@ -42,6 +43,11 @@ export default function PromptTestPage() {
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  // AI Testing state
+  const [testingWithAI, setTestingWithAI] = useState(false);
+  const [aiResult, setAiResult] = useState<any>(null);
+  const [showAiPreview, setShowAiPreview] = useState(false);
 
   // Entity selection state
   const [entityType, setEntityType] = useState<string>("trip");
@@ -262,6 +268,52 @@ export default function PromptTestPage() {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleTestWithAI = async () => {
+    setTestingWithAI(true);
+    setAiResult(null);
+    setError(null);
+
+    try {
+      let parsedMetadata = {};
+      if (metadata.trim()) {
+        try {
+          parsedMetadata = JSON.parse(metadata);
+        } catch {
+          throw new Error("Invalid JSON in metadata field");
+        }
+      }
+
+      const response = await fetch("/api/admin/test/exp-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userMessage,
+          context: {
+            messageCount,
+            hasExistingTrip,
+            chatType: chatType === "none" ? undefined : chatType,
+            metadata: parsedMetadata,
+          },
+          model: "gpt-4o",
+          outputType: "full",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate with AI");
+      }
+
+      const data = await response.json();
+      setAiResult(data);
+      setShowAiPreview(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setTestingWithAI(false);
     }
   };
 
@@ -622,19 +674,38 @@ export default function PromptTestPage() {
             />
           </div>
 
-          <Button onClick={handleTest} disabled={testing || !userMessage} className="w-full">
-            {testing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Building Prompt...
-              </>
-            ) : (
-              <>
-                <Play className="mr-2 h-4 w-4" />
-                Build Prompt
-              </>
-            )}
-          </Button>
+          <div className="grid gap-2 md:grid-cols-2">
+            <Button onClick={handleTest} disabled={testing || !userMessage}>
+              {testing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Building...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Build Prompt
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={handleTestWithAI} 
+              disabled={testingWithAI || !userMessage}
+              variant="default"
+            >
+              {testingWithAI ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Testing with AI...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Test with AI
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -760,6 +831,178 @@ export default function PromptTestPage() {
               </div>
             </CardContent>
           </Card>
+        </>
+      )}
+
+      {/* AI Results */}
+      {aiResult && showAiPreview && (
+        <>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5" />
+                    AI Generated Output
+                  </CardTitle>
+                  <CardDescription>
+                    Structured response from OpenAI with cards and suggestions
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAiPreview(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {aiResult.success ? (
+                <>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <div className="text-2xl font-bold">{aiResult.usage?.totalTokens || 0}</div>
+                      <p className="text-xs text-muted-foreground">Total Tokens</p>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{aiResult.duration}ms</div>
+                      <p className="text-xs text-muted-foreground">Generation Time</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {aiResult.validation?.valid ? (
+                          <>
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            <Badge variant="default">Valid</Badge>
+                          </>
+                        ) : (
+                          <>
+                            <X className="h-5 w-5 text-destructive" />
+                            <Badge variant="destructive">Invalid</Badge>
+                          </>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Schema Validation</p>
+                    </div>
+                  </div>
+
+                  {aiResult.meta?.activePlugins && (
+                    <div className="space-y-2">
+                      <Label>Active Plugins</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {aiResult.meta.activePlugins.map((plugin: string, idx: number) => (
+                          <Badge key={idx} variant="secondary">
+                            {plugin}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-destructive">
+                  Error: {aiResult.error || "Failed to generate AI response"}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {aiResult.success && aiResult.data?.text && (
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Response Text</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm whitespace-pre-wrap">{aiResult.data.text}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {aiResult.success && aiResult.data?.cards && aiResult.data.cards.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Generated Cards ({aiResult.data.cards.length})</CardTitle>
+                <CardDescription>
+                  Visual preview of cards returned by AI
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {aiResult.data.cards.map((card: any, idx: number) => (
+                  <CardPreview key={idx} card={card} />
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {aiResult.success && aiResult.data?.places && aiResult.data.places.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Place Suggestions ({aiResult.data.places.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {aiResult.data.places.map((place: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-3">
+                      <div className="font-semibold">{place.suggestedName}</div>
+                      <div className="text-sm text-muted-foreground">{place.searchQuery}</div>
+                      <div className="mt-1 flex gap-2">
+                        <Badge variant="outline">{place.category}</Badge>
+                        <Badge variant="secondary">{place.type}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {aiResult.success && aiResult.data?.transport && aiResult.data.transport.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Transport Suggestions ({aiResult.data.transport.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {aiResult.data.transport.map((trans: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-3">
+                      <div className="font-semibold">{trans.suggestedName}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {trans.origin} → {trans.destination}
+                      </div>
+                      <div className="mt-1 flex gap-2">
+                        <Badge variant="outline">{trans.type}</Badge>
+                        <Badge variant="secondary">{trans.departureDate}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {aiResult.success && aiResult.data?.hotels && aiResult.data.hotels.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Hotel Suggestions ({aiResult.data.hotels.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {aiResult.data.hotels.map((hotel: any, idx: number) => (
+                    <div key={idx} className="border rounded-lg p-3">
+                      <div className="font-semibold">{hotel.suggestedName}</div>
+                      <div className="text-sm text-muted-foreground">{hotel.location}</div>
+                      <div className="mt-1 flex gap-2">
+                        <Badge variant="outline">{hotel.checkInDate}</Badge>
+                        <Badge variant="outline">{hotel.checkOutDate}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>

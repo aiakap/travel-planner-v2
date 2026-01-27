@@ -10,6 +10,8 @@ interface SegmentCardProps {
   endLocation: string;
   startTime?: string;
   endTime?: string;
+  startTimeZone?: string;
+  endTimeZone?: string;
   onOpenModal?: () => void;
 }
 
@@ -20,6 +22,8 @@ export function SegmentCard({
   endLocation,
   startTime,
   endTime,
+  startTimeZone,
+  endTimeZone,
   onOpenModal
 }: SegmentCardProps) {
   const getIcon = () => {
@@ -45,8 +49,14 @@ export function SegmentCard({
           <h4 className="text-sm font-medium text-slate-900">{name}</h4>
           <div className="flex items-center gap-2 text-xs text-slate-600 mt-1">
             <span>{startLocation}</span>
+            {startTimeZone && endTimeZone && startTimeZone !== endTimeZone && (
+              <span className="text-[9px]">({startTimeZone})</span>
+            )}
             <span>→</span>
             <span>{endLocation}</span>
+            {endTimeZone && startTimeZone !== endTimeZone && (
+              <span className="text-[9px]">({endTimeZone})</span>
+            )}
           </div>
           {startTime && (
             <div className="text-xs text-slate-500 mt-1">

@@ -22,6 +22,7 @@ import { addEventsToTrip } from "@/lib/actions/add-events-to-trip";
 import { addCruisesToTrip } from "@/lib/actions/add-cruises-to-trip";
 import { addGenericReservationToTrip } from "@/lib/actions/add-generic-reservation-to-trip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TypeApproval } from "./components/type-approval";
 
 interface Trip {
   id: string;
@@ -90,7 +91,8 @@ interface CarRentalPreview {
   isOneWay: boolean;
 }
 
-type ExtractionType = "flight" | "hotel" | "car-rental" | "train" | "restaurant" | "event" | "cruise" | "generic";
+type ExtractionType = "flight" | "hotel" | "car-rental" | "train" | "restaurant" | "event" | "cruise" | "generic" | "private-driver";
+type Step = 'input' | 'approval' | 'extracting' | 'complete';
 
 // Helper to parse .eml files
 async function parseEMLFile(file: File): Promise<string> {
@@ -99,6 +101,12 @@ async function parseEMLFile(file: File): Promise<string> {
 }
 
 export default function EmailExtractionPage() {
+  // Workflow state
+  const [step, setStep] = useState<Step>('input');
+  const [detection, setDetection] = useState<any>(null);
+  const [availableTypes, setAvailableTypes] = useState<any[]>([]);
+  
+  // Existing state
   const [emailText, setEmailText] = useState("");
   const [extractedData, setExtractedData] = useState<any>(null);
   const [extractionType, setExtractionType] = useState<ExtractionType | null>(null);
@@ -156,6 +164,79 @@ export default function EmailExtractionPage() {
   // Get selected trip data
   const selectedTrip = trips.find(t => t.id === selectedTripId);
 
+  // NEW: Analyze email (step 1 of interactive flow)
+  const handleAnalyze = async () => {
+    setLoading(true);
+    setError(null);
+    setDetection(null);
+    setAvailableTypes([]);
+
+    try {
+      const response = await fetch("/api/admin/email-extract/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailText }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Analysis failed");
+      }
+
+      setDetection(result.detection);
+      setAvailableTypes(result.availableTypes);
+      setStep('approval');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // NEW: Handle user approval (step 2 of interactive flow)
+  const handleApprove = async (selectedType: string, selectedCategory: string, userFeedback?: string) => {
+    setStep('extracting');
+    setLoading(true);
+    setError(null);
+    setExtractedData(null);
+    setExtractionType(null);
+    setClusterPreview(null);
+
+    try {
+      const wasOverridden = detection.topMatch.type !== selectedType;
+
+      // Extract with user-approved type
+      const response = await fetch("/api/admin/email-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emailText,
+          detectedType: selectedType,
+          userOverride: wasOverridden,
+          userFeedback: userFeedback || null,
+          aiDetection: detection
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Extraction failed");
+      }
+
+      setExtractedData(result.data);
+      setExtractionType(result.type);
+      setStep('complete');
+    } catch (err: any) {
+      setError(err.message);
+      setStep('approval'); // Go back to approval on error
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // OLD: Direct extract (kept for backwards compatibility if needed)
   const handleExtract = async () => {
     setLoading(true);
     setError(null);
@@ -485,54 +566,94 @@ export default function EmailExtractionPage() {
   return (
     <ApiTestLayout
       title="Email Extraction"
-      description="Extract flight or hotel booking information from confirmation emails"
+      description="Extract travel booking information from confirmation emails with AI type detection"
     >
       <div className="space-y-6">
-        {/* Input */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Email Text</CardTitle>
-            <CardDescription>
-              Paste email text or upload a .eml file
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="fileUpload">Upload .eml file (optional)</Label>
-              <Input
-                id="fileUpload"
-                type="file"
-                accept=".eml,.txt,message/rfc822"
-                onChange={handleFileUpload}
+        {/* Step 1: Email Input */}
+        {step === 'input' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Step 1: Email Input</CardTitle>
+              <CardDescription>
+                Paste email text or upload a .eml file
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fileUpload">Upload .eml file (optional)</Label>
+                <Input
+                  id="fileUpload"
+                  type="file"
+                  accept=".eml,.txt,message/rfc822"
+                  onChange={handleFileUpload}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="emailText">Or paste email content</Label>
+                <Textarea
+                  id="emailText"
+                  placeholder="Paste your booking confirmation email here..."
+                  value={emailText}
+                  onChange={(e) => setEmailText(e.target.value)}
+                  rows={12}
+                  className="font-mono text-sm"
+                />
+              </div>
+              <Button
+                onClick={handleAnalyze}
+                disabled={!emailText || loading}
+                className="w-full"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Analyze Email
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 2: Type Approval */}
+        {step === 'approval' && detection && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Step 2: Confirm Reservation Type</CardTitle>
+              <CardDescription>
+                Review the AI&apos;s detection and approve or change the type
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TypeApproval
+                detection={detection}
+                availableTypes={availableTypes}
+                onApprove={handleApprove}
+                onBack={() => setStep('input')}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="emailText">Or paste email content</Label>
-              <Textarea
-                id="emailText"
-                placeholder="Paste your booking confirmation email here..."
-                value={emailText}
-                onChange={(e) => setEmailText(e.target.value)}
-                rows={12}
-                className="font-mono text-sm"
-              />
-            </div>
-            <Button
-              onClick={handleExtract}
-              disabled={!emailText || loading}
-              className="w-full"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Extracting...
-                </>
-              ) : (
-                'Extract Booking Info'
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 3: Extracting */}
+        {step === 'extracting' && (
+          <Card>
+            <CardContent className="py-12">
+              <div className="flex flex-col items-center justify-center space-y-4">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <p className="text-lg font-medium">Extracting booking information...</p>
+                <p className="text-sm text-muted-foreground">
+                  Processing email with AI to extract structured data
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Error Display */}
         {error && (
@@ -549,8 +670,8 @@ export default function EmailExtractionPage() {
           </Alert>
         )}
 
-        {/* Extracted Data Display */}
-        {extractedData && extractionType === 'flight' && (
+        {/* Step 3: Extracted Data Display (only shown when complete) */}
+        {step === 'complete' && extractedData && extractionType === 'flight' && (
           <>
             <Card>
               <CardHeader>
@@ -742,7 +863,7 @@ export default function EmailExtractionPage() {
         )}
 
         {/* Hotel Display */}
-        {extractedData && extractionType === 'hotel' && (
+        {step === 'complete' && extractedData && extractionType === 'hotel' && (
           <>
             <Card>
               <CardHeader>
@@ -934,7 +1055,7 @@ export default function EmailExtractionPage() {
         )}
 
         {/* Car Rental Display */}
-        {extractedData && extractionType === 'car-rental' && (
+        {step === 'complete' && extractedData && extractionType === 'car-rental' && (
           <>
             <Card>
               <CardHeader>
@@ -1153,8 +1274,8 @@ export default function EmailExtractionPage() {
           </>
         )}
 
-        {/* Train, Restaurant, Event, Cruise, and Generic Display - Simple fallback UI */}
-        {extractedData && ['train', 'restaurant', 'event', 'cruise', 'generic'].includes(extractionType || '') && (
+        {/* Train, Restaurant, Event, Cruise, Generic, and Private Driver Display - Simple fallback UI */}
+        {step === 'complete' && extractedData && ['train', 'restaurant', 'event', 'cruise', 'generic', 'private-driver'].includes(extractionType || '') && (
           <>
             <Card>
               <CardHeader>

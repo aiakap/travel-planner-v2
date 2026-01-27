@@ -24,7 +24,7 @@ import { transformTripToV0Format } from "@/lib/v0-data-transform"
 import type { V0Itinerary } from "@/lib/v0-types"
 import { UserPersonalizationData, ChatQuickAction, getHobbyBasedDestination, getPreferenceBudgetLevel } from "@/lib/personalization"
 import { generateGetLuckyPrompt } from "@/lib/ai/get-lucky-prompts"
-import { renameTripConversation, createTripConversation, createConversation, createSegmentConversation, createReservationConversation, findEntityConversations } from "@/lib/actions/chat-actions"
+import { renameTripConversation, createTripConversation, createConversation, createConversationWithOptions, createSegmentConversation, createReservationConversation, findEntityConversations } from "@/lib/actions/chat-actions"
 import { MessageSegmentsRenderer } from "@/app/exp/components/message-segments-renderer"
 import { MessageSegment } from "@/lib/types/place-pipeline"
 import {
@@ -47,7 +47,23 @@ interface ChatMessage {
   segments?: MessageSegment[];
 }
 
-// Removed old helper functions - no longer needed with non-streaming API!
+// Helper function to format chat timestamp
+function formatChatTimestamp(date: Date): string {
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const year = date.getFullYear().toString().slice(-2);
+  
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  
+  const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString();
+  
+  return `${month}/${day}/${year} - ${hours}:${minutesStr} ${ampm}`;
+}
 
 // Type for database trip with all relations
 interface DBTrip {
@@ -862,29 +878,281 @@ export function ExpClient({
     }
   }
 
-  // Handle "Get Lucky" button click - shows plan before creating
-  const handleGetLucky = () => {
+  // Handle "Get Lucky" button click - auto-generates complete trip
+  const handleGetLucky = async () => {
     if (isLoading) return;
-    
-    // Generate profile-aware lucky prompt
-    const destination = profileData 
-      ? getHobbyBasedDestination(profileData.hobbies) 
-      : null;
-    const budgetLevel = (profileData 
-      ? getPreferenceBudgetLevel(profileData.preferences) 
-      : 'moderate') as "moderate" | "budget" | "luxury";
-    
-    const luckyPrompt = generateGetLuckyPrompt(destination, budgetLevel);
-    
-    // Bot will show the plan and ask for confirmation
-    const confirmationMessage = `I have a trip idea for you:
-
-${luckyPrompt}
-
-What would you like to change about this plan, or should I create it as is?`;
-    
-    sendMessage(confirmationMessage);
+    setIsLoading(true);
     setHasStartedPlanning(true);
+    
+    try {
+      // 1. Create conversation first with "Surprise Journey" name
+      const timestamp = formatChatTimestamp(new Date());
+      const conversation = await createConversationWithOptions({
+        title: `Surprise Journey - ${timestamp}`,
+        userId,
+        chatType: 'TRIP',
+        tripId: null,
+      });
+      
+      console.log(`✅ Created Surprise Journey conversation: ${conversation.id}`);
+      
+      // 2. Add to conversations and switch to it
+      const fullConversation = { 
+        ...conversation, 
+        messages: [], 
+        chatType: 'TRIP' as const,
+        tripId: null
+      };
+      setConversations(prev => [fullConversation, ...prev]);
+      setCurrentConversationId(conversation.id);
+      
+      // 3. Create streaming loader message
+      const loaderId = `get-lucky-${Date.now()}`;
+      const loaderMessage: ChatMessage = {
+        id: loaderId,
+        role: 'assistant',
+        content: '',
+        segments: [{
+          type: 'get_lucky_loader',
+          loaderId,
+          stages: [],
+        }],
+      };
+      
+      setMessages([loaderMessage]);
+      
+      // 4. Get profile preferences
+      const destination = profileData 
+        ? getHobbyBasedDestination(profileData.hobbies) 
+        : null;
+      const budgetLevel = (profileData 
+        ? getPreferenceBudgetLevel(profileData.preferences) 
+        : 'moderate') as "moderate" | "budget" | "luxury";
+      const activityLevel = profileData?.preferences?.find(
+        (p: any) => p.preferenceType?.name === 'activity_level'
+      )?.option?.label || 'Moderate';
+      
+      // 5. Start SSE stream (pass conversationId)
+      const response = await fetch('/api/get-lucky/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profileData,
+          destination,
+          budgetLevel,
+          activityLevel,
+          conversationId: conversation.id,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+      
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+      
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let generatedTripId: string | null = null;
+      let tripName: string | null = null;
+      
+      // Process SSE stream
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6));
+            
+            // Handle trip_created event
+            if (data.type === 'trip_created') {
+              generatedTripId = data.data.tripId;
+              tripName = data.data.tripName;
+              
+              console.log(`✅ Trip created: ${generatedTripId} - ${tripName}`);
+              
+              // Update conversation with tripId and new title
+              setConversations(prev => prev.map(c => 
+                c.id === conversation.id 
+                  ? { ...c, tripId: generatedTripId, title: `${tripName} - ${timestamp}` }
+                  : c
+              ));
+              
+              // Switch to the new trip
+              setSelectedTripId(generatedTripId);
+              
+              // Fetch the full trip from API to get all details
+              // Note: At this point, trip exists but may not have segments/reservations yet
+              // We'll refetch as generation progresses
+              try {
+                const tripResponse = await fetch(`/api/trips/${generatedTripId}`);
+                if (tripResponse.ok) {
+                  const newTrip = await tripResponse.json();
+                  
+                  // Update trips list - this will trigger re-render of right pane
+                  setTrips(prev => {
+                    // Remove any existing trip with this ID (shouldn't happen, but be safe)
+                    const filtered = prev.filter(t => t.id !== generatedTripId);
+                    return [newTrip, ...filtered];
+                  });
+                  
+                  console.log(`✅ Trip loaded and displayed in right pane`);
+                }
+              } catch (error) {
+                console.error('❌ Failed to fetch trip details:', error);
+              }
+              
+              continue; // Don't process as regular stage
+            }
+            
+            // Helper function to refetch trip and update right pane
+            const refetchTrip = async () => {
+              if (!generatedTripId) return;
+              
+              try {
+                const tripResponse = await fetch(`/api/trips/${generatedTripId}`);
+                if (tripResponse.ok) {
+                  const updatedTrip = await tripResponse.json();
+                  setTrips(prev => {
+                    const filtered = prev.filter(t => t.id !== generatedTripId);
+                    return [updatedTrip, ...filtered];
+                  });
+                  console.log(`🔄 Trip refreshed in right pane`);
+                }
+              } catch (error) {
+                console.error('❌ Failed to refetch trip:', error);
+              }
+            };
+            
+            // Update loader stages based on event
+            setMessages(prev => {
+              const updated = [...prev];
+              const loaderIdx = updated.findIndex(m => m.id === loaderId);
+              
+              if (loaderIdx >= 0 && updated[loaderIdx].segments?.[0]?.type === 'get_lucky_loader') {
+                const loaderSegment = updated[loaderIdx].segments![0];
+                const stages = [...loaderSegment.stages];
+                
+                if (data.type === 'stage') {
+                  // Add or update stage
+                  const existingIdx = stages.findIndex(s => s.id === data.stage);
+                  if (existingIdx >= 0) {
+                    stages[existingIdx] = {
+                      ...stages[existingIdx],
+                      status: 'loading',
+                      message: data.message,
+                    };
+                  } else {
+                    stages.push({
+                      id: data.stage || 'unknown',
+                      status: 'loading',
+                      message: data.message || 'Processing...',
+                      items: [],
+                    });
+                  }
+                  
+                  // Refetch trip when starting a new stage (segments/reservations may have been added)
+                  if (data.stage === 'route' || data.stage === 'hotels' || data.stage === 'restaurants' || data.stage === 'activities') {
+                    refetchTrip();
+                  }
+                } else if (data.type === 'item') {
+                  // Add item to current stage
+                  const stageIdx = stages.findIndex(s => s.id === data.stage);
+                  if (stageIdx >= 0) {
+                    if (!stages[stageIdx].items) {
+                      stages[stageIdx].items = [];
+                    }
+                    stages[stageIdx].items!.push({
+                      text: data.message || '',
+                      data: data.data,
+                    });
+                    
+                    // Refetch trip periodically as items are added (every 3 items to avoid too many requests)
+                    if (stages[stageIdx].items!.length % 3 === 0) {
+                      refetchTrip();
+                    }
+                  }
+                } else if (data.type === 'complete') {
+                  // Mark last stage as complete
+                  if (stages.length > 0) {
+                    stages[stages.length - 1].status = 'complete';
+                  }
+                  // Add completion stage
+                  stages.push({
+                    id: 'complete',
+                    status: 'complete',
+                    message: data.message || 'Your trip is ready!',
+                    items: [],
+                  });
+                  
+                  // Final refetch to ensure everything is up to date
+                  refetchTrip();
+                } else if (data.type === 'error') {
+                  // Mark current stage as error
+                  if (stages.length > 0) {
+                    stages[stages.length - 1].status = 'error';
+                  }
+                }
+                
+                updated[loaderIdx] = {
+                  ...updated[loaderIdx],
+                  segments: [{
+                    ...loaderSegment,
+                    stages,
+                  }],
+                };
+              }
+              
+              return updated;
+            });
+          }
+        }
+      }
+      
+      // Stay on /exp page - trip is already visible in right pane
+      console.log(`✅ Surprise Journey complete! Trip ${generatedTripId} is visible`);
+      
+    } catch (error) {
+      console.error('❌ Get Lucky failed:', error);
+      // Show error in loader if we have messages
+      setMessages(prev => {
+        if (prev.length === 0) return prev;
+        
+        const updated = [...prev];
+        const loaderIdx = updated.findIndex(m => m.segments?.[0]?.type === 'get_lucky_loader');
+        
+        if (loaderIdx >= 0 && updated[loaderIdx].segments?.[0]?.type === 'get_lucky_loader') {
+          const loaderSegment = updated[loaderIdx].segments![0];
+          updated[loaderIdx] = {
+            ...updated[loaderIdx],
+            segments: [{
+              ...loaderSegment,
+              stages: [
+                ...loaderSegment.stages,
+                {
+                  id: 'error',
+                  status: 'error' as const,
+                  message: 'Generation failed. Please try again.',
+                  items: [],
+                },
+              ],
+            }],
+          };
+        }
+        
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
   
   // Handle quick action selection
@@ -2025,15 +2293,20 @@ What would you like to change about this plan, or should I create it as is?`;
                 </Button>
               )}
               
-              {/* New Journey button */}
+              {/* Surprise Trip button */}
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 px-3 flex items-center gap-2"
-                onClick={() => setIsMultiCityModalOpen(true)}
+                className="h-8 px-3 flex items-center gap-2 bg-gradient-to-r from-purple-50 to-blue-50 hover:from-purple-100 hover:to-blue-100 border-purple-200"
+                onClick={handleGetLucky}
+                disabled={isLoading}
               >
-                <Plus className="h-4 w-4" />
-                New Journey
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span className="text-lg">✨</span>
+                )}
+                Surprise Trip
               </Button>
             </div>
           </div>

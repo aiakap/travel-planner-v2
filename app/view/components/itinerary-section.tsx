@@ -10,7 +10,7 @@ interface ItinerarySectionProps {
 
 export function ItinerarySection({ itinerary }: ItinerarySectionProps) {
   return (
-    <section id="itinerary" className="max-w-5xl mx-auto px-4 py-12">
+    <section id="itinerary" className="scroll-mt-32 max-w-5xl mx-auto px-4 py-12">
       <div className="flex items-center gap-3 mb-6">
         <Calendar className="h-6 w-6 text-primary" />
         <h2 className="text-3xl font-bold">Your Itinerary</h2>

@@ -4,6 +4,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { calculateTravelTime, shouldCreateTravelSegment } from "@/lib/google-maps/calculate-travel-time"
 import { linkConversationToTrip } from "./link-conversation-to-trip"
+import { getSegmentTimeZones } from "./timezone"
 
 interface CityStop {
   city: string
@@ -168,6 +169,16 @@ export async function createMultiCityTrip({
     const stayEndDate = new Date(currentDate)
     stayEndDate.setDate(stayEndDate.getDate() + city.durationDays)
 
+    // Fetch timezone information for stay segment
+    const stayTimezones = cityGeo ? await getSegmentTimeZones(
+      cityGeo.lat,
+      cityGeo.lng,
+      cityGeo.lat,
+      cityGeo.lng,
+      currentDate,
+      stayEndDate
+    ) : { start: null, end: null, hasTimeZoneChange: false }
+
     // Create stay segment
     const staySegment = await prisma.segment.create({
       data: {
@@ -181,6 +192,10 @@ export async function createMultiCityTrip({
         endLng: cityGeo?.lng || 0,
         startTime: currentDate,
         endTime: stayEndDate,
+        startTimeZoneId: stayTimezones.start?.timeZoneId ?? null,
+        startTimeZoneName: stayTimezones.start?.timeZoneName ?? null,
+        endTimeZoneId: stayTimezones.end?.timeZoneId ?? null,
+        endTimeZoneName: stayTimezones.end?.timeZoneName ?? null,
         order: segmentOrder++,
         segmentTypeId: stayType.id,
       },
@@ -212,6 +227,16 @@ export async function createMultiCityTrip({
         const travelEndDate = new Date(stayEndDate)
         travelEndDate.setDate(travelEndDate.getDate() + 1)
 
+        // Fetch timezone information for travel segment
+        const travelTimezones = (cityGeo && nextCityGeo) ? await getSegmentTimeZones(
+          cityGeo.lat,
+          cityGeo.lng,
+          nextCityGeo.lat,
+          nextCityGeo.lng,
+          travelStartDate,
+          travelEndDate
+        ) : { start: null, end: null, hasTimeZoneChange: false }
+
         const travelSegment = await prisma.segment.create({
           data: {
             tripId: trip.id,
@@ -224,6 +249,10 @@ export async function createMultiCityTrip({
             endLng: nextCityGeo?.lng || 0,
             startTime: travelStartDate,
             endTime: travelEndDate,
+            startTimeZoneId: travelTimezones.start?.timeZoneId ?? null,
+            startTimeZoneName: travelTimezones.start?.timeZoneName ?? null,
+            endTimeZoneId: travelTimezones.end?.timeZoneId ?? null,
+            endTimeZoneName: travelTimezones.end?.timeZoneName ?? null,
             order: segmentOrder++,
             segmentTypeId: flightType.id,
             notes: `Estimated travel time: ${travelTime.durationHours.toFixed(1)} hours (${travelTime.distanceKm.toFixed(0)} km)`,

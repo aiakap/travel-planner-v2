@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { TripStatus, TripPermission } from "@/app/generated/prisma";
+import { getSegmentTimeZones } from "@/lib/actions/timezone";
 
 // Geocoding helper (copied from create-segment.ts to keep isolated)
 async function geocodeLocation(location: string): Promise<{
@@ -202,6 +203,16 @@ export async function syncSegments(
       endGeo = await geocodeLocation(segment.end_location);
     }
 
+    // Fetch timezone information for segment
+    const timezones = (startGeo && endGeo) ? await getSegmentTimeZones(
+      startGeo.lat,
+      startGeo.lng,
+      endGeo.lat,
+      endGeo.lng,
+      new Date(segment.startTime),
+      new Date(segment.endTime)
+    ) : { start: null, end: null, hasTimeZoneChange: false };
+
     const segmentData = {
       name: segment.name,
       tripId,
@@ -214,6 +225,10 @@ export async function syncSegments(
       endLng: endGeo?.lng || 0,
       startTime: new Date(segment.startTime),
       endTime: new Date(segment.endTime),
+      startTimeZoneId: timezones.start?.timeZoneId ?? null,
+      startTimeZoneName: timezones.start?.timeZoneName ?? null,
+      endTimeZoneId: timezones.end?.timeZoneId ?? null,
+      endTimeZoneName: timezones.end?.timeZoneName ?? null,
       order: segment.order,
       imageUrl: segment.start_image || segment.end_image || null,
       notes: null,

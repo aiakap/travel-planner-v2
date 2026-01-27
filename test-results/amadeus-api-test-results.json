@@ -1,0 +1,629 @@
+{
+  "timestamp": "2026-01-27T22:48:58.297Z",
+  "totalTests": 21,
+  "passed": 14,
+  "failed": 7,
+  "errors": 7,
+  "deprecated": 0,
+  "noData": 1,
+  "totalTime": 44310,
+  "results": [
+    {
+      "testCase": {
+        "id": "flight-search-1",
+        "name": "Flight Offers Search (JFK→LAX)",
+        "apiType": "flight-search",
+        "params": {
+          "originLocationCode": "JFK",
+          "destinationLocationCode": "LAX",
+          "departureDate": "2026-07-15",
+          "adults": 1,
+          "max": 5
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "flight",
+        "sdkMethod": "amadeus.shopping.flightOffersSearch.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/flight-offers-search",
+        "notes": "Core flight search - should always work"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 7533,
+      "resultCount": 5,
+      "timestamp": "2026-01-27T22:48:21.522Z"
+    },
+    {
+      "testCase": {
+        "id": "hotel-search-1",
+        "name": "Hotel Search (NYC)",
+        "apiType": "hotel-search",
+        "params": {
+          "cityCode": "NYC",
+          "checkInDate": "2026-07-15",
+          "checkOutDate": "2026-07-18",
+          "adults": 1
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "hotel",
+        "sdkMethod": "amadeus.shopping.hotelOffersSearch.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-search",
+        "notes": "Two-step: hotel list → offers"
+      },
+      "success": false,
+      "httpStatus": 400,
+      "responseTime": 2999,
+      "resultCount": 0,
+      "timestamp": "2026-01-27T22:48:25.524Z",
+      "error": {
+        "message": "Cannot read properties of undefined (reading 'map')",
+        "code": "UNKNOWN_ERROR",
+        "statusCode": 500,
+        "details": {}
+      },
+      "recommendation": "SDK method amadeus.shopping.hotelOffersSearch.get() may not exist in Amadeus SDK v11.0.0 - verify method name or update SDK"
+    },
+    {
+      "testCase": {
+        "id": "airport-search-1",
+        "name": "Airport Search (New York)",
+        "apiType": "airport-search",
+        "params": {
+          "keyword": "New York",
+          "max": 10
+        },
+        "expectedStatus": "success",
+        "timeout": 5000,
+        "category": "airport",
+        "sdkMethod": "amadeus.referenceData.locations.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/airport-and-city-search",
+        "notes": "Has fallback to static data"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 904,
+      "resultCount": 1,
+      "timestamp": "2026-01-27T22:48:27.430Z"
+    },
+    {
+      "testCase": {
+        "id": "flight-inspiration-1",
+        "name": "Flight Inspiration Search",
+        "apiType": "flight-inspiration",
+        "params": {
+          "origin": "BOS",
+          "departureDate": "2026-08-01",
+          "maxPrice": 500,
+          "oneWay": false
+        },
+        "expectedStatus": "unknown",
+        "timeout": 10000,
+        "category": "flight",
+        "sdkMethod": "amadeus.shopping.flightDestinations.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/flight-inspiration-search",
+        "notes": "May be deprecated or have limited test data"
+      },
+      "success": false,
+      "httpStatus": 500,
+      "responseTime": 2496,
+      "resultCount": 0,
+      "timestamp": "2026-01-27T22:48:30.929Z",
+      "error": {
+        "message": "The Amadeus API is experiencing issues. Please try again later.",
+        "code": "SERVER_ERROR",
+        "statusCode": 500,
+        "details": {
+          "errors": [
+            {
+              "status": 500,
+              "code": 141,
+              "title": "SYSTEM ERROR HAS OCCURRED",
+              "detail": "An system error occurred while trying to retrieve the details"
+            }
+          ]
+        }
+      },
+      "recommendation": "Amadeus server error - API may be temporarily unavailable"
+    },
+    {
+      "testCase": {
+        "id": "flight-cheapest-dates-1",
+        "name": "Flight Cheapest Date Search",
+        "apiType": "flight-cheapest-dates",
+        "params": {
+          "origin": "MAD",
+          "destination": "BCN",
+          "departureDate": "2026-08-01,2026-08-31",
+          "oneWay": false
+        },
+        "expectedStatus": "unknown",
+        "timeout": 10000,
+        "category": "flight",
+        "sdkMethod": "amadeus.shopping.flightDates.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/flight-cheapest-date-search",
+        "notes": "May be deprecated"
+      },
+      "success": false,
+      "httpStatus": 500,
+      "responseTime": 541,
+      "resultCount": 0,
+      "timestamp": "2026-01-27T22:48:32.471Z",
+      "error": {
+        "message": "The Amadeus API is experiencing issues. Please try again later.",
+        "code": "SERVER_ERROR",
+        "statusCode": 500,
+        "details": {
+          "errors": [
+            {
+              "status": 500,
+              "code": 141,
+              "title": "SYSTEM ERROR HAS OCCURRED",
+              "detail": "An system error occurred while trying to retrieve the details"
+            }
+          ]
+        }
+      },
+      "recommendation": "Amadeus server error - API may be temporarily unavailable"
+    },
+    {
+      "testCase": {
+        "id": "flight-price-analysis-1",
+        "name": "Flight Price Analysis",
+        "apiType": "flight-price-analysis",
+        "params": {
+          "originIataCode": "MAD",
+          "destinationIataCode": "CDG",
+          "departureDate": "2026-08-15",
+          "currencyCode": "EUR",
+          "oneWay": true
+        },
+        "expectedStatus": "unknown",
+        "timeout": 10000,
+        "category": "flight",
+        "sdkMethod": "amadeus.analytics.itineraryPriceMetrics.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/flight-price-analysis",
+        "notes": "Requires historical data - may have limited routes"
+      },
+      "success": false,
+      "httpStatus": 400,
+      "responseTime": 229,
+      "resultCount": 0,
+      "timestamp": "2026-01-27T22:48:33.702Z",
+      "error": {
+        "message": "Validation failed: API is decommissioned and resource can not be accessible anymore",
+        "code": "VALIDATION_ERROR",
+        "statusCode": 400,
+        "details": {
+          "errors": [
+            {
+              "code": "41254",
+              "status": 410,
+              "title": "GONE",
+              "detail": "API is decommissioned and resource can not be accessible anymore"
+            }
+          ]
+        }
+      },
+      "recommendation": "Check API documentation at https://developers.amadeus.com/self-service/category/flights/api-doc/flight-price-analysis"
+    },
+    {
+      "testCase": {
+        "id": "flight-delay-prediction-1",
+        "name": "Flight Delay Prediction",
+        "apiType": "flight-delay-prediction",
+        "params": {
+          "originLocationCode": "NCE",
+          "destinationLocationCode": "IST",
+          "departureDate": "2026-08-01",
+          "departureTime": "18:20:00",
+          "arrivalDate": "2026-08-01",
+          "arrivalTime": "22:15:00",
+          "aircraftCode": "321",
+          "carrierCode": "TK",
+          "flightNumber": "1816",
+          "duration": "PT3H55M"
+        },
+        "expectedStatus": "unknown",
+        "timeout": 10000,
+        "category": "flight",
+        "sdkMethod": "amadeus.travel.predictions.flightDelay.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/flight-delay-prediction",
+        "notes": "Complex parameters - likely to fail"
+      },
+      "success": false,
+      "httpStatus": 400,
+      "responseTime": 215,
+      "resultCount": 0,
+      "timestamp": "2026-01-27T22:48:34.919Z",
+      "error": {
+        "message": "Validation failed: API is decommissioned and resource can not be accessible anymore",
+        "code": "VALIDATION_ERROR",
+        "statusCode": 400,
+        "details": {
+          "errors": [
+            {
+              "code": "41254",
+              "status": 410,
+              "title": "GONE",
+              "detail": "API is decommissioned and resource can not be accessible anymore"
+            }
+          ]
+        }
+      },
+      "recommendation": "Check API documentation at https://developers.amadeus.com/self-service/category/flights/api-doc/flight-delay-prediction"
+    },
+    {
+      "testCase": {
+        "id": "airport-routes-1",
+        "name": "Airport Routes",
+        "apiType": "airport-routes",
+        "params": {
+          "airportCode": "MAD",
+          "max": 20
+        },
+        "expectedStatus": "unknown",
+        "timeout": 10000,
+        "category": "airport",
+        "sdkMethod": "amadeus.airport.directDestinations.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/airport-routes",
+        "notes": "Should return list of destinations"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 344,
+      "resultCount": 20,
+      "timestamp": "2026-01-27T22:48:36.264Z"
+    },
+    {
+      "testCase": {
+        "id": "airport-nearby-1",
+        "name": "Airport Nearest Relevant",
+        "apiType": "airport-nearby",
+        "params": {
+          "latitude": 40.416775,
+          "longitude": -3.70379,
+          "radius": 500
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "airport",
+        "sdkMethod": "amadeus.referenceData.locations.airports.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/airport-nearest-relevant",
+        "notes": "Madrid coordinates - should find MAD"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 273,
+      "resultCount": 10,
+      "timestamp": "2026-01-27T22:48:37.537Z"
+    },
+    {
+      "testCase": {
+        "id": "airport-ontime-1",
+        "name": "Airport On-Time Performance",
+        "apiType": "airport-ontime",
+        "params": {
+          "airportCode": "JFK",
+          "date": "2026-08-15"
+        },
+        "expectedStatus": "unknown",
+        "timeout": 10000,
+        "category": "airport",
+        "sdkMethod": "amadeus.airport.predictions.onTime.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/airport-on-time-performance",
+        "notes": "May require specific date format"
+      },
+      "success": false,
+      "httpStatus": 400,
+      "responseTime": 431,
+      "resultCount": 0,
+      "timestamp": "2026-01-27T22:48:38.970Z",
+      "error": {
+        "message": "Validation failed: API is decommissioned and resource can not be accessible anymore",
+        "code": "VALIDATION_ERROR",
+        "statusCode": 400,
+        "details": {
+          "errors": [
+            {
+              "code": "41254",
+              "status": 410,
+              "title": "GONE",
+              "detail": "API is decommissioned and resource can not be accessible anymore"
+            }
+          ]
+        }
+      },
+      "recommendation": "Check API documentation at https://developers.amadeus.com/self-service/category/flights/api-doc/airport-on-time-performance"
+    },
+    {
+      "testCase": {
+        "id": "airline-lookup-1",
+        "name": "Airline Code Lookup",
+        "apiType": "airline-lookup",
+        "params": {
+          "airlineCodes": "BA"
+        },
+        "expectedStatus": "success",
+        "timeout": 5000,
+        "category": "airport",
+        "sdkMethod": "amadeus.referenceData.airlines.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/airline-code-lookup",
+        "notes": "Reference data - should work"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 616,
+      "resultCount": 1,
+      "timestamp": "2026-01-27T22:48:40.589Z"
+    },
+    {
+      "testCase": {
+        "id": "airline-routes-1",
+        "name": "Airline Routes",
+        "apiType": "airline-routes",
+        "params": {
+          "airlineCode": "BA",
+          "max": 20
+        },
+        "expectedStatus": "unknown",
+        "timeout": 10000,
+        "category": "airport",
+        "sdkMethod": "amadeus.airline.destinations.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/airline-routes",
+        "notes": "Should return BA destinations"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 412,
+      "resultCount": 20,
+      "timestamp": "2026-01-27T22:48:42.004Z"
+    },
+    {
+      "testCase": {
+        "id": "hotel-list-city-1",
+        "name": "Hotel List by City",
+        "apiType": "hotel-list-city",
+        "params": {
+          "cityCode": "PAR",
+          "radius": 5,
+          "radiusUnit": "KM"
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "hotel",
+        "sdkMethod": "amadeus.referenceData.locations.hotels.byCity.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-list",
+        "notes": "Hotel list API - should work"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 712,
+      "resultCount": 988,
+      "timestamp": "2026-01-27T22:48:43.723Z"
+    },
+    {
+      "testCase": {
+        "id": "hotel-list-geocode-1",
+        "name": "Hotel List by Geocode",
+        "apiType": "hotel-list-geocode",
+        "params": {
+          "latitude": 48.8566,
+          "longitude": 2.3522,
+          "radius": 5,
+          "radiusUnit": "KM"
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "hotel",
+        "sdkMethod": "amadeus.referenceData.locations.hotels.byGeocode.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-list",
+        "notes": "Paris coordinates"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 782,
+      "resultCount": 978,
+      "timestamp": "2026-01-27T22:48:45.510Z"
+    },
+    {
+      "testCase": {
+        "id": "hotel-list-ids-1",
+        "name": "Hotel List by IDs",
+        "apiType": "hotel-list-ids",
+        "params": {
+          "hotelIds": "HLPAR001,HLPAR002"
+        },
+        "expectedStatus": "error",
+        "timeout": 10000,
+        "category": "hotel",
+        "sdkMethod": "amadeus.referenceData.locations.hotels.byHotels.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-list",
+        "notes": "Test hotel IDs may not exist"
+      },
+      "success": false,
+      "httpStatus": 400,
+      "responseTime": 379,
+      "resultCount": 0,
+      "timestamp": "2026-01-27T22:48:46.891Z",
+      "error": {
+        "message": "Validation failed: Property codes not found in system",
+        "code": "VALIDATION_ERROR",
+        "statusCode": 400,
+        "details": {
+          "errors": [
+            {
+              "code": 3237,
+              "detail": "Property codes not found in system",
+              "status": 400,
+              "title": "PROPERTY CODE NOT FOUND IN SYSTEM"
+            }
+          ]
+        }
+      },
+      "recommendation": "Check API documentation at https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-list"
+    },
+    {
+      "testCase": {
+        "id": "hotel-autocomplete-1",
+        "name": "Hotel Name Autocomplete",
+        "apiType": "hotel-autocomplete",
+        "params": {
+          "keyword": "PARI",
+          "subType": "HOTEL_LEISURE"
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "hotel",
+        "sdkMethod": "amadeus.referenceData.locations.hotel.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-name-autocomplete",
+        "notes": "Autocomplete should work"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 548,
+      "resultCount": 20,
+      "timestamp": "2026-01-27T22:48:48.443Z"
+    },
+    {
+      "testCase": {
+        "id": "hotel-ratings-1",
+        "name": "Hotel Ratings",
+        "apiType": "hotel-ratings",
+        "params": {
+          "hotelIds": "TELONMFS,ADNYCCTB"
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "hotel",
+        "sdkMethod": "amadeus.eReputation.hotelSentiments.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-ratings",
+        "notes": "CONFIRMED WORKING - Returns hotel sentiment ratings"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 377,
+      "resultCount": 2,
+      "timestamp": "2026-01-27T22:48:49.821Z"
+    },
+    {
+      "testCase": {
+        "id": "tours-activities-1",
+        "name": "Tours & Activities by Radius",
+        "apiType": "tours-activities",
+        "params": {
+          "latitude": 40.41436995,
+          "longitude": -3.69170868,
+          "radius": 1
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "activity",
+        "sdkMethod": "amadeus.shopping.activities.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/destination-experiences/api-doc/tours-and-activities",
+        "notes": "CONFIRMED WORKING - Madrid has excellent test data (117+ activities)"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 1495,
+      "resultCount": 117,
+      "timestamp": "2026-01-27T22:48:52.319Z"
+    },
+    {
+      "testCase": {
+        "id": "tours-activities-square-1",
+        "name": "Tours & Activities by Square",
+        "apiType": "tours-activities-square",
+        "params": {
+          "north": 41.397158,
+          "west": 2.160873,
+          "south": 41.394582,
+          "east": 2.177181
+        },
+        "expectedStatus": "unknown",
+        "timeout": 15000,
+        "category": "activity",
+        "sdkMethod": "amadeus.shopping.activities.bySquare.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/destination-experiences/api-doc/tours-and-activities",
+        "notes": "Barcelona bounds - increased timeout to 15s (previously timed out)"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 1133,
+      "resultCount": 27,
+      "timestamp": "2026-01-27T22:48:54.455Z"
+    },
+    {
+      "testCase": {
+        "id": "flight-checkin-links-1",
+        "name": "Flight Check-in Links",
+        "apiType": "flight-checkin-links",
+        "params": {
+          "airlineCode": "BA",
+          "language": "en-GB"
+        },
+        "expectedStatus": "success",
+        "timeout": 5000,
+        "category": "flight",
+        "sdkMethod": "amadeus.referenceData.urls.checkinLinks.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/flight-check-in-links",
+        "notes": "CONFIRMED WORKING - Returns check-in URLs for airlines"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 391,
+      "resultCount": 3,
+      "timestamp": "2026-01-27T22:48:55.847Z"
+    },
+    {
+      "testCase": {
+        "id": "flight-status-1",
+        "name": "On-Demand Flight Status",
+        "apiType": "flight-status",
+        "params": {
+          "carrierCode": "IB",
+          "flightNumber": "532",
+          "scheduledDepartureDate": "2026-08-23"
+        },
+        "expectedStatus": "success",
+        "timeout": 10000,
+        "category": "flight",
+        "sdkMethod": "amadeus.schedule.flights.get()",
+        "apiDocUrl": "https://developers.amadeus.com/self-service/category/flights/api-doc/on-demand-flight-status",
+        "notes": "CONFIRMED WORKING - Returns empty for future dates (use recent dates for real data)"
+      },
+      "success": true,
+      "httpStatus": 200,
+      "responseTime": 448,
+      "resultCount": 0,
+      "timestamp": "2026-01-27T22:48:57.295Z"
+    }
+  ],
+  "categories": {
+    "flight": {
+      "total": 7,
+      "passed": 3,
+      "failed": 4
+    },
+    "hotel": {
+      "total": 6,
+      "passed": 4,
+      "failed": 2
+    },
+    "airport": {
+      "total": 6,
+      "passed": 5,
+      "failed": 1
+    },
+    "activity": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "transfer": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0
+    }
+  }
+}

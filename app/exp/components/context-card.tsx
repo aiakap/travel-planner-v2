@@ -249,7 +249,17 @@ export function ContextCard({ type, data, actions, onActionClick, onSaved }: Con
         />
       </div>
       <div className="text-sm text-slate-700 space-y-1">
-        <div>{data.startLocation} → {data.endLocation}</div>
+        <div className="flex items-center gap-1">
+          <span>{data.startLocation}</span>
+          {data.startTimeZone && data.endTimeZone && data.startTimeZone !== data.endTimeZone && (
+            <span className="text-[9px] text-slate-500">({data.startTimeZone})</span>
+          )}
+          <span>→</span>
+          <span>{data.endLocation}</span>
+          {data.endTimeZone && data.startTimeZone !== data.endTimeZone && (
+            <span className="text-[9px] text-slate-500">({data.endTimeZone})</span>
+          )}
+        </div>
         <div className="text-xs text-slate-600">
           {data.startDate} - {data.endDate}
         </div>

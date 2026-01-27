@@ -15,6 +15,7 @@ interface TripReservationsMapProps {
   height?: string;
   selectedSegmentId?: string | null;
   selectedReservationId?: string | null;
+  mapTypeId?: "roadmap" | "satellite" | "hybrid" | "terrain";
 }
 
 interface MapMarker {
@@ -64,7 +65,8 @@ export function TripReservationsMap({
   trip, 
   height = "600px",
   selectedSegmentId,
-  selectedReservationId 
+  selectedReservationId,
+  mapTypeId = "roadmap"
 }: TripReservationsMapProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const [activeMarker, setActiveMarker] = useState<string | null>(null);
@@ -202,6 +204,7 @@ export function TripReservationsMap({
         center={center}
         onLoad={(map) => setMapInstance(map)}
         options={{
+          mapTypeId: mapTypeId,
           styles: [
             {
               featureType: "poi",

@@ -55,7 +55,7 @@ async function loadStatuses() {
 /**
  * Get reservation type by category and name (cached)
  * 
- * @param category - Category name (e.g., "Transportation", "Stay", "Activity", "Dining")
+ * @param category - Category name (e.g., "Travel", "Stay", "Activity", "Dining")
  * @param typeName - Type name (e.g., "Flight", "Hotel", "Tour")
  * @returns Cached reservation type with id, name, categoryId, categoryName
  * @throws Error if type not found (with helpful message listing available types)

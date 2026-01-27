@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, TestTube, Settings, ArrowRight, Plug, Upload, Trash2, Mail, List, ImageIcon } from "lucide-react";
+import { FileText, TestTube, Settings, ArrowRight, Plug, Upload, Trash2, Mail, List, ImageIcon, Code, MapPin, Home } from "lucide-react";
 
 export default function AdminDashboard() {
   return (
@@ -9,12 +9,12 @@ export default function AdminDashboard() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">
-          Manage and monitor your prompt plugin system
+          Manage prompts, test card generation, and explore the exp system
         </p>
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -33,14 +33,29 @@ export default function AdminDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Active Plugins
+              Card Types
             </CardTitle>
-            <Settings className="h-4 w-4 text-muted-foreground" />
+            <Code className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">6</div>
+            <div className="text-2xl font-bold">10</div>
             <p className="text-xs text-muted-foreground">
-              All plugins currently enabled
+              Defined in exp-response-schema
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Suggestion Types
+            </CardTitle>
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">3</div>
+            <p className="text-xs text-muted-foreground">
+              Places, Transport, Hotels
             </p>
           </CardContent>
         </Card>
@@ -86,9 +101,26 @@ export default function AdminDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Test Prompts</CardTitle>
+            <CardTitle>Card Types</CardTitle>
             <CardDescription>
-              Build and preview prompts with different contexts
+              Explore all 10 card types with schema reference
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/cards">
+              <Button variant="outline" className="w-full">
+                Card Explorer
+                <Code className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Test Prompts & Cards</CardTitle>
+            <CardDescription>
+              Build prompts and preview AI-generated cards
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -103,9 +135,26 @@ export default function AdminDashboard() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Suggestion Testing</CardTitle>
+            <CardDescription>
+              Test place, transport, and hotel suggestion schemas
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/suggestions">
+              <Button variant="outline" className="w-full">
+                Test Suggestions
+                <MapPin className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>API Testing</CardTitle>
             <CardDescription>
-              Test and monitor external API integrations
+              Test external APIs and structured outputs
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -252,16 +301,24 @@ export default function AdminDashboard() {
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Plugin System Version</span>
-            <span className="font-medium">1.0.0</span>
+            <span className="text-muted-foreground">Admin Version</span>
+            <span className="font-medium">2.0.0</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Registry Location</span>
+            <span className="text-muted-foreground">Exp System</span>
+            <span className="font-medium">Structured Outputs (Zod + OpenAI)</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Schema Location</span>
+            <span className="font-mono text-xs">lib/schemas/exp-response-schema.ts</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Plugin Registry</span>
             <span className="font-mono text-xs">app/exp/lib/prompts/registry.ts</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Persistence</span>
-            <span className="text-orange-600 font-medium">Preview Only (No persistence yet)</span>
+            <span className="text-muted-foreground">Old Card Syntax</span>
+            <span className="text-orange-600 font-medium">Deprecated (use structured outputs)</span>
           </div>
         </CardContent>
       </Card>

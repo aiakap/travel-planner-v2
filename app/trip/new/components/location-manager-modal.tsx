@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, MapPin } from 'lucide-react';
 import { SimpleLocationInput } from './simple-location-input';
-import { JourneyMapView } from './journey-map-view';
 import { type PlaceData } from './place-autocomplete-live';
 import {
   analyzeLocationChain,
@@ -72,13 +71,22 @@ export function LocationManagerModal({
 
     const analysis = analyzeLocationChain(segments);
     
-    // Filter suggestions that should be auto-applied
+    // CRITICAL: Only apply suggestions to EMPTY fields
     const autoSuggestions = analysis.suggestions.filter(suggestion => {
       if (!suggestion.autoApply || suggestion.priority > 2) return false;
       
-      // Check if any of the changes would overwrite manual edits
+      // Check that ALL target fields are EMPTY and not manually edited
       return suggestion.changes.every(change => {
-        const key = `${segments[change.segmentIndex].id}-${change.field}`;
+        const segment = segments[change.segmentIndex];
+        const currentValue = segment[change.field];
+        
+        // Only apply if field is completely empty (not even whitespace)
+        if (currentValue && currentValue.trim() !== '') {
+          return false;
+        }
+        
+        // Don't overwrite fields that were manually edited
+        const key = `${segment.id}-${change.field}`;
         return !manualEdits.has(key);
       });
     });
@@ -86,7 +94,7 @@ export function LocationManagerModal({
     if (autoSuggestions.length > 0) {
       const updated = applyMultipleSuggestions(segments, autoSuggestions);
       
-      // Track which fields were auto-filled
+      // Track which fields were auto-filled (for potential future clearing)
       const newAutoFilled = new Set(autoFilledFields);
       autoSuggestions.forEach(suggestion => {
         suggestion.changes.forEach(change => {
@@ -111,23 +119,20 @@ export function LocationManagerModal({
     const segment = updated[segmentIndex];
     const prefix = field === 'start_location' ? 'start' : 'end';
     
-    // Mark as manual edit
+    // ALWAYS mark as manual edit when user changes a field
     const key = `${segment.id}-${field}`;
     const newManualEdits = new Set(manualEdits);
     newManualEdits.add(key);
     
-    // Remove from auto-filled if it was auto-filled
+    // Remove from auto-filled set (user is taking control)
     const newAutoFilled = new Set(autoFilledFields);
-    if (autoFilledFields.has(key)) {
-      newAutoFilled.delete(key);
-    }
+    newAutoFilled.delete(key);
     
-    // Update the primary field
+    // Update segment with place data
     updated[segmentIndex] = {
       ...segment,
       [field]: value,
       [`${prefix}_image`]: imageUrl,
-      // Add coordinates and timezone if available
       ...(placeData && {
         [`${prefix}_lat`]: placeData.lat,
         [`${prefix}_lng`]: placeData.lng,
@@ -136,10 +141,11 @@ export function LocationManagerModal({
       })
     };
     
-    // If sameLocation is true, sync to the other field
+    // Sync if same location
     if (segment.sameLocation) {
       const otherField = field === 'start_location' ? 'end_location' : 'start_location';
       const otherPrefix = field === 'start_location' ? 'end' : 'start';
+      const otherKey = `${segment.id}-${otherField}`;
       
       updated[segmentIndex] = {
         ...updated[segmentIndex],
@@ -153,26 +159,28 @@ export function LocationManagerModal({
         })
       };
       
-      // Also mark the other field as manually edited
-      const otherKey = `${segment.id}-${otherField}`;
       newManualEdits.add(otherKey);
+      newAutoFilled.delete(otherKey);
     }
     
     setManualEdits(newManualEdits);
     setAutoFilledFields(newAutoFilled);
     setSegments(updated);
     
-    // Trigger smart suggestions immediately after location change
+    // Trigger auto-fill for remaining EMPTY fields only
     setTimeout(() => {
       const analysis = analyzeLocationChain(updated);
-      
-      // Filter suggestions that should be auto-applied
       const autoSuggestions = analysis.suggestions.filter(suggestion => {
         if (!suggestion.autoApply || suggestion.priority > 2) return false;
         
-        // Check if any of the changes would overwrite manual edits
         return suggestion.changes.every(change => {
-          const changeKey = `${updated[change.segmentIndex].id}-${change.field}`;
+          const seg = updated[change.segmentIndex];
+          const currentValue = seg[change.field];
+          
+          // Only if empty and not manually edited
+          if (currentValue && currentValue.trim() !== '') return false;
+          
+          const changeKey = `${seg.id}-${change.field}`;
           return !newManualEdits.has(changeKey);
         });
       });
@@ -180,7 +188,6 @@ export function LocationManagerModal({
       if (autoSuggestions.length > 0) {
         const withSuggestions = applyMultipleSuggestions(updated, autoSuggestions);
         
-        // Track which fields were auto-filled
         const updatedAutoFilled = new Set(newAutoFilled);
         autoSuggestions.forEach(suggestion => {
           suggestion.changes.forEach(change => {
@@ -243,43 +250,27 @@ export function LocationManagerModal({
       <div className="fixed inset-2 md:inset-4 z-[60] animate-in fade-in zoom-in-95 duration-200">
         <div className="bg-white rounded-xl shadow-2xl border border-gray-200 h-full flex flex-col overflow-hidden">
           
-          {/* Simple Header */}
-          <div className="flex-shrink-0 border-b border-gray-200 p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="bg-indigo-100 text-indigo-600 p-1.5 rounded-lg">
-                  <MapPin size={16} />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-gray-900">Set Locations</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {segments.length} chapter{segments.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-              </div>
+          {/* Enhanced Header */}
+          <div className="flex-shrink-0 border-b border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xl font-bold text-gray-900">Add Locations</h2>
               <button
                 onClick={handleCancel}
-                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
+            <p className="text-sm text-gray-600">
+              Enter the start and end location for each chapter of your trip
+            </p>
           </div>
 
           {/* Content Area */}
           <div className="flex-1 overflow-hidden flex flex-col">
-            {/* Map View */}
-            <div className="flex-shrink-0 h-[120px] md:h-[180px] p-3 pb-2">
-              <JourneyMapView
-                segments={segments}
-                focusedIndex={focusedSegmentIndex}
-                onMarkerClick={(index) => setFocusedSegmentIndex(index)}
-              />
-            </div>
-
             {/* Location Inputs List */}
-            <div className="flex-1 overflow-y-auto px-3 pb-3">
-              <div className="space-y-1.5">
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <div className="space-y-3 max-w-3xl mx-auto">
                 {segments.map((segment, index) => (
                   <SimpleLocationInput
                     key={segment.id}
@@ -289,8 +280,6 @@ export function LocationManagerModal({
                       handleLocationChange(index, field, value, imageUrl, placeData)
                     }
                     onToggleSameLocation={(newValue) => handleToggleSameLocation(index, newValue)}
-                    isStartAutoFilled={isFieldAutoFilled(segment.id, 'start_location')}
-                    isEndAutoFilled={isFieldAutoFilled(segment.id, 'end_location')}
                     isFocused={focusedSegmentIndex === index}
                     focusField={focusedSegmentIndex === index ? initialFocusField : undefined}
                   />

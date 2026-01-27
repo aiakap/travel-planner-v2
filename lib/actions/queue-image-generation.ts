@@ -7,7 +7,7 @@ import { queueImageGeneration } from "@/lib/image-queue";
  * Helper to build and queue image generation for a trip
  * Note: Should only be called from authenticated server actions
  */
-export async function queueTripImageGeneration(tripId: string, specificPromptId?: string) {
+export async function queueTripImageGeneration(tripId: string, specificStyleId?: string) {
   console.log(`[queueTripImageGeneration] Starting for trip: ${tripId}`);
   
   try {
@@ -28,7 +28,7 @@ export async function queueTripImageGeneration(tripId: string, specificPromptId?
     const { buildContextualPrompt, selectBestPromptForTrip, logImageGeneration } = await import("@/lib/image-generation");
     
     console.log(`[queueTripImageGeneration] Selecting best prompt...`);
-    const selectionResult = await selectBestPromptForTrip(trip, specificPromptId);
+    const selectionResult = await selectBestPromptForTrip(trip, specificStyleId);
     const prompt = selectionResult.prompt;
     console.log(`[queueTripImageGeneration] Selected prompt: ${prompt.name}`);
     
@@ -44,13 +44,12 @@ export async function queueTripImageGeneration(tripId: string, specificPromptId?
       entityName: trip.title,
       promptId: prompt.id,
       promptName: prompt.name,
-      promptStyle: prompt.style || undefined,
+      promptStyle: prompt.style?.name || null,
       fullPrompt: fullPrompt,
       aiReasoning: selectionResult.reasoning,
-      selectionReason: specificPromptId ? "Manually selected" : `AI selected for trip: ${trip.title}`,
-      availablePrompts: selectionResult.availablePrompts.map(p => p.name),
+      selectionReason: specificStyleId ? "Manually selected style" : `Default style for trip: ${trip.title}`,
       callerFunction: "queueTripImageGeneration",
-      callerSource: specificPromptId ? "regenerate" : "trip-creation",
+      callerSource: specificStyleId ? "regenerate" : "trip-creation",
       status: "in_progress",
       imageProvider: process.env.IMAGE_PROVIDER || "imagen",
     });
@@ -115,11 +114,10 @@ export async function queueSegmentImageGeneration(segmentId: string) {
       entityName: segment.name,
       promptId: prompt.id,
       promptName: prompt.name,
-      promptStyle: prompt.style || undefined,
+      promptStyle: prompt.style?.name || null,
       fullPrompt: fullPrompt,
       aiReasoning: selectionResult.reasoning,
-      selectionReason: `AI selected for segment: ${segment.name}`,
-      availablePrompts: selectionResult.availablePrompts.map(p => p.name),
+      selectionReason: `Default prompt for segment: ${segment.name}`,
       callerFunction: "queueSegmentImageGeneration",
       callerSource: "segment-creation",
       status: "in_progress",
@@ -186,11 +184,10 @@ export async function queueReservationImageGeneration(reservationId: string) {
       entityName: reservation.name,
       promptId: prompt.id,
       promptName: prompt.name,
-      promptStyle: prompt.style || undefined,
+      promptStyle: prompt.style?.name || null,
       fullPrompt: fullPrompt,
       aiReasoning: selectionResult.reasoning,
-      selectionReason: `AI selected for reservation: ${reservation.name}`,
-      availablePrompts: selectionResult.availablePrompts.map(p => p.name),
+      selectionReason: `Default prompt for reservation: ${reservation.name}`,
       callerFunction: "queueReservationImageGeneration",
       callerSource: "reservation-creation",
       status: "in_progress",
@@ -209,4 +206,60 @@ export async function queueReservationImageGeneration(reservationId: string) {
     console.error(`[queueReservationImageGeneration] Stack:`, error.stack);
     throw error;
   }
+}
+
+/**
+ * Queue image generation for multiple entities at once
+ */
+export async function queueBulkImageGeneration(params: {
+  tripIds?: string[];
+  segmentIds?: string[];
+  reservationIds?: string[];
+}) {
+  const results = {
+    trips: { success: 0, failed: 0 },
+    segments: { success: 0, failed: 0 },
+    reservations: { success: 0, failed: 0 }
+  };
+  
+  // Queue trips
+  if (params.tripIds) {
+    for (const tripId of params.tripIds) {
+      try {
+        await queueTripImageGeneration(tripId);
+        results.trips.success++;
+      } catch (error) {
+        console.error(`Failed to queue trip ${tripId}:`, error);
+        results.trips.failed++;
+      }
+    }
+  }
+  
+  // Queue segments
+  if (params.segmentIds) {
+    for (const segmentId of params.segmentIds) {
+      try {
+        await queueSegmentImageGeneration(segmentId);
+        results.segments.success++;
+      } catch (error) {
+        console.error(`Failed to queue segment ${segmentId}:`, error);
+        results.segments.failed++;
+      }
+    }
+  }
+  
+  // Queue reservations
+  if (params.reservationIds) {
+    for (const reservationId of params.reservationIds) {
+      try {
+        await queueReservationImageGeneration(reservationId);
+        results.reservations.success++;
+      } catch (error) {
+        console.error(`Failed to queue reservation ${reservationId}:`, error);
+        results.reservations.failed++;
+      }
+    }
+  }
+  
+  return results;
 }

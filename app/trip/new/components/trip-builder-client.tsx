@@ -13,7 +13,8 @@ import {
   HelpCircle,
   ArrowRight,
   ChevronUp,
-  Minus
+  Minus,
+  Home
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PlaceAutocompleteLive } from './place-autocomplete-live';
@@ -28,6 +29,7 @@ import { HandDrawnTooltip } from '@/components/ui/hand-drawn-tooltip';
 import { TooltipOverlay } from '@/components/ui/tooltip-overlay';
 import { LocationManagerModal } from './location-manager-modal';
 import { DateChangeModal } from './date-change-modal';
+import { HomeLocationData } from '@/lib/types/home-location';
 
 interface Segment {
   id: string;
@@ -52,6 +54,7 @@ interface Segment {
 
 interface TripBuilderClientProps {
   segmentTypeMap: Record<string, string>;
+  homeLocation?: HomeLocationData; // User's home location with Google Places data
   initialTrip?: any; // Pre-loaded trip from Journey Architect
   initialSegments?: Segment[]; // Pre-loaded segments
   onUpdate?: (data: any) => void; // Callback for updates
@@ -90,6 +93,7 @@ const defaultSameLocation = (type: string): boolean => {
 
 export function TripBuilderClient({ 
   segmentTypeMap, 
+  homeLocation,
   initialTrip, 
   initialSegments,
   onUpdate,
@@ -122,6 +126,10 @@ export function TripBuilderClient({
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const tripIdRef = useRef<string | null>(null);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  
+  // Home location toggle state
+  const [includeHomeStart, setIncludeHomeStart] = useState(true);
+  const [includeHomeEnd, setIncludeHomeEnd] = useState(true);
   
   // Location manager modal state
   const [locationManagerState, setLocationManagerState] = useState<{
@@ -212,10 +220,33 @@ export function TripBuilderClient({
       return [mkSeg('STAY', 'First Stop', 1), mkSeg('STAY', 'Second Stop', 1)];
     } else {
       const stayDays = totalDays - 2;
+      // Use home location for first and last travel segments if available and toggles are enabled
+      // Home location data for first segment (start)
+      const homeStart = (homeLocation && includeHomeStart) ? homeLocation.name : "";
+      const homeStartImage = (homeLocation && includeHomeStart) ? homeLocation.imageUrl : null;
+      const homeStartLat = (homeLocation && includeHomeStart) ? homeLocation.lat : undefined;
+      const homeStartLng = (homeLocation && includeHomeStart) ? homeLocation.lng : undefined;
+      
+      // Home location data for last segment (end)
+      const homeEnd = (homeLocation && includeHomeEnd) ? homeLocation.name : "";
+      const homeEndImage = (homeLocation && includeHomeEnd) ? homeLocation.imageUrl : null;
+      const homeEndLat = (homeLocation && includeHomeEnd) ? homeLocation.lat : undefined;
+      const homeEndLng = (homeLocation && includeHomeEnd) ? homeLocation.lng : undefined;
+      
       return [
-        mkSeg('TRAVEL', 'Journey Begins', 1),
+        {
+          ...mkSeg('TRAVEL', 'Journey Begins', 1, homeStart, ""),
+          start_image: homeStartImage,
+          start_lat: homeStartLat,
+          start_lng: homeStartLng,
+        },
         mkSeg('STAY', 'The Adventure', stayDays),
-        mkSeg('TRAVEL', 'Journey Home', 1),
+        {
+          ...mkSeg('TRAVEL', 'Journey Home', 1, "", homeEnd),
+          end_image: homeEndImage,
+          end_lat: homeEndLat,
+          end_lng: homeEndLng,
+        },
       ];
     }
   };
@@ -260,9 +291,9 @@ export function TripBuilderClient({
     return nextSegments;
   };
 
-  // Calculate if we have minimum info to show timeline
+  // Calculate if we have minimum info to enable timeline interaction
   const hasMinimumInfo = journeyName.trim().length > 0;
-  const showTimeline = hasMinimumInfo;
+  const showTimeline = true; // Always show timeline, but gray out when incomplete
 
   // Generate segments when timeline should be shown
   useEffect(() => {
@@ -815,6 +846,40 @@ export function TripBuilderClient({
     });
   };
   
+  // --- HOME LOCATION TOGGLE HANDLERS ---
+  const handleToggleHomeStart = () => {
+    setHasUserInteracted(true);
+    const newValue = !includeHomeStart;
+    setIncludeHomeStart(newValue);
+    
+    // Update first segment if it exists and is a TRAVEL segment
+    if (segments.length > 0 && segments[0].type === 'TRAVEL') {
+      const newSegments = [...segments];
+      newSegments[0].start_location = newValue ? (homeLocation?.name || "") : "";
+      newSegments[0].start_image = newValue ? (homeLocation?.imageUrl || null) : null;
+      newSegments[0].start_lat = newValue ? homeLocation?.lat : undefined;
+      newSegments[0].start_lng = newValue ? homeLocation?.lng : undefined;
+      setSegments(newSegments);
+    }
+  };
+
+  const handleToggleHomeEnd = () => {
+    setHasUserInteracted(true);
+    const newValue = !includeHomeEnd;
+    setIncludeHomeEnd(newValue);
+    
+    // Update last segment if it exists and is a TRAVEL segment
+    const lastIdx = segments.length - 1;
+    if (lastIdx >= 0 && segments[lastIdx].type === 'TRAVEL') {
+      const newSegments = [...segments];
+      newSegments[lastIdx].end_location = newValue ? (homeLocation?.name || "") : "";
+      newSegments[lastIdx].end_image = newValue ? (homeLocation?.imageUrl || null) : null;
+      newSegments[lastIdx].end_lat = newValue ? homeLocation?.lat : undefined;
+      newSegments[lastIdx].end_lng = newValue ? homeLocation?.lng : undefined;
+      setSegments(newSegments);
+    }
+  };
+  
   const handleInsertSegment = (indexBefore: number) => {
     setHasUserInteracted(true);
     const newSegment: Segment = {
@@ -906,9 +971,11 @@ export function TripBuilderClient({
 
   // Main UI - always show, timeline appears progressively
   return (
-    <div className="bg-gray-50 text-slate-800 font-sans selection:bg-indigo-100">
-      {/* HEADER */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
+    <div className="h-screen flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="bg-gray-50 text-slate-800 font-sans selection:bg-indigo-100 min-h-full">
+          {/* HEADER */}
+          <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
         <div className="px-3 py-2 space-y-2">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
@@ -1036,13 +1103,17 @@ export function TripBuilderClient({
       <div className="px-3 py-3 flex flex-col gap-3">
         <div className="flex-1">
           {showTimeline && (
-            <div ref={timelineRef}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Journey Timeline</h3>
-                <div className="text-xs text-gray-400">{segments.length} Chapters · {duration} Days Total</div>
-              </div>
-
-              {/* Add segment button at the top */}
+            <>
+              {!hasMinimumInfo && (
+                <div className="text-center py-2 text-xs text-gray-400 italic">
+                  Enter a journey name above to start planning
+                </div>
+              )}
+              <div 
+                ref={timelineRef}
+                className={`transition-opacity ${!hasMinimumInfo ? 'opacity-40 pointer-events-none' : ''}`}
+              >
+                {/* Add segment button at the top */}
               <div className="relative group my-1">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-gray-200"></div>
@@ -1286,54 +1357,118 @@ export function TripBuilderClient({
                 </div>
               </div>
 
-              {/* Helper Text and Create Journey Button */}
-              <div className="mt-4 space-y-3">
-                {/* Helper Text */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={16} />
-                    <div className="text-xs text-blue-900">
-                      <p className="font-semibold mb-1">Customize Your Journey Outline</p>
-                      <p className="text-blue-800">
-                        Refine your chapters: rename them, adjust their types, and add locations. This outline will help organize your journey.
-                      </p>
+              {/* Home Location Toggle */}
+              {homeLocation && segments.length >= 3 && (
+                <div className="mt-4 bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="bg-indigo-100 p-1.5 rounded-lg">
+                      <Home size={16} className="text-indigo-600" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs font-bold text-indigo-900">Your Home Base</div>
+                      <div className="text-sm font-semibold text-indigo-700">{homeLocation.name}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Display image if available */}
+                  {homeLocation.imageUrl && (
+                    <div className="mb-3">
+                      <img 
+                        src={homeLocation.imageUrl} 
+                        alt={homeLocation.name}
+                        className="w-full h-24 object-cover rounded-md"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="space-y-2">
+                    {/* Start from home toggle */}
+                    <div className="flex items-center justify-between bg-white rounded-md px-3 py-2 border border-indigo-100">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="includeHomeStart"
+                          checked={includeHomeStart}
+                          onChange={handleToggleHomeStart}
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
+                        <label htmlFor="includeHomeStart" className="text-sm text-gray-700 cursor-pointer">
+                          Start trip from home
+                        </label>
+                      </div>
+                      {includeHomeStart && (
+                        <button
+                          onClick={handleToggleHomeStart}
+                          className="p-1 hover:bg-red-50 rounded-md text-gray-400 hover:text-red-600 transition-colors"
+                          title="Remove home as starting point"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Return home toggle */}
+                    <div className="flex items-center justify-between bg-white rounded-md px-3 py-2 border border-indigo-100">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="includeHomeEnd"
+                          checked={includeHomeEnd}
+                          onChange={handleToggleHomeEnd}
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
+                        <label htmlFor="includeHomeEnd" className="text-sm text-gray-700 cursor-pointer">
+                          Return home at end
+                        </label>
+                      </div>
+                      {includeHomeEnd && (
+                        <button
+                          onClick={handleToggleHomeEnd}
+                          className="p-1 hover:bg-red-50 rounded-md text-gray-400 hover:text-red-600 transition-colors"
+                          title="Remove home as ending point"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* Create Journey Button */}
-                {tripId && (
-                  <div className="flex justify-center">
-                    <button
-                      onClick={async () => {
-                        try {
-                          // Update status and trigger image generation
-                          await finalizeTrip(tripId);
-                          
-                          // Use callback if provided, otherwise navigate
-                          if (onComplete) {
-                            onComplete(tripId);
-                          } else {
-                            router.push(`/exp?tripId=${tripId}`);
-                          }
-                        } catch (error) {
-                          console.error("Failed to finalize trip:", error);
-                          // Still navigate/callback even if finalization fails
-                          if (onComplete) {
-                            onComplete(tripId);
-                          } else {
-                            router.push(`/exp?tripId=${tripId}`);
-                          }
-                        }
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg text-sm"
-                    >
-                      Continue to Journey Planning
-                      <ArrowRight size={16} />
-                    </button>
-                  </div>
-                )}
               </div>
+            </>
+          )}
+          
+          {/* Continue Journey Button - Outside grayed area, always accessible */}
+          {showTimeline && tripId && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={async () => {
+                  try {
+                    // Update status and trigger image generation
+                    await finalizeTrip(tripId);
+                    
+                    // Use callback if provided, otherwise navigate
+                    if (onComplete) {
+                      onComplete(tripId);
+                    } else {
+                      router.push(`/exp?tripId=${tripId}`);
+                    }
+                  } catch (error) {
+                    console.error("Failed to finalize trip:", error);
+                    // Still navigate/callback even if finalization fails
+                    if (onComplete) {
+                      onComplete(tripId);
+                    } else {
+                      router.push(`/exp?tripId=${tripId}`);
+                    }
+                  }
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg"
+              >
+                Continue to Journey Planning
+                <ArrowRight size={18} />
+              </button>
             </div>
           )}
         </div>
@@ -1574,6 +1709,8 @@ export function TripBuilderClient({
           )}
         </>
       )}
+        </div>
+      </div>
     </div>
   );
 }

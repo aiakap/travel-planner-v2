@@ -24,6 +24,7 @@ export interface ViewReservation {
   // Status fields for to-do list
   status: "pending" | "confirmed" | "cancelled" | "completed" | "waitlisted"
   statusName: string
+  reservationStatusId: string
 }
 
 export interface ViewSegment {
@@ -106,6 +107,10 @@ export interface WeatherData {
   location: string
   country: string
   forecast: WeatherForecast[]
+  segmentId?: string
+  position?: 'departure' | 'arrival' | 'stay'
+  isForecastForTripDates?: boolean
+  forecastNote?: string
 }
 
 export interface WeatherForecast {
@@ -138,6 +143,28 @@ export interface PackingItem {
   name: string
   quantity?: string
   reason?: string
+}
+
+// Visa requirement types
+export interface VisaRequirement {
+  destination: string
+  country: string
+  visaRequired: boolean
+  visaType?: string // e.g., "Electronic Travel Authorization (ETA)", "Visa on Arrival", "eVisa"
+  duration?: string
+  advanceRegistration?: string // Pre-arrival digital systems (Visit Japan Web, K-ETA, etc.)
+  requirements: string[]
+  processingTime?: string // How far in advance to apply
+  cost?: string // Fees if any
+  sources: VisaSource[]
+  importantNotes?: string // Critical information travelers often miss
+  lastChecked: Date
+}
+
+export interface VisaSource {
+  title: string
+  url: string
+  domain: string
 }
 
 

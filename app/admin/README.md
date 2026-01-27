@@ -1,5 +1,18 @@
 # Admin Interface - Quick Start Guide
 
+## 🎉 What's New
+
+**January 27, 2026** - The admin interface has been enhanced with exp system integration!
+
+**New Features**:
+- ⭐ **Card Type Explorer** - Interactive reference for all 10 card types with schema validation
+- ⭐ **Suggestion Testing** - Test place, transport, and hotel suggestion schemas
+- ⭐ **AI Testing** - Generate cards with OpenAI and see visual previews
+- ⭐ **Structured Output Tab** - Full exp response testing in AI Content page
+- ⭐ **Prompt Mapping** - See which prompts trigger which cards
+
+**See**: `/docs/ADMIN_EXP_MIGRATION.md` for complete migration guide
+
 ## 🚀 Getting Started
 
 Navigate to **`/admin`** in your browser to access the admin panel.
@@ -9,9 +22,20 @@ Navigate to **`/admin`** in your browser to access the admin panel.
 ```
 /admin
 ├── Dashboard (landing page)
-│   ├── Stats overview
+│   ├── Stats overview (plugins, cards, suggestions)
 │   ├── Quick actions
 │   └── System information
+│
+├── /cards ⭐ NEW (card type explorer)
+│   ├── Overview - All 10 card types
+│   ├── Schema Editor - Test & validate JSON
+│   ├── Field Reference - Complete schema docs
+│   └── Prompt Mapping - Card-to-prompt relationships
+│
+├── /suggestions ⭐ NEW (suggestion testing)
+│   ├── Places tab - Google Places schema
+│   ├── Transport tab - Amadeus transport schema
+│   └── Hotels tab - Amadeus hotel schema
 │
 ├── /prompts (plugin management)
 │   ├── All plugins list
@@ -25,14 +49,55 @@ Navigate to **`/admin`** in your browser to access the admin panel.
 │   ├── Activation logic
 │   └── Statistics
 │
-└── /prompts/test (testing interface)
-    ├── Context configuration
-    ├── Quick presets
-    ├── Build & test
-    └── Results viewer
+├── /prompts/test (testing interface) ⭐ ENHANCED
+│   ├── Context configuration
+│   ├── Entity selection (load from database)
+│   ├── Quick presets
+│   ├── Build & test prompts
+│   ├── Test with AI (live generation) ⭐ NEW
+│   └── Card preview & validation ⭐ NEW
+│
+└── /apis (API testing)
+    ├── Dashboard - Health checks
+    ├── /ai-content ⭐ ENHANCED
+    │   ├── Structured Output tab ⭐ NEW
+    │   ├── Trip Suggestions
+    │   ├── Place Descriptions
+    │   └── Travel Dossier
+    └── Individual API tests (Google Maps, Amadeus, OpenAI, etc.)
 ```
 
 ## 🎯 Quick Actions
+
+### Explore Card Types ⭐ NEW
+1. Go to `/admin/cards`
+2. Browse the **10 card types** (trip, segment, reservation, etc.)
+3. Switch to **Schema Editor** to test JSON validation
+4. Check **Field Reference** for complete schema documentation
+5. View **Prompt Mapping** to see card-to-prompt relationships
+
+### Test Suggestions ⭐ NEW
+1. Go to `/admin/suggestions`
+2. Choose tab: **Places**, **Transport**, or **Hotels**
+3. Fill in form fields
+4. Click **"Validate"** to check schema compliance
+5. View validated JSON output
+
+### Test with AI ⭐ ENHANCED
+1. Go to `/admin/prompts/test`
+2. Configure context (or load from database entity)
+3. Click **"Test with AI"** for live generation ⭐ NEW
+4. View **generated cards** with visual previews ⭐ NEW
+5. See **suggestions** (places, transport, hotels) ⭐ NEW
+6. Check **validation status** and token usage ⭐ NEW
+
+### Test Structured Outputs ⭐ NEW
+1. Go to `/admin/apis/ai-content`
+2. Click **"Structured Output"** tab
+3. Enter user message
+4. Select output type (full/cards/suggestions)
+5. Click **"Generate"**
+6. View cards, suggestions, and validation results
 
 ### View All Plugins
 1. Go to `/admin`

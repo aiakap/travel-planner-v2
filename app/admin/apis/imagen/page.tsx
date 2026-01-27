@@ -35,40 +35,40 @@ interface GeneratedImage {
 // Travel-specific prompt presets
 const TRAVEL_PRESETS = [
   {
+    id: "retro-poster-paris",
+    name: "Retro Travel Poster - Paris",
+    prompt: "Create a vintage mid-century travel poster for Paris. Include bold text at the top saying 'PARIS' in elegant serif font, and at the bottom 'The City of Light' in smaller script. Feature the Eiffel Tower as a stylized silhouette, warm sunset colors, gouache paint aesthetic with matte finish. Vertical 9:16 format.",
+    category: "Posters with Text",
+  },
+  {
+    id: "retro-poster-tokyo",
+    name: "Retro Travel Poster - Tokyo",
+    prompt: "Create a vintage 1960s travel poster for Tokyo. Include text at top: 'TOKYO' in bold sans-serif font, and bottom text: 'JAPAN' in smaller letters. Show Mount Fuji with cherry blossoms, stylized Japanese architecture, vintage color palette of red, cream, and teal. Vertical format.",
+    category: "Posters with Text",
+  },
+  {
+    id: "beach-destination-card",
+    name: "Beach Destination Card",
+    prompt: "Create a clean travel card with a white text box overlay on tropical beach background. In the white box, include: 'MALDIVES' as title, 'December 2026' as subtitle, and '10 Days in Paradise' as description. Crystal blue waters and palm trees in background. Modern, clean design.",
+    category: "Posters with Text",
+  },
+  {
+    id: "ski-resort-poster",
+    name: "Ski Resort Poster",
+    prompt: "Vintage ski resort poster with text 'ASPEN' at the top in bold letters, 'Colorado Rockies' below in script font, and 'WINTER 2026' at bottom. Show stylized mountain slopes with skiers as silhouettes, snow-covered peaks, retro color palette of blues and whites.",
+    category: "Posters with Text",
+  },
+  {
     id: "hotel-room",
-    name: "Luxury Hotel Room",
+    name: "Luxury Hotel Room (No Text)",
     prompt: "Modern luxury hotel room with floor-to-ceiling windows overlooking a city skyline, king-size bed with white linens, minimalist design, natural lighting, marble bathroom visible, professional interior photography",
     category: "Accommodation",
   },
   {
     id: "destination-landscape",
-    name: "Destination Landscape",
+    name: "Destination Landscape (No Text)",
     prompt: "Breathtaking coastal landscape at golden hour, turquoise waters, white sand beach, palm trees, dramatic cliffs in background, professional travel photography, vibrant colors",
     category: "Destinations",
-  },
-  {
-    id: "restaurant-ambiance",
-    name: "Restaurant Interior",
-    prompt: "Upscale restaurant interior with elegant table settings, ambient lighting, exposed brick walls, modern chandeliers, busy dining atmosphere, professional food photography style",
-    category: "Dining",
-  },
-  {
-    id: "activity-adventure",
-    name: "Adventure Activity",
-    prompt: "Exciting outdoor adventure scene, person hiking on mountain trail with panoramic views, backpack and gear visible, dramatic landscape, action photography, inspiring composition",
-    category: "Activities",
-  },
-  {
-    id: "city-architecture",
-    name: "City Architecture",
-    prompt: "Iconic city architecture, historic buildings mixed with modern skyscrapers, busy street scene, blue hour lighting, long exposure effect, professional urban photography",
-    category: "Urban",
-  },
-  {
-    id: "beach-resort",
-    name: "Beach Resort",
-    prompt: "Tropical beach resort with infinity pool overlooking ocean, luxury cabanas, palm trees, sunset colors, professional resort photography, inviting atmosphere",
-    category: "Accommodation",
   },
 ];
 
@@ -76,24 +76,24 @@ export default function ImagenTestPage() {
   const imageModels = getAllImageModels();
   
   // Single Generation State
-  const [prompt, setPrompt] = useState("A serene mountain landscape with a lake reflecting snow-capped peaks at sunset, professional photography, high detail");
-  const [aspectRatio, setAspectRatio] = useState("1:1");
-  const [model, setModel] = useState("imagen-4.0-generate-001");
+  const [prompt, setPrompt] = useState("Create a vintage travel poster with text 'SANTORINI' at the top and 'Greece 2026' at the bottom. White buildings with blue domes, Mediterranean sea, sunset colors.");
+  const [aspectRatio, setAspectRatio] = useState("9:16");
+  const [model, setModel] = useState("gemini-3-pro-image-preview");
   const [loading, setLoading] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<GeneratedImage | null>(null);
 
   // Batch Generation State
-  const [batchPrompt, setBatchPrompt] = useState("Luxury hotel room interior, modern design");
-  const [batchAspectRatio, setBatchAspectRatio] = useState("16:9");
+  const [batchPrompt, setBatchPrompt] = useState("Vintage travel poster with destination name as text");
+  const [batchAspectRatio, setBatchAspectRatio] = useState("9:16");
   const [batchCount, setBatchCount] = useState("3");
-  const [batchModel, setBatchModel] = useState("imagen-4.0-generate-001");
+  const [batchModel, setBatchModel] = useState("gemini-3-pro-image-preview");
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
 
   // Preset State
   const [selectedPreset, setSelectedPreset] = useState(TRAVEL_PRESETS[0].id);
-  const [presetAspectRatio, setPresetAspectRatio] = useState("16:9");
-  const [presetModel, setPresetModel] = useState("imagen-4.0-generate-001");
+  const [presetAspectRatio, setPresetAspectRatio] = useState("9:16");
+  const [presetModel, setPresetModel] = useState("gemini-3-pro-image-preview");
   const [presetLoading, setPresetLoading] = useState(false);
   const [presetImage, setPresetImage] = useState<GeneratedImage | null>(null);
 

@@ -6,6 +6,7 @@ import { HotelExtraction } from "@/lib/schemas/hotel-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { createHotelCluster } from "@/lib/utils/hotel-clustering";
 import { findBestSegmentForHotel } from "@/lib/utils/segment-matching";
+import { getSegmentTimeZones } from "./timezone";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -115,6 +116,19 @@ export async function addHotelsToTrip(params: {
         throw new Error('Could not geocode hotel location');
       }
       
+      const startTime = new Date(`${hotelData.checkInDate}T15:00:00`);
+      const endTime = new Date(`${hotelData.checkOutDate}T11:00:00`);
+      
+      // Fetch timezone information for segment
+      const timezones = await getSegmentTimeZones(
+        geo.lat,
+        geo.lng,
+        geo.lat,
+        geo.lng,
+        startTime,
+        endTime
+      );
+      
       const newSegment = await prisma.segment.create({
         data: {
           tripId,
@@ -125,8 +139,12 @@ export async function addHotelsToTrip(params: {
           endTitle: city,
           endLat: geo.lat,
           endLng: geo.lng,
-          startTime: new Date(`${hotelData.checkInDate}T15:00:00`),
-          endTime: new Date(`${hotelData.checkOutDate}T11:00:00`),
+          startTime,
+          endTime,
+          startTimeZoneId: timezones.start?.timeZoneId ?? null,
+          startTimeZoneName: timezones.start?.timeZoneName ?? null,
+          endTimeZoneId: timezones.end?.timeZoneId ?? null,
+          endTimeZoneName: timezones.end?.timeZoneName ?? null,
           order: trip.segments.length,
           segmentTypeId: stayType?.id
         }

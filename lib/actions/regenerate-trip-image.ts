@@ -6,7 +6,7 @@ import { generateAndUploadImage } from "@/lib/image-generation";
 
 export async function regenerateTripImageWithTheme(
   tripId: string,
-  imagePromptId?: string // Optional: if not provided, AI picks best theme
+  imageStyleId?: string // Optional: if not provided, uses default style
 ) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -22,11 +22,11 @@ export async function regenerateTripImageWithTheme(
     throw new Error("Trip not found");
   }
 
-  // Generate image with selected or AI-picked theme
+  // Generate image with selected or default style
   const result = await generateAndUploadImage(
     trip,
     "trip",
-    imagePromptId // Pass specific prompt ID if provided
+    imageStyleId // Pass specific style ID if provided
   );
 
   // Update trip with new image and track which theme was used

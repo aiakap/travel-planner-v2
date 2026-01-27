@@ -17,9 +17,10 @@ import {
   Plus,
   Loader2,
 } from "lucide-react";
-import { GooglePlaceData, PlaceSuggestion as PipelinePlaceSuggestion } from "@/lib/types/place-pipeline";
+import { GooglePlaceData, PlaceSuggestion as PipelinePlaceSuggestion, AmadeusHotelData } from "@/lib/types/place-pipeline";
 import { GooglePlaceData as AmadeusGooglePlaceData, PlaceSuggestion as AmadeusPlaceSuggestion } from "@/lib/types/amadeus-pipeline";
 import { PlaceSuggestion as LegacyPlaceSuggestion, GooglePlaceData as LegacyGooglePlaceData } from "@/lib/types/place-suggestion";
+import { calculateNights } from "@/lib/utils/date-utils";
 import { getPhotoUrl } from "@/lib/google-places/resolve-suggestions";
 import { useEffect, useState } from "react";
 import { SuggestionDetailModal } from "@/app/exp/components/suggestion-detail-modal";
@@ -35,9 +36,12 @@ interface PlaceHoverCardProps {
   tripId?: string; // Optional trip ID for adding to itinerary
   suggestion?: PipelinePlaceSuggestion | AmadeusPlaceSuggestion; // Original suggestion data
   onReservationAdded?: () => void; // Callback when reservation is successfully added
+  hotelData?: AmadeusHotelData; // Optional hotel pricing data from Amadeus
+  checkInDate?: string; // For calculating nights (YYYY-MM-DD)
+  checkOutDate?: string; // For calculating nights (YYYY-MM-DD)
 }
 
-export function PlaceHoverCard({ placeData, placeName, children, tripId, suggestion, onReservationAdded }: PlaceHoverCardProps) {
+export function PlaceHoverCard({ placeData, placeName, children, tripId, suggestion, onReservationAdded, hotelData, checkInDate, checkOutDate }: PlaceHoverCardProps) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showQuickTripModal, setShowQuickTripModal] = useState(false);
@@ -282,6 +286,74 @@ export function PlaceHoverCard({ placeData, placeName, children, tripId, suggest
                     </Badge>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Hotel Pricing (from Amadeus API) */}
+            {hotelData && !hotelData.notFound && hotelData.available && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-semibold text-blue-900">Live Pricing</span>
+                  </div>
+                  {hotelData.rating && (
+                    <Badge variant="outline" className="bg-white text-blue-700 border-blue-300">
+                      <Star className="h-3 w-3 mr-1 fill-blue-400 text-blue-400" />
+                      {hotelData.rating}
+                    </Badge>
+                  )}
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-blue-900">
+                      {hotelData.price.currency} {parseFloat(hotelData.price.total).toLocaleString()}
+                    </span>
+                    <span className="text-xs text-blue-600">total</span>
+                  </div>
+                  
+                  {checkInDate && checkOutDate && (() => {
+                    const nights = calculateNights(checkInDate, checkOutDate);
+                    const perNight = parseFloat(hotelData.price.total) / nights;
+                    return (
+                      <div className="text-xs text-blue-700">
+                        {hotelData.price.currency} {perNight.toLocaleString(undefined, { maximumFractionDigits: 0 })} per night × {nights} {nights === 1 ? 'night' : 'nights'}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {hotelData.amenities && hotelData.amenities.length > 0 && (
+                  <div className="pt-2 border-t border-blue-200">
+                    <p className="text-xs text-blue-700 font-medium mb-1">Amenities:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {hotelData.amenities.slice(0, 5).map((amenity, i) => (
+                        <Badge key={i} variant="secondary" className="text-xs bg-white text-blue-700">
+                          {amenity.replace(/_/g, ' ').toLowerCase()}
+                        </Badge>
+                      ))}
+                      {hotelData.amenities.length > 5 && (
+                        <Badge variant="secondary" className="text-xs bg-white text-blue-700">
+                          +{hotelData.amenities.length - 5} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <p className="text-xs text-blue-600 italic">
+                  Powered by Amadeus
+                </p>
+              </div>
+            )}
+
+            {/* Hotel pricing unavailable message */}
+            {hotelData && (hotelData.notFound || !hotelData.available) && suggestion?.type?.toLowerCase() === 'hotel' && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
+                <p className="text-xs text-gray-600">
+                  💡 Price unavailable for selected dates
+                </p>
               </div>
             )}
 

@@ -11,6 +11,7 @@ import { TodoSection } from "./components/todo-section"
 import { ItinerarySection } from "./components/itinerary-section"
 import { WeatherSection } from "./components/weather-section"
 import { PackingSection } from "./components/packing-section"
+import { VisaSection } from "./components/visa-section"
 
 interface ItineraryViewClientProps {
   itineraries: ViewItinerary[]
@@ -27,7 +28,7 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
   useEffect(() => {
     if (!selectedItinerary) return
 
-    const sections = ['hero', 'todo', 'itinerary', 'weather', 'packing']
+    const sections = ['hero', 'todo', 'itinerary', 'weather', 'packing', 'visa']
     
     const observer = new IntersectionObserver(
       (entries) => {
@@ -79,8 +80,8 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
 
   return (
     <main className="min-h-screen pb-8">
-      {/* Trip Selector - Fixed at top */}
-      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b">
+      {/* Trip Selector - Fixed below main nav */}
+      <div className="sticky top-20 z-30 bg-background/95 backdrop-blur border-b">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -106,7 +107,7 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
         </div>
       </div>
 
-      {/* Floating Navigation */}
+      {/* Floating Navigation - Sticky, follows scroll */}
       <FloatingNav activeSection={activeSection} />
 
       {/* Scrolling Sections */}
@@ -119,6 +120,7 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
           itinerary={selectedItinerary}
           profileValues={profileValues}
         />
+        <VisaSection itinerary={selectedItinerary} />
       </div>
     </main>
   )

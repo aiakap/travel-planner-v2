@@ -170,6 +170,11 @@ export function SuggestionDetailModal({
 
         const days = await getTripDays(tripId);
         setTripDays(days);
+        
+        // If no valid days, log warning but continue
+        if (days.length === 0) {
+          console.warn(`[SuggestionDetailModal] Trip ${tripId} has no valid days (invalid dates?)`);
+        }
 
         // For hotels (Stay category), get segment duration
         if (suggestion.category === "Stay" && suggestion.segmentId) {

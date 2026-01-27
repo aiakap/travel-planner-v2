@@ -153,9 +153,29 @@ export async function createReservationFromSuggestion({
   }
 
   // Calculate the actual date for the day
+  console.log(`[createReservationFromSuggestion] Trip dates:`, {
+    startDate: trip.startDate,
+    endDate: trip.endDate,
+    day: day,
+  });
+  
   const tripStartDate = new Date(trip.startDate);
+  
+  // Validate trip start date
+  if (isNaN(tripStartDate.getTime())) {
+    console.error(`[createReservationFromSuggestion] Invalid trip start date:`, trip.startDate);
+    throw new Error(`Invalid trip start date: ${trip.startDate}. Please ensure the trip has valid dates.`);
+  }
+  
   const targetDate = new Date(tripStartDate);
   targetDate.setDate(targetDate.getDate() + day - 1);
+  
+  console.log(`[createReservationFromSuggestion] Calculated dates:`, {
+    tripStartDate: tripStartDate.toISOString(),
+    targetDate: targetDate.toISOString(),
+    startTime,
+    endTime,
+  });
 
   // Parse time and create full datetime
   const [startHour, startMinute] = startTime.split(":").map(Number);
@@ -268,13 +288,52 @@ export async function createReservationFromSuggestion({
   // Get cached reservation status
   const status = await getReservationStatus(statusName);
 
-  // Extract contact info from Google Places data
+  // Extract contact info and location from Google Places data
   const contactPhone = placeData?.phoneNumber || null;
   const website = placeData?.website || null;
   const address = placeData?.formattedAddress || null;
   const imageUrl = placeData?.photos?.[0]?.url || null;
+  const latitude = placeData?.geometry?.location?.lat || null;
+  const longitude = placeData?.geometry?.location?.lng || null;
 
-  // Create reservation with Google Places data
+  // Fetch timezone for the location
+  let timeZoneId: string | null = null;
+  let timeZoneName: string | null = null;
+  
+  if (latitude && longitude) {
+    try {
+      const { getTimeZoneForLocation } = await import("./timezone");
+      const tzInfo = await getTimeZoneForLocation(latitude, longitude);
+      if (tzInfo) {
+        timeZoneId = tzInfo.timeZoneId;
+        timeZoneName = tzInfo.timeZoneName;
+        console.log(`[createReservationFromSuggestion] Fetched timezone for ${placeName}:`, {
+          timeZoneId,
+          timeZoneName
+        });
+      }
+    } catch (error) {
+      console.warn(`[createReservationFromSuggestion] Failed to fetch timezone:`, error);
+    }
+  }
+  
+  // Fallback to segment timezone if no location timezone
+  if (!timeZoneId && targetSegment) {
+    const segment = await prisma.segment.findUnique({
+      where: { id: targetSegment.id },
+      select: { startTimeZoneId: true, startTimeZoneName: true }
+    });
+    if (segment?.startTimeZoneId) {
+      timeZoneId = segment.startTimeZoneId;
+      timeZoneName = segment.startTimeZoneName;
+      console.log(`[createReservationFromSuggestion] Using segment timezone:`, {
+        timeZoneId,
+        timeZoneName
+      });
+    }
+  }
+
+  // Create reservation with Google Places data and timezone
   const reservation = await prisma.reservation.create({
     data: {
       name: placeName,
@@ -283,6 +342,10 @@ export async function createReservationFromSuggestion({
       reservationStatusId: status.id,
       startTime: startDateTime,
       endTime: endDateTime,
+      timeZoneId,
+      timeZoneName,
+      latitude,
+      longitude,
       cost: cost > 0 ? cost : null,
       currency: cost > 0 ? "USD" : null,
       location: address,

@@ -57,11 +57,13 @@ function getPluginScore(plugin: ExtractionPlugin, context: ExtractionContext): n
  * 
  * @param context - The context for this extraction
  * @param customRegistry - Optional custom registry (defaults to built-in registry)
+ * @param skipPluginValidation - If true, skip shouldInclude checks (used when type is pre-detected)
  * @returns The assembled prompt with schema and metadata
  */
 export function buildExtractionPrompt(
   context: ExtractionContext,
-  customRegistry?: Map<string, ExtractionPlugin>
+  customRegistry?: Map<string, ExtractionPlugin>,
+  skipPluginValidation?: boolean
 ): BuildExtractionResult {
   const registry = customRegistry || createExtractionRegistry();
   
@@ -77,11 +79,22 @@ export function buildExtractionPrompt(
   // Evaluate each plugin to find the best match based on keyword count
   for (const [id, plugin] of registry.entries()) {
     try {
-      // Get keyword count for this plugin
-      const score = getPluginScore(plugin, context);
+      // If skipPluginValidation is true, skip shouldInclude checks
+      // This is used when we have a high-confidence pre-detected type
+      let score = 0;
+      
+      if (skipPluginValidation) {
+        // When validation is skipped, we still need to select a plugin
+        // Use a simple heuristic: check if plugin ID matches context hints
+        // For now, just mark as valid (score = 1) - caller should provide specific plugin
+        score = 1;
+      } else {
+        // Get keyword count for this plugin
+        score = getPluginScore(plugin, context);
+      }
       
       if (score > 0) {
-        console.log(`[ExtractionBuilder] Plugin ${plugin.name} scored ${score} keywords`);
+        console.log(`[ExtractionBuilder] Plugin ${plugin.name} scored ${score} keywords${skipPluginValidation ? ' (validation skipped)' : ''}`);
         
         // Select plugin with highest score
         if (score > highestScore) {

@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { RestaurantExtraction } from "@/lib/schemas/restaurant-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
+import { getSegmentTimeZones } from "./timezone";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -137,6 +138,16 @@ export async function addRestaurantsToTrip(params: {
       const segmentEnd = new Date(reservationDate);
       segmentEnd.setHours(23, 59, 59, 999);
 
+      // Fetch timezone information for segment
+      const timezones = geocoded ? await getSegmentTimeZones(
+        geocoded.lat,
+        geocoded.lng,
+        geocoded.lat,
+        geocoded.lng,
+        segmentStart,
+        segmentEnd
+      ) : { start: null, end: null, hasTimeZoneChange: false };
+
       const newSegment = await prisma.segment.create({
         data: {
           name: segmentName,
@@ -150,6 +161,10 @@ export async function addRestaurantsToTrip(params: {
           endLng: geocoded?.lng || 0,
           startTime: segmentStart,
           endTime: segmentEnd,
+          startTimeZoneId: timezones.start?.timeZoneId ?? null,
+          startTimeZoneName: timezones.start?.timeZoneName ?? null,
+          endTimeZoneId: timezones.end?.timeZoneId ?? null,
+          endTimeZoneName: timezones.end?.timeZoneName ?? null,
           order: trip.segments.length,
         },
       });

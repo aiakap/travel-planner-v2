@@ -1,5 +1,6 @@
 import { Plane, Hotel, Utensils, Train, Camera } from "lucide-react"
 import type { V0Itinerary, V0Segment, V0Day, V0Item, V0Reservation } from "./v0-types"
+import { getLocalCalendarDay } from "./utils/timezone-display"
 
 // Database types (simplified for this transformation)
 type DBTrip = {
@@ -19,6 +20,10 @@ type DBSegment = {
   endTime: Date | null
   startTitle: string
   endTitle: string
+  startTimeZoneId: string | null
+  startTimeZoneName: string | null
+  endTimeZoneId: string | null
+  endTimeZoneName: string | null
   segmentType: { name: string }
   reservations: DBReservation[]
   order: number
@@ -31,6 +36,8 @@ type DBReservation = {
   notes: string | null
   startTime: Date | null
   endTime: Date | null
+  timeZoneId: string | null
+  timeZoneName: string | null
   cost: number | null
   currency: string | null
   location: string | null
@@ -91,6 +98,15 @@ function transformSegment(segment: DBSegment, segmentIndex: number, tripStartDat
   
   const days = calculateSegmentDays(segment, tripStartDate)
   
+  // Get timezone abbreviations, fallback to timezone name if ID not available
+  const startTimeZone = segment.startTimeZoneId 
+    ? getTimezoneAbbreviation(segment.startTimeZoneId)
+    : segment.startTimeZoneName || undefined
+  
+  const endTimeZone = segment.endTimeZoneId
+    ? getTimezoneAbbreviation(segment.endTimeZoneId)
+    : segment.endTimeZoneName || undefined
+  
   return {
     id: segmentIndex + 1,
     dbId: segment.id,
@@ -100,6 +116,10 @@ function transformSegment(segment: DBSegment, segmentIndex: number, tripStartDat
     endDate: formatShortDate(segment.endTime || tripStartDate),
     startLocation: segment.startTitle,
     endLocation: segment.endTitle,
+    startTimeZone,
+    endTimeZone,
+    startTimeZoneId: segment.startTimeZoneId || undefined,
+    endTimeZoneId: segment.endTimeZoneId || undefined,
     image: segment.imageUrl || undefined,
     days
   }
@@ -107,10 +127,12 @@ function transformSegment(segment: DBSegment, segmentIndex: number, tripStartDat
 
 /**
  * Calculate days structure for a segment with grouped reservations
+ * Uses timezone-aware day grouping based on segment's local timezone
  */
 function calculateSegmentDays(segment: DBSegment, tripStartDate: Date): V0Day[] {
   const startTime = segment.startTime || tripStartDate
   const endTime = segment.endTime || tripStartDate
+  const segmentTimeZone = segment.startTimeZoneId || 'UTC'
   
   const dayCount = Math.ceil((new Date(endTime).getTime() - new Date(startTime).getTime()) / (1000 * 60 * 60 * 24)) + 1
   
@@ -118,8 +140,14 @@ function calculateSegmentDays(segment: DBSegment, tripStartDate: Date): V0Day[] 
   const tripStart = new Date(tripStartDate)
   const segmentStart = new Date(startTime)
   
-  // Calculate which day of the trip this segment starts on
-  const dayOffset = Math.floor((segmentStart.getTime() - tripStart.getTime()) / (1000 * 60 * 60 * 24))
+  // Calculate which day of the trip this segment starts on (in segment's timezone)
+  const tripStartLocal = getLocalCalendarDay(tripStart, segmentTimeZone)
+  const segmentStartLocal = getLocalCalendarDay(segmentStart, segmentTimeZone)
+  
+  // Calculate day offset based on local calendar days
+  const dayOffset = Math.floor(
+    (new Date(segmentStartLocal.dateString).getTime() - new Date(tripStartLocal.dateString).getTime()) / (1000 * 60 * 60 * 24)
+  )
   
   for (let i = 0; i < dayCount; i++) {
     const currentDate = new Date(segmentStart)
@@ -127,23 +155,27 @@ function calculateSegmentDays(segment: DBSegment, tripStartDate: Date): V0Day[] 
     
     const dayNumber = dayOffset + i + 1
     
-    // Get reservations for this day
+    // Get local calendar day for this iteration
+    const currentLocalDay = getLocalCalendarDay(currentDate, segmentTimeZone)
+    
+    // Get reservations for this day (using timezone-aware comparison)
     const dayReservations = segment.reservations.filter(res => {
       if (!res.startTime) return i === 0 // If no time, put on first day
       
-      const resDate = new Date(res.startTime)
-      const resDay = resDate.toDateString()
-      const currentDay = currentDate.toDateString()
+      // Get timezone for this reservation (reservation TZ > segment TZ > UTC)
+      const resTimeZone = res.timeZoneId || segmentTimeZone
+      const resLocalDay = getLocalCalendarDay(res.startTime, resTimeZone)
       
-      return resDay === currentDay
+      // Compare local calendar days
+      return resLocalDay.dateString === currentLocalDay.dateString
     })
     
     const items = dayReservations.map((res, idx) => transformReservationToItem(res, idx))
     
     days.push({
       day: dayNumber,
-      date: formatLongDate(currentDate),
-      dayOfWeek: formatDayOfWeek(currentDate),
+      date: formatLongDate(currentDate, segmentTimeZone),
+      dayOfWeek: formatDayOfWeek(currentDate, segmentTimeZone),
       items
     })
   }
@@ -193,14 +225,14 @@ function transformReservation(res: DBReservation): V0Reservation {
     image: res.imageUrl || undefined,
     notes: res.notes || undefined,
     cancellationPolicy: res.cancellationPolicy || undefined,
-    startTime: res.startTime ? formatTime(res.startTime, res.departureTimezone || "UTC") : undefined,
-    endTime: res.endTime ? formatTime(res.endTime, res.arrivalTimezone || res.departureTimezone || "UTC") : undefined,
-    startTimezone: res.departureTimezone ? getTimezoneAbbreviation(res.departureTimezone) : undefined,
-    endTimezone: res.arrivalTimezone ? getTimezoneAbbreviation(res.arrivalTimezone) : undefined,
-    checkInDate: isHotel && res.startTime ? formatShortDate(res.startTime) : undefined,
-    checkOutDate: isHotel && res.endTime ? formatShortDate(res.endTime) : undefined,
-    checkInTime: isHotel && res.startTime ? formatTime(res.startTime, res.departureTimezone || "UTC") : undefined,
-    checkOutTime: isHotel && res.endTime ? formatTime(res.endTime, res.arrivalTimezone || res.departureTimezone || "UTC") : undefined,
+    startTime: res.startTime ? formatTime(res.startTime, res.departureTimezone || res.timeZoneId || "UTC") : undefined,
+    endTime: res.endTime ? formatTime(res.endTime, res.arrivalTimezone || res.timeZoneId || "UTC") : undefined,
+    startTimezone: (res.departureTimezone || res.timeZoneId) ? getTimezoneAbbreviation(res.departureTimezone || res.timeZoneId || "UTC") : undefined,
+    endTimezone: (res.arrivalTimezone || res.timeZoneId) ? getTimezoneAbbreviation(res.arrivalTimezone || res.timeZoneId || "UTC") : undefined,
+    checkInDate: isHotel && res.startTime ? formatShortDate(res.startTime, res.timeZoneId || undefined) : undefined,
+    checkOutDate: isHotel && res.endTime ? formatShortDate(res.endTime, res.timeZoneId || undefined) : undefined,
+    checkInTime: isHotel && res.startTime ? formatTime(res.startTime, res.timeZoneId || "UTC") : undefined,
+    checkOutTime: isHotel && res.endTime ? formatTime(res.endTime, res.timeZoneId || "UTC") : undefined,
     nights,
     type: categoryName
   }
@@ -333,51 +365,63 @@ function getTimezoneAbbreviation(timezone: string): string {
 function formatTimeDisplay(reservation: DBReservation): string {
   if (!reservation.startTime) return "TBD"
   
-  const startTz = reservation.departureTimezone || "UTC"
-  const endTz = reservation.arrivalTimezone || startTz
+  // For flights, use departure/arrival timezones
+  // For other reservations, use timeZoneId
+  const startTz = reservation.departureTimezone || reservation.timeZoneId || "UTC"
+  const endTz = reservation.arrivalTimezone || reservation.timeZoneId || startTz
+  
   const startTime = formatTime(reservation.startTime, startTz)
+  const startTzAbbr = getTimezoneAbbreviation(startTz)
   
   if (reservation.endTime && startTz !== endTz) {
+    // Different timezones (e.g., flights)
     const endTime = formatTime(reservation.endTime, endTz)
-    const startTzAbbr = getTimezoneAbbreviation(startTz)
     const endTzAbbr = getTimezoneAbbreviation(endTz)
     return `${startTime} ${startTzAbbr} - ${endTime} ${endTzAbbr}`
   }
   
   if (reservation.endTime) {
+    // Same timezone - show timezone once at the end
     const endTime = formatTime(reservation.endTime, endTz)
-    return `${startTime} - ${endTime}`
+    return `${startTime} - ${endTime} ${startTzAbbr}`
   }
   
-  return startTime
+  // Single time - show with timezone
+  return `${startTime} ${startTzAbbr}`
 }
 
 /**
  * Format date in short format (e.g., "Mar 15")
+ * Optionally formats in a specific timezone
  */
-function formatShortDate(date: Date): string {
+function formatShortDate(date: Date, timeZone?: string): string {
   return new Date(date).toLocaleDateString('en-US', {
     month: 'short',
-    day: 'numeric'
+    day: 'numeric',
+    timeZone: timeZone || undefined
   })
 }
 
 /**
  * Format date in long format (e.g., "March 15, 2025")
+ * Optionally formats in a specific timezone
  */
-function formatLongDate(date: Date): string {
+function formatLongDate(date: Date, timeZone?: string): string {
   return new Date(date).toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone: timeZone || undefined
   })
 }
 
 /**
  * Format day of week (e.g., "Mon", "Tue")
+ * Optionally formats in a specific timezone
  */
-function formatDayOfWeek(date: Date): string {
+function formatDayOfWeek(date: Date, timeZone?: string): string {
   return new Date(date).toLocaleDateString('en-US', {
-    weekday: 'short'
+    weekday: 'short',
+    timeZone: timeZone || undefined
   })
 }

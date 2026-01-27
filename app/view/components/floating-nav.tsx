@@ -1,6 +1,6 @@
 "use client"
 
-import { LayoutGrid, CheckSquare, Calendar, Cloud, Backpack } from "lucide-react"
+import { LayoutGrid, CheckSquare, Calendar, Cloud, Backpack, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface FloatingNavProps {
@@ -14,19 +14,20 @@ export function FloatingNav({ activeSection }: FloatingNavProps) {
     { id: 'itinerary', label: 'Itinerary', icon: Calendar },
     { id: 'weather', label: 'Weather', icon: Cloud },
     { id: 'packing', label: 'Packing', icon: Backpack },
+    { id: 'visa', label: 'Visas', icon: FileText },
   ]
   
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id)
     if (element) {
-      const offset = 80 // Account for fixed header
+      const offset = 120 // Increased from 80 to prevent header cutoff
       const top = element.getBoundingClientRect().top + window.pageYOffset - offset
       window.scrollTo({ top, behavior: 'smooth' })
     }
   }
   
   return (
-    <nav className="sticky top-16 z-30 flex justify-center mb-6 px-4">
+    <nav className="sticky top-[5.5rem] z-25 flex justify-center mb-6 px-4 bg-background/50 backdrop-blur-sm py-3">
       <div className="bg-card/95 backdrop-blur-sm border rounded-full px-3 py-2 shadow-lg">
         <div className="flex gap-1">
           {sections.map(section => {

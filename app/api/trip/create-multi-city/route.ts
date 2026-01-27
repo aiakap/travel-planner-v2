@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { calculateTravelTime } from "@/lib/google-maps/calculate-travel-time"
+import { getSegmentTimeZones } from "@/lib/actions/timezone"
 
 export const maxDuration = 60
 
@@ -186,6 +187,16 @@ export async function POST(request: NextRequest) {
       const stayEndDate = new Date(currentDate)
       stayEndDate.setDate(stayEndDate.getDate() + city.durationDays)
 
+      // Fetch timezone information for stay segment
+      const stayTimezones = cityGeo ? await getSegmentTimeZones(
+        cityGeo.lat,
+        cityGeo.lng,
+        cityGeo.lat,
+        cityGeo.lng,
+        currentDate,
+        stayEndDate
+      ) : { start: null, end: null, hasTimeZoneChange: false }
+
       // Create stay segment
       const staySegment = await prisma.segment.create({
         data: {
@@ -199,6 +210,10 @@ export async function POST(request: NextRequest) {
           endLng: cityGeo?.lng || 0,
           startTime: currentDate,
           endTime: stayEndDate,
+          startTimeZoneId: stayTimezones.start?.timeZoneId ?? null,
+          startTimeZoneName: stayTimezones.start?.timeZoneName ?? null,
+          endTimeZoneId: stayTimezones.end?.timeZoneId ?? null,
+          endTimeZoneName: stayTimezones.end?.timeZoneName ?? null,
           order: segmentOrder++,
           segmentTypeId: stayType.id,
         },
@@ -226,6 +241,16 @@ export async function POST(request: NextRequest) {
           const travelEndDate = new Date(stayEndDate)
           travelEndDate.setDate(travelEndDate.getDate() + 1)
 
+          // Fetch timezone information for travel segment
+          const travelTimezones = (cityGeo && nextCityGeo) ? await getSegmentTimeZones(
+            cityGeo.lat,
+            cityGeo.lng,
+            nextCityGeo.lat,
+            nextCityGeo.lng,
+            travelStartDate,
+            travelEndDate
+          ) : { start: null, end: null, hasTimeZoneChange: false }
+
           const travelSegment = await prisma.segment.create({
             data: {
               tripId: trip.id,
@@ -238,6 +263,10 @@ export async function POST(request: NextRequest) {
               endLng: nextCityGeo?.lng || 0,
               startTime: travelStartDate,
               endTime: travelEndDate,
+              startTimeZoneId: travelTimezones.start?.timeZoneId ?? null,
+              startTimeZoneName: travelTimezones.start?.timeZoneName ?? null,
+              endTimeZoneId: travelTimezones.end?.timeZoneId ?? null,
+              endTimeZoneName: travelTimezones.end?.timeZoneName ?? null,
               order: segmentOrder++,
               segmentTypeId: travelType.id,
               notes: `Estimated travel time: ${travelTime.durationHours.toFixed(1)} hours`,

@@ -19,7 +19,7 @@ export async function GET(
     }
 
     // Construct path to the image
-    const imagePath = join(process.cwd(), "image-generator", "output", filename);
+    const imagePath = join(process.cwd(), "app", "api", "imagen", "output", filename);
 
     // Check if file exists
     if (!existsSync(imagePath)) {

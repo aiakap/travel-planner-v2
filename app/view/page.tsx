@@ -85,6 +85,7 @@ export default async function ViewPage() {
         endTime: res.endTime?.toISOString(),
         status: mapReservationStatus(res.reservationStatus.name),
         statusName: res.reservationStatus.name,
+        reservationStatusId: res.reservationStatusId,
       }))
     }))
     

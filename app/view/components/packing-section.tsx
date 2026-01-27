@@ -1,9 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import type { ViewItinerary, PackingList } from "@/lib/itinerary-view-types"
-import { Backpack, Shirt, Footprints, Wrench, Heart, FileText } from "lucide-react"
+import { Backpack, Shirt, Footprints, Wrench, Heart, FileText, RefreshCw, Sparkles, MessageCircle } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { buildChatUrl } from "../lib/chat-integration"
 
 interface PackingSectionProps {
   itinerary: ViewItinerary
@@ -12,12 +14,12 @@ interface PackingSectionProps {
 
 export function PackingSection({ itinerary, profileValues }: PackingSectionProps) {
   const [packingList, setPackingList] = useState<PackingList | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<'notStarted' | 'loading' | 'loaded'>('notStarted')
   
-  useEffect(() => {
-    async function generatePackingList() {
-      setLoading(true)
-      
+  const generatePackingList = async () => {
+    setStatus('loading')
+    
+    try {
       // Fetch weather data first
       const weatherPromises = itinerary.segments.map(seg =>
         fetch('/api/weather/forecast', {
@@ -42,22 +44,52 @@ export function PackingSection({ itinerary, profileValues }: PackingSectionProps
           profile: profileValues,
           weather: weatherData.filter(Boolean)
         })
-      }).catch(() => null)
+      })
       
-      if (response) {
+      if (response.ok) {
         const list = await response.json()
         setPackingList(list)
+        setStatus('loaded')
+      } else {
+        setStatus('notStarted')
       }
-      
-      setLoading(false)
+    } catch (error) {
+      console.error('Failed to generate packing list:', error)
+      setStatus('notStarted')
     }
-    
-    generatePackingList()
-  }, [itinerary, profileValues])
+  }
   
-  if (loading) {
+  // Empty state - not yet generated
+  if (status === 'notStarted') {
     return (
-      <section id="packing" className="max-w-5xl mx-auto px-4 py-12">
+      <section id="packing" className="scroll-mt-32 max-w-5xl mx-auto px-4 py-12 mb-12">
+        <div className="flex items-center gap-3 mb-6">
+          <Backpack className="h-6 w-6 text-purple-500" />
+          <h2 className="text-3xl font-bold">Packing Suggestions</h2>
+        </div>
+        <Card className="p-12 text-center">
+          <Backpack className="h-16 w-16 mx-auto text-purple-500 mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Generate Your Packing List</h3>
+          <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+            AI will analyze your trip, activities, and weather forecast to suggest personalized items you should pack.
+          </p>
+          <Button 
+            onClick={generatePackingList}
+            size="lg"
+            className="bg-purple-600 hover:bg-purple-700"
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            Generate Packing List
+          </Button>
+        </Card>
+      </section>
+    )
+  }
+  
+  // Loading state
+  if (status === 'loading') {
+    return (
+      <section id="packing" className="scroll-mt-32 max-w-5xl mx-auto px-4 py-12 mb-12">
         <div className="flex items-center gap-3 mb-6">
           <Backpack className="h-6 w-6 text-purple-500" />
           <h2 className="text-3xl font-bold">Packing Suggestions</h2>
@@ -70,21 +102,46 @@ export function PackingSection({ itinerary, profileValues }: PackingSectionProps
     )
   }
   
+  // Loaded state - show results
   if (!packingList) {
     return null
   }
   
   return (
-    <section id="packing" className="max-w-5xl mx-auto px-4 py-12 mb-12">
+    <section id="packing" className="scroll-mt-32 max-w-5xl mx-auto px-4 py-12 mb-12">
       <div className="flex items-center gap-3 mb-6">
         <Backpack className="h-6 w-6 text-purple-500" />
         <h2 className="text-3xl font-bold">Packing Suggestions</h2>
+        <Button
+          onClick={generatePackingList}
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          disabled={status === 'loading'}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${status === 'loading' ? 'animate-spin' : ''}`} />
+          Regenerate
+        </Button>
       </div>
       
       <Card className="p-6">
-        <p className="text-sm text-muted-foreground mb-6">
-          Personalized suggestions based on your profile, planned activities, and weather forecast.
-        </p>
+        <div className="flex items-start justify-between mb-6">
+          <p className="text-sm text-muted-foreground">
+            Personalized suggestions based on your profile, planned activities, and weather forecast.
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.location.href = buildChatUrl({
+              tripId: itinerary.id,
+              action: 'chat',
+              source: 'overview'
+            })}
+          >
+            <MessageCircle className="h-4 w-4 mr-2" />
+            Chat about packing
+          </Button>
+        </div>
         
         <div className="space-y-6">
           {/* Clothing */}

@@ -8,6 +8,7 @@ import { Input } from "@/app/exp/ui/input";
 import { SaveIndicator } from "@/app/exp/ui/save-indicator";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { updateReservationSimple } from "@/lib/actions/update-reservation-simple";
+import { formatInLocalTime, getDisplayTimezone } from "@/lib/utils/timezone-display";
 
 interface ReservationCardProps {
   reservationId: string;
@@ -22,6 +23,8 @@ interface ReservationCardProps {
   endTime?: string;
   imageUrl?: string;
   vendor?: string;
+  timeZoneId?: string | null;
+  segmentTimeZoneId?: string | null;
   onOpenModal?: () => void;
   onEdit?: () => void;
   onSaved?: () => void;
@@ -40,6 +43,8 @@ export function ReservationCard({
   endTime: initialEndTime,
   imageUrl,
   vendor: initialVendor,
+  timeZoneId,
+  segmentTimeZoneId,
   onOpenModal,
   onEdit,
   onSaved,
@@ -59,6 +64,12 @@ export function ReservationCard({
 
   // Auto-save hook
   const { save, saveState } = useAutoSave(async (updates: any) => {
+    // Only save if we have a valid database reservation ID
+    if (!reservationId || reservationId.startsWith('temp_') || reservationId.startsWith('suggestion_')) {
+      console.warn('⚠️ Cannot save - reservation not yet created:', reservationId);
+      return;
+    }
+    
     await updateReservationSimple(reservationId, updates);
     onSaved?.();
   }, { delay: 500 });
@@ -88,54 +99,65 @@ export function ReservationCard({
     return new Date(`${date}T${time}`).toISOString();
   };
 
-  const formatDateDisplay = (dateString?: string) => {
-    if (!dateString) return "";
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-      });
-    } catch {
-      return "";
-    }
-  };
+  // State for formatted times (async)
+  const [formattedTime, setFormattedTime] = useState<string>("");
 
-  const formatTimeDisplay = (dateString?: string) => {
-    if (!dateString) return "";
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit'
-      });
-    } catch {
-      return "";
-    }
-  };
+  // Get the display timezone (reservation > segment > browser)
+  const displayTimeZone = getDisplayTimezone(
+    { timeZoneId },
+    { startTimeZoneId: segmentTimeZoneId }
+  );
 
-  const formatDateRange = () => {
-    if (!startTime) return "";
-    
-    const startDate = formatDateDisplay(startTime);
-    const startTimeStr = formatTimeDisplay(startTime);
-    
-    if (!endTime) {
-      return `${startDate} at ${startTimeStr}`;
+  // Format times with timezone on mount/update
+  useEffect(() => {
+    if (!startTime) {
+      setFormattedTime("");
+      return;
     }
-    
-    const endDate = formatDateDisplay(endTime);
-    const endTimeStr = formatTimeDisplay(endTime);
-    
-    // Same day
-    if (formatDateForInput(startTime) === formatDateForInput(endTime)) {
-      return `${startDate}, ${startTimeStr} - ${endTimeStr}`;
+
+    try {
+      const tz = displayTimeZone || 'UTC';
+      
+      // Format start time with timezone
+      const startFormatted = formatInLocalTime(startTime, tz, {
+        showTime: true,
+        showTimezone: true,
+        format: 'short'
+      });
+
+      if (!endTime) {
+        setFormattedTime(startFormatted);
+        return;
+      }
+
+      // Format end time
+      const endFormatted = formatInLocalTime(endTime, tz, {
+        showTime: true,
+        showTimezone: true,
+        format: 'short'
+      });
+
+      // Check if same day
+      const startDate = new Date(startTime);
+      const endDate = new Date(endTime);
+      const sameDay = startDate.toDateString() === endDate.toDateString();
+
+      if (sameDay) {
+        // Same day - only show timezone once
+        const startTimeStr = formatInLocalTime(startTime, tz, {
+          showTime: true,
+          showTimezone: false
+        });
+        setFormattedTime(`${startTimeStr} - ${endFormatted}`);
+      } else {
+        // Different days
+        setFormattedTime(`${startFormatted} - ${endFormatted}`);
+      }
+    } catch (error) {
+      console.error("Error formatting times:", error);
+      setFormattedTime("");
     }
-    
-    // Different days
-    return `${startDate} - ${endDate}`;
-  };
+  }, [startTime, endTime, displayTimeZone]);
 
   const calculateNights = (): number | null => {
     if (!startTime || !endTime) return null;
@@ -303,7 +325,7 @@ export function ReservationCard({
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-slate-500" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-slate-900">{formatDateRange()}</p>
+                <p className="text-sm font-medium text-slate-900">{formattedTime}</p>
               </div>
               <Edit2 className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>

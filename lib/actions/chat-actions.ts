@@ -44,6 +44,30 @@ export async function createConversation(title?: string, shouldRevalidate = true
   return conversation;
 }
 
+// Create conversation with full control over fields (for Surprise Journey)
+export async function createConversationWithOptions({
+  title,
+  userId,
+  chatType,
+  tripId,
+}: {
+  title: string;
+  userId: string;
+  chatType?: 'TRIP' | 'SEGMENT' | 'RESERVATION';
+  tripId?: string | null;
+}) {
+  const conversation = await prisma.chatConversation.create({
+    data: {
+      userId,
+      title,
+      chatType: chatType || 'TRIP',
+      tripId: tripId || null,
+    },
+  });
+  
+  return conversation;
+}
+
 export async function getConversations() {
   const session = await auth();
 

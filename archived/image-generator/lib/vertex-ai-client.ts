@@ -121,25 +121,34 @@ export class VertexAIImagenClient {
         throw new Error("Failed to get access token");
       }
 
-      // Build endpoint URL
-      const endpoint = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${this.model}:predict`;
+      // Build endpoint URL - Gemini uses generateContent instead of predict
+      // For global location, use aiplatform.googleapis.com (no region prefix)
+      const baseUrl = this.location === 'global' 
+        ? 'https://aiplatform.googleapis.com'
+        : `https://${this.location}-aiplatform.googleapis.com`;
+      const endpoint = `${baseUrl}/v1/projects/${this.project}/locations/${this.location}/publishers/google/models/${this.model}:generateContent`;
 
-      // Build request body
+      // Build request body for Gemini API
       const aspectRatio = params.aspectRatio || process.env.IMAGEN_ASPECT_RATIO || "1:1";
       const body = {
-        instances: [
-          {
-            prompt: params.prompt,
+        contents: {
+          role: "USER",
+          parts: [
+            {
+              text: params.prompt,
+            },
+          ],
+        },
+        generationConfig: {
+          responseModalities: ["IMAGE"],
+          imageConfig: {
+            aspectRatio: aspectRatio,
           },
-        ],
-        parameters: {
-          sampleCount: 1,
-          aspectRatio: aspectRatio,
-          addWatermark: params.addWatermark ?? false,
-          safetySetting: params.safetySetting || "block_medium_and_above",
-          outputOptions: {
-            mimeType: "image/png",
-          },
+        },
+        safetySettings: {
+          method: "PROBABILITY",
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE",
         },
       };
 
@@ -177,10 +186,21 @@ export class VertexAIImagenClient {
       }
 
       const data = await response.json();
+      
+      console.log(`[VertexAI] Response structure:`, JSON.stringify(data, null, 2).substring(0, 500));
 
-      // Extract base64 image from response
-      const prediction = data.predictions?.[0];
-      if (!prediction || !prediction.bytesBase64Encoded) {
+      // Extract base64 image from Gemini response format
+      const candidate = data.candidates?.[0];
+      const parts = candidate?.content?.parts;
+      
+      console.log(`[VertexAI] Candidates found:`, data.candidates?.length || 0);
+      console.log(`[VertexAI] Parts found:`, parts?.length || 0);
+      
+      const imagePart = parts?.find((part: any) => part.inlineData?.data);
+      
+      if (!imagePart || !imagePart.inlineData?.data) {
+        console.error(`[VertexAI] No image data found in response`);
+        console.error(`[VertexAI] Full response:`, JSON.stringify(data, null, 2));
         return {
           success: false,
           error: {
@@ -193,12 +213,13 @@ export class VertexAIImagenClient {
         };
       }
 
-      const imageBase64 = prediction.bytesBase64Encoded;
+      const imageBase64 = imagePart.inlineData.data;
+      console.log(`[VertexAI] Image data extracted, length: ${imageBase64.length} chars`);
 
       // Save image to output folder
       const timestamp = Date.now();
       const outputFilename = `${filename}_${timestamp}.png`;
-      const outputPath = join(process.cwd(), "image-generator", "output", outputFilename);
+      const outputPath = join(process.cwd(), "app", "api", "imagen", "output", outputFilename);
 
       // Convert base64 to buffer and save
       const imageBuffer = Buffer.from(imageBase64, "base64");
@@ -265,7 +286,18 @@ let clientInstance: VertexAIImagenClient | null = null;
 
 export function getVertexAIClient(): VertexAIImagenClient {
   if (!clientInstance) {
-    clientInstance = new VertexAIImagenClient();
+    try {
+      console.log(`[getVertexAIClient] Initializing new VertexAIImagenClient...`);
+      console.log(`[getVertexAIClient] Project: ${process.env.GOOGLE_CLOUD_PROJECT}`);
+      console.log(`[getVertexAIClient] Location: ${process.env.GOOGLE_CLOUD_LOCATION}`);
+      console.log(`[getVertexAIClient] Model: ${process.env.IMAGEN_MODEL}`);
+      console.log(`[getVertexAIClient] Credentials: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+      clientInstance = new VertexAIImagenClient();
+      console.log(`[getVertexAIClient] Client initialized successfully`);
+    } catch (error: any) {
+      console.error(`[getVertexAIClient] Failed to initialize client:`, error);
+      throw new Error(`Failed to initialize Vertex AI client: ${error.message}`);
+    }
   }
   return clientInstance;
 }

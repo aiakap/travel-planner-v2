@@ -15,6 +15,9 @@ import { eventExtractionPlugin } from './plugins/event-extraction-plugin';
 import { cruiseExtractionPlugin } from './plugins/cruise-extraction-plugin';
 import { genericReservationPlugin } from './plugins/generic-reservation-plugin';
 
+// New type-specific plugins
+import { privateDriverExtractionPlugin } from './plugins/travel/private-driver-extraction-plugin';
+
 /** Helper to register a plugin */
 function registerPlugin(registry: ExtractionRegistry, plugin: ExtractionPlugin): void {
   if (registry.has(plugin.id)) {
@@ -36,6 +39,9 @@ export function createExtractionRegistry(): ExtractionRegistry {
   registerPlugin(registry, restaurantExtractionPlugin);
   registerPlugin(registry, eventExtractionPlugin);
   registerPlugin(registry, cruiseExtractionPlugin);
+  
+  // New type-specific plugins
+  registerPlugin(registry, privateDriverExtractionPlugin);
   
   // Generic fallback plugin (priority 999) - evaluated last
   registerPlugin(registry, genericReservationPlugin);

@@ -55,6 +55,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Toast } from "./ui/toast";
 import { useRouter } from "next/navigation";
+import MissingImagesSection from "./missing-images-section";
 
 type ReservationWithRelations = Reservation & {
   reservationType: ReservationType & { category: ReservationCategory };
@@ -84,6 +85,11 @@ interface ManageClientProps {
       endTimeZoneName?: string;
     }
   >;
+  missingImages: {
+    trips: Array<{ id: string; title: string; startDate: Date }>;
+    segments: Array<{ id: string; startTitle: string; endTitle: string; trip: { title: string } }>;
+    reservations: Array<{ id: string; name: string; segment: { trip: { title: string } } }>;
+  };
 }
 
 function getCategoryIcon(categoryName: string) {
@@ -151,6 +157,7 @@ function getTripStatusLabel(status: string) {
 export default function ManageClient({
   trips,
   segmentTimeZones,
+  missingImages,
 }: ManageClientProps) {
   const router = useRouter();
   const [expandedTrips, setExpandedTrips] = useState<Set<string>>(new Set());
@@ -799,6 +806,9 @@ export default function ManageClient({
             </p>
           </div>
         </div>
+
+        {/* Missing Images Section */}
+        <MissingImagesSection missingImages={missingImages} />
 
         {/* Status Filter */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">

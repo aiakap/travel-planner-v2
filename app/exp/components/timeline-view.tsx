@@ -3,7 +3,7 @@
 import type React from "react"
 import { Badge } from "@/app/exp/ui/badge"
 import { Button } from "@/app/exp/ui/button"
-import { Plane, Hotel, Utensils, Train, Camera, ChevronDown, ChevronRight, Moon, Clock, MessageCircle, Edit, Phone, Mail, Globe, ChevronDown as ChevronDownIcon } from "lucide-react"
+import { Plane, Hotel, Utensils, Train, Camera, ChevronDown, ChevronRight, Moon, Clock, MessageCircle, Edit, Phone, Mail, Globe, ChevronDown as ChevronDownIcon, MapPin } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 
 interface Reservation {
@@ -33,6 +33,12 @@ interface TimelineViewProps {
     type: string
     startDate: string
     endDate: string
+    startLocation?: string
+    endLocation?: string
+    startTimeZone?: string
+    endTimeZone?: string
+    startTimeZoneId?: string
+    endTimeZoneId?: string
     image?: string
     days: Array<{
       day: number
@@ -172,6 +178,21 @@ export function TimelineView({ segments, heroImage, onSelectReservation, onChatA
                     )}
                     <span className="font-bold text-sm truncate">{segment.name}</span>
                   </div>
+                  {/* Location and timezone display */}
+                  {segment.startLocation && segment.endLocation && (
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{segment.startLocation}</span>
+                      {segment.startTimeZone && segment.endTimeZone && segment.startTimeZone !== segment.endTimeZone && (
+                        <span className="text-[9px]">({segment.startTimeZone})</span>
+                      )}
+                      <span className="shrink-0">→</span>
+                      <span className="truncate">{segment.endLocation}</span>
+                      {segment.endTimeZone && segment.startTimeZone !== segment.endTimeZone && (
+                        <span className="text-[9px]">({segment.endTimeZone})</span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-xs text-muted-foreground">
                       {segment.startDate}

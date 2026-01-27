@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getSegmentTimeZones } from "./timezone";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -89,6 +90,16 @@ export async function createSegment({
     throw new Error(`Could not geocode locations. Please provide specific city/country names.`);
   }
 
+  // Fetch timezone information for start and end locations
+  const timezones = await getSegmentTimeZones(
+    startGeo.lat,
+    startGeo.lng,
+    endGeo.lat,
+    endGeo.lng,
+    startTime,
+    endTime
+  );
+
   // Get segment type ID
   let segmentTypeRecord = await prisma.segmentType.findFirst({
     where: { name: segmentType },
@@ -130,6 +141,10 @@ export async function createSegment({
       endLng: endGeo.lng,
       startTime: startTime || null,
       endTime: endTime || null,
+      startTimeZoneId: timezones.start?.timeZoneId ?? null,
+      startTimeZoneName: timezones.start?.timeZoneName ?? null,
+      endTimeZoneId: timezones.end?.timeZoneId ?? null,
+      endTimeZoneName: timezones.end?.timeZoneName ?? null,
       notes: notes || null,
       order: nextOrder,
     },

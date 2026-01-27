@@ -1,10 +1,12 @@
 "use client"
 
 import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
-import { CheckSquare, X, Plane, Hotel, Utensils, Compass, Car } from "lucide-react"
+import { CheckSquare, X, Plane, Hotel, Utensils, Compass, Car, MessageCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { buildChatUrl } from "../lib/chat-integration"
+import { ReservationStatusSelect } from "./reservation-status-select"
 
 interface TodoSectionProps {
   itinerary: ViewItinerary
@@ -43,7 +45,7 @@ export function TodoSection({ itinerary }: TodoSectionProps) {
   }, {} as Record<string, typeof todoItems>)
   
   return (
-    <section id="todo" className="max-w-5xl mx-auto px-4 py-12">
+    <section id="todo" className="scroll-mt-32 max-w-5xl mx-auto px-4 py-12">
       <div className="flex items-center gap-3 mb-6">
         <CheckSquare className="h-6 w-6 text-amber-500" />
         <h2 className="text-3xl font-bold">Action Items</h2>
@@ -86,7 +88,14 @@ export function TodoSection({ itinerary }: TodoSectionProps) {
                         
                         {/* Content */}
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm">{item.title}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium text-sm">{item.title}</div>
+                            <ReservationStatusSelect
+                              reservationId={item.id}
+                              currentStatusId={item.reservationStatusId}
+                              currentStatusName={item.statusName}
+                            />
+                          </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             {item.date} • {item.time}
                             {item.location && ` • ${item.location}`}
@@ -104,6 +113,22 @@ export function TodoSection({ itinerary }: TodoSectionProps) {
                             ${item.price.toLocaleString()}
                           </div>
                         )}
+                        
+                        {/* Chat Button */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.location.href = buildChatUrl({
+                            tripId: itinerary.id,
+                            segmentId: item.segment.id,
+                            reservationId: item.id,
+                            action: 'chat',
+                            source: 'overview'
+                          })}
+                          className="ml-2"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </Button>
                       </div>
                     )
                   })}

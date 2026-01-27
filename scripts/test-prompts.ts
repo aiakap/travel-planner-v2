@@ -10,7 +10,6 @@
 
 import { generatePlaceSuggestions } from "@/lib/ai/generate-place-suggestions";
 import { EXP_BUILDER_SYSTEM_PROMPT } from "@/app/exp/lib/exp-prompts";
-import { validateAIResponse, formatValidationErrors } from "@/lib/ai/validate-ai-response";
 
 interface TestResult {
   query: string;
@@ -23,11 +22,7 @@ interface TestResult {
     placesCount: number;
     transportCount: number;
     hotelsCount: number;
-  };
-  validation?: {
-    valid: boolean;
-    errors: string[];
-    warnings: string[];
+    cardsCount: number;
   };
 }
 
@@ -50,14 +45,13 @@ async function testPrompt(query: string, useExpPrompt: boolean): Promise<TestRes
     
     const duration = Date.now() - startTime;
     
-    // Validate the response
-    const validation = validateAIResponse(result);
-    
+    // Response is already validated by Zod schema
     const stats = {
       textLength: result.text.length,
       placesCount: result.places.length,
       transportCount: (result as any).transport?.length || 0,
       hotelsCount: (result as any).hotels?.length || 0,
+      cardsCount: (result as any).cards?.length || 0,
     };
     
     console.log("✅ Success!");
@@ -66,12 +60,7 @@ async function testPrompt(query: string, useExpPrompt: boolean): Promise<TestRes
     console.log(`   Places: ${stats.placesCount}`);
     console.log(`   Transport: ${stats.transportCount}`);
     console.log(`   Hotels: ${stats.hotelsCount}`);
-    
-    if (!validation.valid) {
-      console.error("❌ Validation failed:", formatValidationErrors(validation));
-    } else if (validation.warnings.length > 0) {
-      console.warn("⚠️  Warnings:", formatValidationErrors(validation));
-    }
+    console.log(`   Cards: ${stats.cardsCount}`);
     
     return {
       query,
@@ -79,7 +68,6 @@ async function testPrompt(query: string, useExpPrompt: boolean): Promise<TestRes
       success: true,
       duration,
       stats,
-      validation,
     };
   } catch (error) {
     const duration = Date.now() - startTime;
@@ -144,15 +132,6 @@ async function runTests() {
     });
   }
   
-  // Show validation issues
-  const validationIssues = results.filter(r => r.validation && !r.validation.valid);
-  if (validationIssues.length > 0) {
-    console.log("\n⚠️  VALIDATION ISSUES:");
-    validationIssues.forEach(r => {
-      console.log(`   ${r.promptType} - "${r.query}": ${formatValidationErrors(r.validation!)}`);
-    });
-  }
-  
   // Average durations
   const avgDefaultDuration = defaultResults.reduce((sum, r) => sum + r.duration, 0) / defaultResults.length;
   const avgExp1Duration = exp1Results.reduce((sum, r) => sum + r.duration, 0) / exp1Results.length;
@@ -164,9 +143,9 @@ async function runTests() {
   console.log("\n" + "=".repeat(80));
   
   // Exit with error code if any tests failed
-  const allPassed = results.every(r => r.success && r.validation?.valid);
+  const allPassed = results.every(r => r.success);
   if (!allPassed) {
-    console.error("\n❌ Some tests failed or had validation issues");
+    console.error("\n❌ Some tests failed");
     process.exit(1);
   } else {
     console.log("\n✅ All tests passed!");

@@ -81,6 +81,72 @@ export default async function ManagePage() {
   });
   const reservationStatuses = await prisma.reservationStatus.findMany();
 
+  // Find entities missing images
+  const missingImages = {
+    trips: await prisma.trip.findMany({
+      where: {
+        userId: session.user?.id,
+        OR: [
+          { imageUrl: null },
+          { imageUrl: "" }
+        ]
+      },
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        endDate: true
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    
+    segments: await prisma.segment.findMany({
+      where: {
+        trip: { userId: session.user?.id },
+        OR: [
+          { imageUrl: null },
+          { imageUrl: "" }
+        ]
+      },
+      select: {
+        id: true,
+        startTitle: true,
+        endTitle: true,
+        trip: {
+          select: { id: true, title: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    
+    reservations: await prisma.reservation.findMany({
+      where: {
+        segment: {
+          trip: { userId: session.user?.id }
+        },
+        OR: [
+          { imageUrl: null },
+          { imageUrl: "" }
+        ]
+      },
+      select: {
+        id: true,
+        name: true,
+        startTime: true,
+        segment: {
+          select: {
+            id: true,
+            name: true,
+            trip: {
+              select: { id: true, title: true }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+  };
+
   // Collect all segment timezone info
   const timeZoneCache = new Map<string, TimeZoneInfo>();
   const getCachedTimeZone = async (lat: number, lng: number) => {
@@ -124,6 +190,7 @@ export default async function ManagePage() {
       reservationCategories={reservationCategories}
       reservationStatuses={reservationStatuses}
       segmentTimeZones={allSegmentTimeZones}
+      missingImages={missingImages}
     />
   );
 }

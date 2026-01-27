@@ -16,6 +16,7 @@ import { BudgetBreakdownCard } from "@/app/exp/components/budget-breakdown-card"
 import { DayPlanCard } from "@/app/exp/components/day-plan-card";
 import { PlacesMapCard } from "@/app/exp/components/places-map-card";
 import { ChatLoadingMessage } from "@/app/exp/components/chat-loading-message";
+import { GetLuckyLoader } from "@/app/exp/components/get-lucky-loader";
 
 interface MessageSegmentsRendererProps {
   segments: MessageSegment[];
@@ -73,6 +74,8 @@ export function MessageSegmentsRenderer({
                 endLocation={segment.endLocation}
                 startTime={segment.startTime}
                 endTime={segment.endTime}
+                startTimeZone={segment.startTimeZone}
+                endTimeZone={segment.endTimeZone}
                 onOpenModal={() => {
                   // Open edit segment modal
                 }}
@@ -236,6 +239,12 @@ export function MessageSegmentsRenderer({
               <ChatLoadingMessage conversationId={segment.conversationId} />
             </div>
           );
+        } else if (segment.type === "get_lucky_loader") {
+          return (
+            <div key={idx} className="my-3">
+              <GetLuckyLoader loaderId={segment.loaderId} stages={segment.stages} />
+            </div>
+          );
         } else {
           // Place segment - render as clickable link with hover card
           const hasValidData = segment.placeData && !segment.placeData.notFound;
@@ -248,6 +257,9 @@ export function MessageSegmentsRenderer({
               tripId={tripId}
               suggestion={segment.suggestion!}
               onReservationAdded={onReservationAdded}
+              hotelData={segment.hotelData}
+              checkInDate={segment.suggestion?.context?.checkInDate}
+              checkOutDate={segment.suggestion?.context?.checkOutDate}
             >
               <button
                 onClick={() => {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getVertexAIClient, ImageGenerationParams } from "@/image-generator/lib/vertex-ai-client";
+import { getVertexAIClient, ImageGenerationParams } from "@/archived/image-generator/lib/vertex-ai-client";
 import { v4 as uuidv4 } from "uuid";
 
 export async function POST(request: NextRequest) {

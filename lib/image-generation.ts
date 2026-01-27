@@ -26,20 +26,24 @@ interface GeneratedImageResult {
 export async function generateAndUploadImage(
   entity: any,
   entityType: "trip" | "segment" | "reservation",
-  specificPromptId?: string
+  specificStyleId?: string
 ): Promise<GeneratedImageResult> {
   console.warn("generateAndUploadImage is deprecated. Use queueImageGeneration instead.");
-  return await generateAndUploadImageImmediate(entity, entityType, specificPromptId);
+  return await generateAndUploadImageImmediate(entity, entityType, specificStyleId);
 }
 
 // Immediate generation (for manual triggers, not for auto-generation)
 export async function generateAndUploadImageImmediate(
   entity: any,
   entityType: "trip" | "segment" | "reservation",
-  specificPromptId?: string
+  specificStyleId?: string
 ): Promise<GeneratedImageResult> {
-  // 1. Select prompt theme - either specific one or AI picks best
-  const selectionResult = await selectBestPromptForContent(entity, entityType);
+  // 1. Select prompt theme - either specific style or use default
+  const selectionResult = specificStyleId 
+    ? await (entityType === "trip" ? selectBestPromptForTrip(entity, specificStyleId) : 
+             entityType === "segment" ? selectBestPromptForSegment(entity) :
+             selectBestPromptForReservation(entity))
+    : await selectDefaultPromptForContent(entityType);
   const selectedPrompt = selectionResult.prompt;
 
   // 2. Build complete prompt with all entity data
@@ -67,165 +71,98 @@ export async function generateAndUploadImageImmediate(
 }
 
 // Helper functions to select prompts for specific entity types
-export async function selectBestPromptForTrip(trip: any, specificPromptId?: string): Promise<PromptSelectionResult> {
-  if (specificPromptId) {
-    const prompt = await prisma.imagePrompt.findUnique({
-      where: { id: specificPromptId, category: "trip" },
+export async function selectBestPromptForTrip(trip: any, specificStyleId?: string): Promise<PromptSelectionResult> {
+  if (specificStyleId) {
+    const prompt = await prisma.imagePrompt.findFirst({
+      where: { 
+        styleId: specificStyleId,
+        category: "trip",
+        isActive: true
+      },
+      include: { style: true }
     });
-    if (!prompt) throw new Error("Prompt not found");
-    const availablePrompts = await prisma.imagePrompt.findMany({
-      where: { category: "trip" },
-    });
+    if (!prompt) throw new Error("Style/category combination not found");
     return {
       prompt,
-      reasoning: "Manually selected by user",
-      availablePrompts,
+      reasoning: `Manually selected style: ${prompt.style?.name}`,
     };
   }
-  return await selectBestPromptForContent(trip, "trip");
+  return await selectDefaultPromptForContent("trip");
 }
 
 export async function selectBestPromptForSegment(segment: any): Promise<PromptSelectionResult> {
-  return await selectBestPromptForContent(segment, "segment");
+  return await selectDefaultPromptForContent("segment");
 }
 
 export async function selectBestPromptForReservation(reservation: any): Promise<PromptSelectionResult> {
-  return await selectBestPromptForContent(reservation, "reservation");
+  return await selectDefaultPromptForContent("reservation");
 }
 
 // Extended type for prompt selection with reasoning
 interface PromptSelectionResult {
   prompt: ImagePrompt;
   reasoning?: string;
-  availablePrompts: ImagePrompt[];
 }
 
-// AI analyzes trip/segment/reservation data to pick best theme
-async function selectBestPromptForContent(
-  entity: any,
+// Style-based prompt selection: Pick default style, then get prompt for category
+async function selectDefaultPromptForContent(
   entityType: "trip" | "segment" | "reservation"
 ): Promise<PromptSelectionResult> {
-  // Fetch all prompts for this category from database
-  const availablePrompts = await prisma.imagePrompt.findMany({
-    where: { category: entityType },
+  console.log(`[selectDefaultPromptForContent] Looking for default style...`);
+  
+  // Step 1: Get default style
+  const defaultStyle = await prisma.imagePromptStyle.findFirst({
+    where: { 
+      isActive: true,
+      isDefault: true 
+    },
+    orderBy: { sortOrder: 'asc' }
   });
-
-  if (availablePrompts.length === 0) {
-    throw new Error(`No prompts available for category: ${entityType}`);
+  
+  if (!defaultStyle) {
+    console.error(`[selectDefaultPromptForContent] ERROR: No default style found!`);
+    console.error(`[selectDefaultPromptForContent] Available styles:`, 
+      await prisma.imagePromptStyle.findMany({ select: { id: true, name: true, isDefault: true, isActive: true } })
+    );
+    throw new Error("No default style configured");
   }
-
-  // Build analysis context with ALL entity data
-  const analysisContext = buildAnalysisContext(entity, entityType);
-
-  // Use OpenAI to select best matching prompt
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY!,
+  
+  console.log(`[selectDefaultPromptForContent] Found default style: ${defaultStyle.name} (${defaultStyle.id})`);
+  
+  // Step 2: Get prompt for this style + category
+  const prompt = await prisma.imagePrompt.findFirst({
+    where: { 
+      styleId: defaultStyle.id,
+      category: entityType,
+      isActive: true
+    },
+    include: { style: true }
   });
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You are a travel imagery expert. Analyze the travel details and select the most appropriate visual style.
-
-Consider:
-- Destination type (urban/nature/beach/mountains)
-- Travel dates and season
-- Activity type and character
-- Number of destinations (multi-city trips work well with scrapbook collage)
-- Trip sentiment (personal/family trips suit nostalgic scrapbook style)
-
-Available styles:
-- Retro Gouache: Classic mid-century poster aesthetic
-- Golden Hour: Dramatic lighting and silhouettes
-- Map Journey: Artistic cartography
-- Travel Scrapbook: Nostalgic collage with layered memories (great for multi-destination or personal trips)
-
-Return JSON: {"promptName": "exact name from list", "reasoning": "1-2 sentence explanation why this style fits best"}`,
-        },
-        {
-          role: "user",
-          content: `Travel Details:\n${analysisContext}\n\nAvailable Styles:\n${availablePrompts.map((p) => p.name).join("\n")}\n\nSelect the single best matching style:`,
-        },
-      ],
-      temperature: 0.3,
-      response_format: { type: "json_object" },
-    });
-
-    const responseText = completion.choices[0].message.content?.trim();
-    if (responseText) {
-      try {
-        const response = JSON.parse(responseText);
-        const selectedName = response.promptName;
-        const reasoning = response.reasoning;
-        const selectedPrompt = availablePrompts.find((p) => p.name === selectedName);
-
-        if (selectedPrompt) {
-          return {
-            prompt: selectedPrompt,
-            reasoning,
-            availablePrompts,
-          };
-        }
-      } catch (parseError) {
-        console.error("Error parsing AI response:", parseError);
-      }
-    }
-
-    // Fallback to first available prompt
-    return {
-      prompt: availablePrompts[0],
-      reasoning: "Fallback selection (AI response parse failed)",
-      availablePrompts,
-    };
-  } catch (error) {
-    console.error("Error selecting prompt with AI:", error);
-    // Fallback to first available prompt
-    return {
-      prompt: availablePrompts[0],
-      reasoning: "Fallback selection (AI call failed)",
-      availablePrompts,
-    };
+  
+  if (!prompt) {
+    console.error(`[selectDefaultPromptForContent] ERROR: No prompt found!`);
+    console.error(`[selectDefaultPromptForContent] Looking for: styleId=${defaultStyle.id}, category=${entityType}`);
+    console.error(`[selectDefaultPromptForContent] Available prompts for this style:`,
+      await prisma.imagePrompt.findMany({ 
+        where: { styleId: defaultStyle.id },
+        select: { id: true, category: true, styleId: true }
+      })
+    );
+    throw new Error(
+      `No prompt found for style "${defaultStyle.name}" and category "${entityType}"`
+    );
   }
+  
+  console.log(`[selectDefaultPromptForContent] Found prompt: ${prompt.name}`);
+  
+  return {
+    prompt,
+    reasoning: `Default style: ${defaultStyle.name} for ${entityType}`,
+  };
 }
 
-// Build analysis context for AI prompt selection
-function buildAnalysisContext(
-  entity: any,
-  entityType: "trip" | "segment" | "reservation"
-): string {
-  if (entityType === "trip") {
-    const segments = entity.segments || [];
-    const firstSegment = segments[0];
-    return `Type: Trip
-Title: ${entity.title}
-Description: ${entity.description}
-Dates: ${formatDate(entity.startDate)} to ${formatDate(entity.endDate)}
-Season: ${getSeason(entity.startDate)}
-Duration: ${getDurationInDays(entity.startDate, entity.endDate)} days
-${firstSegment ? `Primary Location: ${firstSegment.startTitle}` : ""}
-${firstSegment ? `Coordinates: ${firstSegment.startLat}, ${firstSegment.startLng}` : ""}`;
-  } else if (entityType === "segment") {
-    return `Type: Segment/Journey
-Name: ${entity.name}
-Transportation: ${entity.segmentType?.name || "Unknown"}
-From: ${entity.startTitle}
-To: ${entity.endTitle}
-${entity.startTime ? `Departure: ${formatDateTime(entity.startTime)}` : ""}
-${entity.endTime ? `Arrival: ${formatDateTime(entity.endTime)}` : ""}
-Notes: ${entity.notes || "No notes"}`;
-  } else {
-    return `Type: Reservation
-Name: ${entity.name}
-Category: ${entity.reservationType?.category?.name || "Unknown"}
-Type: ${entity.reservationType?.name || "Unknown"}
-Location: ${entity.location || "Unknown"}
-${entity.startTime ? `Time: ${formatDateTime(entity.startTime)}` : ""}
-Notes: ${entity.notes || "No notes"}`;
-  }
-}
+// Note: buildAnalysisContext function removed - no longer needed for flag-based selection
+// The old AI-based selection logic has been archived to archived/image-generation.ts.backup
 
 // Scrapbook-specific helper functions
 function extractDestinations(segments: any[]): string {
@@ -483,40 +420,50 @@ ${entity.segment ? `Regional Context: ${getRegionFromCoordinates(entity.segment.
   }
 
   // Replace the placeholder in template with actual data
-  return (
-    template.replace("TRAVEL CONTEXT TO VISUALIZE:", `TRAVEL CONTEXT TO VISUALIZE:\n${travelContext}`) +
-    travelContext
-  );
+  return template.replace("TRAVEL CONTEXT TO VISUALIZE:", `TRAVEL CONTEXT TO VISUALIZE:\n${travelContext}`);
 }
 
 // Generate image using Google Vertex AI Imagen (exported for queue processor)
 export async function generateImageWithImagen(prompt: string): Promise<string> {
-  const { getVertexAIClient } = await import("@/image-generator/lib/vertex-ai-client");
+  console.log(`[generateImageWithImagen] Starting image generation...`);
+  console.log(`[generateImageWithImagen] Prompt length: ${prompt.length} chars`);
   
-  // Add explicit NO TEXT instruction
-  const finalPrompt = `${prompt}
+  try {
+    const { getVertexAIClient } = await import("@/archived/image-generator/lib/vertex-ai-client");
+    
+    // Add explicit NO TEXT instruction
+    const finalPrompt = `${prompt}
 
 CRITICAL: Do not include any text, words, letters, labels, signs, or typography in the image. No readable characters of any kind.`;
 
-  const client = getVertexAIClient();
-  const filename = `trip-${Date.now()}.png`;
-  
-  const result = await client.generateImage(
-    {
-      prompt: finalPrompt,
-      aspectRatio: "9:16", // Vertical format for mobile
-      addWatermark: false,
-      safetySetting: "block_few"
-    },
-    filename
-  );
+    const client = getVertexAIClient();
+    console.log(`[generateImageWithImagen] Vertex AI client initialized`);
+    
+    const filename = `trip-${Date.now()}.png`;
+    
+    const result = await client.generateImage(
+      {
+        prompt: finalPrompt,
+        aspectRatio: "9:16", // Vertical format for mobile
+        addWatermark: false,
+        safetySetting: "block_few"
+      },
+      filename
+    );
 
-  if (!result.success || !result.imagePath) {
-    throw new Error(result.error?.message || "Image generation failed");
+    if (!result.success || !result.imagePath) {
+      console.error(`[generateImageWithImagen] ERROR: Image generation failed`);
+      console.error(`[generateImageWithImagen] Error:`, result.error);
+      throw new Error(result.error?.message || "Image generation failed");
+    }
+
+    console.log(`[generateImageWithImagen] Image generated successfully`);
+    // Return the local file path for upload
+    return result.imagePath;
+  } catch (error) {
+    console.error(`[generateImageWithImagen] EXCEPTION:`, error);
+    throw error;
   }
-
-  // Return the local file path for upload
-  return result.imagePath;
 }
 
 // Generate image using OpenAI DALL-E 3 (exported for queue processor)

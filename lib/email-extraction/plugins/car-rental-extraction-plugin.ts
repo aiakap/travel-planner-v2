@@ -62,18 +62,31 @@ export const carRentalExtractionPlugin: ExtractionPlugin = {
   priority: 10,
   shouldInclude: (context) => {
     const carRentalKeywords = [
+      // Traditional car rental
       'car rental', 'rent a car', 'rental car', 'vehicle rental',
       'pick-up', 'pickup', 'drop-off', 'return location',
       'hertz', 'enterprise', 'avis', 'budget', 'toyota rent',
       'sixt', 'alamo', 'national', 'thrifty', 'europcar', 'dollar',
       'reservation number', 'rental agreement', 'vehicle class',
-      'rental confirmation', 'car hire'
+      'rental confirmation', 'car hire',
+      
+      // Private driver / transfer keywords
+      'driver', 'transfer', 'shuttle', 'chauffeur', 'airport pickup',
+      'name board', 'arrival hall', 'private car', 'meet and greet',
+      'driver will be waiting', 'showing a name board', 'drive normally takes',
+      'transfer service', 'airport transfer', 'private transfer',
+      
+      // Ride share keywords
+      'uber', 'lyft', 'ride share', 'rideshare',
+      
+      // Taxi keywords
+      'taxi', 'cab', 'taxi booking'
     ];
     
     const lowerText = context.emailText.toLowerCase();
     const carRentalScore = carRentalKeywords.filter(kw => lowerText.includes(kw)).length;
     
-    // Activate if at least 3 car rental keywords are present
+    // Activate if at least 3 keywords are present (covers all ground transportation)
     return carRentalScore >= 3;
   }
 };

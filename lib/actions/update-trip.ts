@@ -64,7 +64,8 @@ export async function updateTrip(tripId: string, formData: FormData) {
   if (!imageUrl || imageUrl === existingTrip.imageUrl) {
     if (!existingTrip.imageIsCustom) {
       try {
-        await queueTripImageGeneration(tripId, existingTrip.imagePromptId || undefined);
+        // Use default style (no specific style passed)
+        await queueTripImageGeneration(tripId);
       } catch (error) {
         console.error("Failed to queue trip image:", error);
       }

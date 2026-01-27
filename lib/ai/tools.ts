@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
+import { getSegmentTimeZones } from "@/lib/actions/timezone";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -284,6 +285,16 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
         const nextOrder =
           existingSegments.length > 0 ? existingSegments[0].order + 1 : 0;
 
+        // Fetch timezone information for segment
+        const timezones = await getSegmentTimeZones(
+          startGeo.lat,
+          startGeo.lng,
+          endGeo.lat,
+          endGeo.lng,
+          startTime ? new Date(startTime) : undefined,
+          endTime ? new Date(endTime) : undefined
+        );
+
         const segment = await prisma.segment.create({
           data: {
             name,
@@ -297,6 +308,10 @@ export function createTripPlanningTools(userId: string, conversationId?: string)
             endLng: endGeo.lng,
             startTime: startTime ? new Date(startTime) : null,
             endTime: endTime ? new Date(endTime) : null,
+            startTimeZoneId: timezones.start?.timeZoneId ?? null,
+            startTimeZoneName: timezones.start?.timeZoneName ?? null,
+            endTimeZoneId: timezones.end?.timeZoneId ?? null,
+            endTimeZoneName: timezones.end?.timeZoneName ?? null,
             notes: notes || null,
             order: nextOrder,
           },

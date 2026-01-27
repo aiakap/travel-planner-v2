@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Sparkles, MapPin, FileText, BookOpen } from "lucide-react";
+import { Loader2, Sparkles, MapPin, FileText, BookOpen, Code, CheckCircle2 } from "lucide-react";
 import { ApiTestLayout } from "../_components/api-test-layout";
 import { ModelSelector } from "../_components/model-selector";
 import { CostBreakdownCard } from "../_components/cost-breakdown-card";
@@ -26,6 +26,9 @@ import {
   calculateTextCost,
   estimateTokens,
 } from "@/lib/utils/model-pricing";
+import { CardPreview } from "@/app/admin/cards/_components/card-preview";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 
 interface ContentResult {
   content: string;
@@ -63,6 +66,13 @@ export default function AIContentPage() {
   const [dossierModel, setDossierModel] = useState("gpt-4o");
   const [dossierLoading, setDossierLoading] = useState(false);
   const [dossierResult, setDossierResult] = useState<ContentResult | null>(null);
+
+  // Structured Output State
+  const [structuredMessage, setStructuredMessage] = useState("Plan a week-long trip to Paris");
+  const [structuredModel, setStructuredModel] = useState("gpt-4o");
+  const [structuredOutputType, setStructuredOutputType] = useState<"full" | "cards" | "suggestions">("full");
+  const [structuredLoading, setStructuredLoading] = useState(false);
+  const [structuredResult, setStructuredResult] = useState<any>(null);
 
   const generateTripSuggestions = async () => {
     setTripLoading(true);
@@ -216,6 +226,38 @@ Make it detailed, practical, and engaging.`;
     }
   };
 
+  const generateStructuredOutput = async () => {
+    setStructuredLoading(true);
+    setStructuredResult(null);
+
+    try {
+      const response = await fetch("/api/admin/test/exp-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userMessage: structuredMessage,
+          context: {
+            messageCount: 1,
+            hasExistingTrip: false,
+          },
+          model: structuredModel,
+          outputType: structuredOutputType,
+        }),
+      });
+
+      const data = await response.json();
+      setStructuredResult(data);
+    } catch (error: any) {
+      console.error("Structured output error:", error);
+      setStructuredResult({
+        success: false,
+        error: error.message || "Failed to generate structured output",
+      });
+    } finally {
+      setStructuredLoading(false);
+    }
+  };
+
   return (
     <ApiTestLayout
       title="AI Content Generation"
@@ -229,8 +271,12 @@ Make it detailed, practical, and engaging.`;
         </AlertDescription>
       </Alert>
 
-      <Tabs defaultValue="suggestions" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs defaultValue="structured" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="structured">
+            <Code className="h-4 w-4 mr-2" />
+            Structured Output
+          </TabsTrigger>
           <TabsTrigger value="suggestions">
             <MapPin className="h-4 w-4 mr-2" />
             Trip Suggestions
@@ -244,6 +290,237 @@ Make it detailed, practical, and engaging.`;
             Travel Dossier
           </TabsTrigger>
         </TabsList>
+
+        {/* Structured Output */}
+        <TabsContent value="structured" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Exp System Structured Output</CardTitle>
+              <CardDescription>
+                Test the exp system with structured outputs (cards + suggestions)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ModelSelector
+                models={allModels}
+                selectedModel={structuredModel}
+                onModelChange={setStructuredModel}
+                label="Model"
+              />
+
+              <div className="space-y-2">
+                <Label htmlFor="structured-message">User Message</Label>
+                <Textarea
+                  id="structured-message"
+                  value={structuredMessage}
+                  onChange={(e) => setStructuredMessage(e.target.value)}
+                  placeholder="Plan a week-long trip to Paris"
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="output-type">Output Type</Label>
+                <Select value={structuredOutputType} onValueChange={(value: any) => setStructuredOutputType(value)}>
+                  <SelectTrigger id="output-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full">Full Response (text + cards + suggestions)</SelectItem>
+                    <SelectItem value="cards">Cards Only</SelectItem>
+                    <SelectItem value="suggestions">Suggestions Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                onClick={generateStructuredOutput}
+                disabled={structuredLoading || !structuredMessage}
+                className="w-full"
+              >
+                {structuredLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate Structured Output
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {structuredResult && (
+            <>
+              {structuredResult.success ? (
+                <>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <CostBreakdownCard
+                      usage={structuredResult.usage}
+                      model={structuredResult.meta?.model}
+                    />
+                    <PerformanceMetrics
+                      duration={structuredResult.duration}
+                      tokenCount={structuredResult.usage?.totalTokens}
+                    />
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-medium">Validation</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            {structuredResult.validation?.valid ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4 text-destructive" />
+                            )}
+                            <Badge variant={structuredResult.validation?.valid ? "default" : "destructive"}>
+                              {structuredResult.validation?.valid ? "Valid" : "Invalid"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Schema compliance check
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {structuredResult.data?.text && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>AI Response Text</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm whitespace-pre-wrap">{structuredResult.data.text}</p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {structuredResult.data?.cards && structuredResult.data.cards.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Cards ({structuredResult.data.cards.length})</CardTitle>
+                        <CardDescription>
+                          Visual preview of generated cards
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {structuredResult.data.cards.map((card: any, idx: number) => (
+                          <CardPreview key={idx} card={card} />
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {structuredResult.data?.places && structuredResult.data.places.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Place Suggestions ({structuredResult.data.places.length})</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {structuredResult.data.places.map((place: any, idx: number) => (
+                            <div key={idx} className="border rounded-lg p-3">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="font-semibold">{place.suggestedName}</div>
+                                  <div className="text-sm text-muted-foreground">{place.searchQuery}</div>
+                                  <div className="mt-1 flex gap-2">
+                                    <Badge variant="outline">{place.category}</Badge>
+                                    <Badge variant="secondary">{place.type}</Badge>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {structuredResult.data?.transport && structuredResult.data.transport.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Transport Suggestions ({structuredResult.data.transport.length})</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {structuredResult.data.transport.map((trans: any, idx: number) => (
+                            <div key={idx} className="border rounded-lg p-3">
+                              <div className="font-semibold">{trans.suggestedName}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {trans.origin} → {trans.destination}
+                              </div>
+                              <div className="mt-1 flex gap-2">
+                                <Badge variant="outline">{trans.type}</Badge>
+                                <Badge variant="secondary">{trans.departureDate}</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {structuredResult.data?.hotels && structuredResult.data.hotels.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Hotel Suggestions ({structuredResult.data.hotels.length})</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {structuredResult.data.hotels.map((hotel: any, idx: number) => (
+                            <div key={idx} className="border rounded-lg p-3">
+                              <div className="font-semibold">{hotel.suggestedName}</div>
+                              <div className="text-sm text-muted-foreground">{hotel.location}</div>
+                              <div className="mt-1 flex gap-2">
+                                <Badge variant="outline">{hotel.checkInDate}</Badge>
+                                <Badge variant="outline">{hotel.checkOutDate}</Badge>
+                                <Badge variant="secondary">{hotel.guests} guests</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <Collapsible>
+                    <Card>
+                      <CardHeader>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="outline" className="w-full justify-between">
+                            <span>View Raw JSON</span>
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </CollapsibleTrigger>
+                      </CardHeader>
+                      <CollapsibleContent>
+                        <CardContent>
+                          <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto max-h-96">
+                            {JSON.stringify(structuredResult, null, 2)}
+                          </pre>
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
+                </>
+              ) : (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Error:</strong> {structuredResult.error || "Failed to generate structured output"}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
+          )}
+        </TabsContent>
 
         {/* Trip Suggestions */}
         <TabsContent value="suggestions" className="space-y-4">

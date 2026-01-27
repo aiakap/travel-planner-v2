@@ -3,6 +3,8 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { searchPlace } from "@/lib/actions/google-places";
+import { HomeLocationData } from "@/lib/types/home-location";
 
 // Get user profile with all related data
 export async function getUserProfile(userId: string) {
@@ -72,6 +74,68 @@ export async function getUserProfile(userId: string) {
     hobbies,
     travelPreferences,
     relationships,
+  };
+}
+
+// Get user's home location formatted for travel segments with Google Places resolution
+export async function getUserHomeLocation(): Promise<HomeLocationData | null> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return null;
+  }
+
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId: session.user.id },
+    select: {
+      city: true,
+      country: true,
+      address: true,
+    },
+  });
+
+  if (!profile) {
+    return null;
+  }
+
+  // Format search query: prefer "city, country", fallback to address
+  let searchQuery = "";
+  if (profile.city && profile.country) {
+    searchQuery = `${profile.city}, ${profile.country}`;
+  } else if (profile.city) {
+    searchQuery = profile.city;
+  } else if (profile.country) {
+    searchQuery = profile.country;
+  } else if (profile.address) {
+    searchQuery = profile.address;
+  }
+
+  if (!searchQuery) {
+    return null;
+  }
+
+  // Resolve through Google Places to get image and place data
+  try {
+    const placeData = await searchPlace(searchQuery);
+    if (placeData && placeData.photos && placeData.photos.length > 0) {
+      return {
+        name: searchQuery,
+        imageUrl: placeData.photos[0].url,
+        placeId: placeData.placeId,
+        lat: placeData.geometry.location.lat,
+        lng: placeData.geometry.location.lng,
+      };
+    }
+  } catch (error) {
+    console.error('Error resolving home location through Google Places:', error);
+  }
+
+  // Fallback without image if Google Places fails or no photos
+  return {
+    name: searchQuery,
+    imageUrl: null,
+    placeId: null,
+    lat: null,
+    lng: null,
   };
 }
 

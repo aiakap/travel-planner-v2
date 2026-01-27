@@ -49,9 +49,9 @@ Flight, Drive, Train, Ferry, Walk, Other
 
 ## Reservation Types Available
 
-**Travel**: Flight, Train, Car Rental, Bus, Ferry
-**Stay**: Hotel, Airbnb, Hostel, Resort, Vacation Rental
-**Activity**: Tour, Event Tickets, Museum, Hike, Excursion, Adventure, Sport
+**Travel**: Flight, Train, Car Rental, Private Driver, Ride Share, Taxi, Bus, Ferry, Cruise, Parking
+**Stay**: Hotel, Airbnb, Hostel, Resort, Vacation Rental, Ski Resort
+**Activity**: Tour, Event Tickets, Museum, Hike, Excursion, Adventure, Sport, Concert, Theater, Ski Pass, Equipment Rental, Spa & Wellness, Golf
 **Dining**: Restaurant, Cafe, Bar, Food Tour
 
 ## Guidelines

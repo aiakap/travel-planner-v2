@@ -190,29 +190,71 @@ export interface HotelOffer {
 
 export async function searchHotels(params: HotelSearchParams): Promise<HotelOffer[]> {
   try {
+    console.log('🔍 [AMADEUS] Starting hotel search with params:', JSON.stringify(params, null, 2));
+    
     // Step 1: Search for hotels by city
-    const hotelListResponse = await amadeus.referenceData.locations.hotels.byCity.get({
+    const hotelListParams = {
       cityCode: params.cityCode,
       radius: params.radius || 50,
       radiusUnit: params.radiusUnit || 'KM',
-    });
+    };
+    console.log('📍 [AMADEUS] Step 1: Calling hotels.byCity.get with:', JSON.stringify(hotelListParams, null, 2));
+    
+    const hotelListResponse = await amadeus.referenceData.locations.hotels.byCity.get(hotelListParams);
+    
+    console.log('✅ [AMADEUS] Step 1 Response received. Status:', hotelListResponse.result?.statusCode);
+    console.log('📦 [AMADEUS] Step 1 Data type:', typeof hotelListResponse.data);
+    console.log('📦 [AMADEUS] Step 1 Is array:', Array.isArray(hotelListResponse.data));
+    console.log('📦 [AMADEUS] Step 1 Data length:', hotelListResponse.data?.length);
+    console.log('📦 [AMADEUS] Step 1 Full response:', JSON.stringify(hotelListResponse, null, 2));
+
+    // Check if response has data
+    if (!hotelListResponse || !hotelListResponse.data || !Array.isArray(hotelListResponse.data)) {
+      console.error('❌ [AMADEUS] Hotel list response missing data or not an array');
+      console.error('   Response object:', hotelListResponse);
+      return [];
+    }
 
     const hotelIds = hotelListResponse.data
       .slice(0, params.max || 10)
       .map((hotel: any) => hotel.hotelId);
 
+    console.log('🏨 [AMADEUS] Found hotel IDs:', hotelIds);
+
     if (hotelIds.length === 0) {
+      console.log('⚠️  [AMADEUS] No hotel IDs found, returning empty array');
       return [];
     }
 
     // Step 2: Get hotel offers with pricing
-    const offersResponse = await amadeus.shopping.hotelOffersSearch.get({
+    const offersParams = {
       hotelIds: hotelIds.join(','),
       checkInDate: params.checkInDate,
       checkOutDate: params.checkOutDate,
       adults: params.adults || 1,
       roomQuantity: params.rooms || 1,
-    });
+    };
+    console.log('💰 [AMADEUS] Step 2: Calling hotelOffersSearch.get with:', JSON.stringify(offersParams, null, 2));
+    
+    const offersResponse = await amadeus.shopping.hotelOffersSearch.get(offersParams);
+    
+    console.log('✅ [AMADEUS] Step 2 Response received. Status:', offersResponse.result?.statusCode);
+    console.log('📦 [AMADEUS] Step 2 Data type:', typeof offersResponse.data);
+    console.log('📦 [AMADEUS] Step 2 Is array:', Array.isArray(offersResponse.data));
+    console.log('📦 [AMADEUS] Step 2 Data length:', offersResponse.data?.length);
+    console.log('📦 [AMADEUS] Step 2 Full response:', JSON.stringify(offersResponse, null, 2));
+
+    // Check if response has data
+    if (!offersResponse || !offersResponse.data) {
+      console.error('Hotel offers response missing data:', offersResponse);
+      return [];
+    }
+
+    // Ensure data is an array
+    if (!Array.isArray(offersResponse.data)) {
+      console.error('Hotel offers response data is not an array:', typeof offersResponse.data);
+      return [];
+    }
 
     // Validate response with Zod
     const validation = validateHotelOffers(offersResponse.data);
@@ -366,5 +408,507 @@ export async function searchTransfers(params: TransferSearchParams): Promise<Tra
     const parsedError = parseAmadeusError(error);
     console.warn('Transfer search failed:', parsedError.getUserMessage());
     return [];
+  }
+}
+
+// ============================================================================
+// Flight Inspiration & Discovery
+// ============================================================================
+
+export interface FlightInspirationParams {
+  origin: string; // IATA code
+  departureDate?: string; // YYYY-MM-DD (optional)
+  oneWay?: boolean;
+  duration?: number; // days
+  nonStop?: boolean;
+  maxPrice?: number;
+  currency?: string;
+  max?: number;
+}
+
+export async function searchFlightInspiration(params: FlightInspirationParams): Promise<any[]> {
+  try {
+    console.log('🌟 Flight Inspiration Search Request:', params);
+    
+    const response = await amadeus.shopping.flightDestinations.get({
+      origin: params.origin,
+      departureDate: params.departureDate,
+      oneWay: params.oneWay,
+      duration: params.duration,
+      nonStop: params.nonStop,
+      maxPrice: params.maxPrice,
+      viewBy: 'DESTINATION',
+    });
+
+    console.log(`✅ Found ${response.data.length} inspiring destinations`);
+    return response.data;
+  } catch (error) {
+    console.error('Flight inspiration search error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export interface FlightCheapestDateParams {
+  origin: string;
+  destination: string;
+  departureDate?: string; // Can be range: "2026-08-01,2026-08-15"
+  oneWay?: boolean;
+  duration?: number;
+  nonStop?: boolean;
+  maxPrice?: number;
+  viewBy?: 'DATE' | 'DURATION' | 'WEEK';
+}
+
+export async function searchFlightCheapestDates(params: FlightCheapestDateParams): Promise<any[]> {
+  try {
+    console.log('📅 Flight Cheapest Date Search Request:', params);
+    
+    const response = await amadeus.shopping.flightDates.get({
+      origin: params.origin,
+      destination: params.destination,
+      departureDate: params.departureDate,
+      oneWay: params.oneWay,
+      duration: params.duration,
+      nonStop: params.nonStop,
+      maxPrice: params.maxPrice,
+      viewBy: params.viewBy || 'DATE',
+    });
+
+    console.log(`✅ Found ${response.data.length} date options`);
+    return response.data;
+  } catch (error) {
+    console.error('Flight cheapest date search error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+// ============================================================================
+// Flight Intelligence & Prediction
+// ============================================================================
+
+export interface FlightPriceAnalysisParams {
+  originIataCode: string;
+  destinationIataCode: string;
+  departureDate: string; // YYYY-MM-DD
+  currencyCode?: string;
+  oneWay?: boolean;
+}
+
+export async function analyzeFlightPrice(params: FlightPriceAnalysisParams): Promise<any> {
+  try {
+    console.log('💰 Flight Price Analysis Request:', params);
+    
+    const response = await amadeus.analytics.itineraryPriceMetrics.get({
+      originIataCode: params.originIataCode,
+      destinationIataCode: params.destinationIataCode,
+      departureDate: params.departureDate,
+      currencyCode: params.currencyCode || 'USD',
+      oneWay: params.oneWay !== false,
+    });
+
+    console.log(`✅ Price analysis complete`);
+    return response.data;
+  } catch (error) {
+    console.error('Flight price analysis error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export interface FlightDelayPredictionParams {
+  originLocationCode: string;
+  destinationLocationCode: string;
+  departureDate: string; // YYYY-MM-DD
+  departureTime: string; // HH:mm:ss
+  arrivalDate: string;
+  arrivalTime: string;
+  aircraftCode: string;
+  carrierCode: string;
+  flightNumber: string;
+  duration: string; // ISO 8601 (PT2H30M)
+}
+
+export async function predictFlightDelay(params: FlightDelayPredictionParams): Promise<any[]> {
+  try {
+    console.log('⏰ Flight Delay Prediction Request:', params);
+    
+    const response = await amadeus.travel.predictions.flightDelay.get({
+      originLocationCode: params.originLocationCode,
+      destinationLocationCode: params.destinationLocationCode,
+      departureDate: params.departureDate,
+      departureTime: params.departureTime,
+      arrivalDate: params.arrivalDate,
+      arrivalTime: params.arrivalTime,
+      aircraftCode: params.aircraftCode,
+      carrierCode: params.carrierCode,
+      flightNumber: params.flightNumber,
+      duration: params.duration,
+    });
+
+    console.log(`✅ Delay predictions generated`);
+    return response.data;
+  } catch (error) {
+    console.error('Flight delay prediction error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+// ============================================================================
+// Airport Intelligence
+// ============================================================================
+
+export async function getAirportRoutes(airportCode: string, max: number = 50): Promise<any[]> {
+  try {
+    console.log(`✈️  Getting routes for airport: ${airportCode}`);
+    
+    const response = await amadeus.airport.directDestinations.get({
+      departureAirportCode: airportCode,
+      max,
+    });
+
+    console.log(`✅ Found ${response.data.length} routes`);
+    return response.data;
+  } catch (error) {
+    console.error('Airport routes search error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export interface AirportNearbyParams {
+  latitude: number;
+  longitude: number;
+  radius?: number; // km (default: 500)
+  sort?: 'relevance' | 'distance' | 'flights' | 'travelers';
+}
+
+export async function getNearbyAirports(params: AirportNearbyParams): Promise<any[]> {
+  try {
+    console.log(`🗺️  Finding nearby airports:`, params);
+    
+    const response = await amadeus.referenceData.locations.airports.get({
+      latitude: params.latitude,
+      longitude: params.longitude,
+      radius: params.radius || 500,
+      sort: params.sort || 'relevance',
+    });
+
+    console.log(`✅ Found ${response.data.length} nearby airports`);
+    return response.data;
+  } catch (error) {
+    console.error('Nearby airport search error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export async function getAirportOnTimePerformance(airportCode: string, date: string): Promise<any> {
+  try {
+    console.log(`📊 Getting on-time performance for: ${airportCode} on ${date}`);
+    
+    const response = await amadeus.airport.predictions.onTime.get({
+      airportCode,
+      date,
+    });
+
+    console.log(`✅ On-time performance data retrieved`);
+    return response.data;
+  } catch (error) {
+    console.error('Airport on-time performance error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+// ============================================================================
+// Airline Information
+// ============================================================================
+
+export async function lookupAirlineCode(airlineCodes: string): Promise<any[]> {
+  try {
+    console.log(`🔍 Looking up airline codes: ${airlineCodes}`);
+    
+    const response = await amadeus.referenceData.airlines.get({
+      airlineCodes,
+    });
+
+    console.log(`✅ Found ${response.data.length} airlines`);
+    return response.data;
+  } catch (error) {
+    console.error('Airline code lookup error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export async function getAirlineRoutes(airlineCode: string, max: number = 50): Promise<any[]> {
+  try {
+    console.log(`✈️  Getting routes for airline: ${airlineCode}`);
+    
+    const response = await amadeus.airline.destinations.get({
+      airlineCode,
+      max,
+    });
+
+    console.log(`✅ Found ${response.data.length} destinations`);
+    return response.data;
+  } catch (error) {
+    console.error('Airline routes search error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export async function getFlightCheckinLinks(airlineCode: string, language?: string): Promise<any[]> {
+  try {
+    console.log(`🔗 Getting check-in links for: ${airlineCode}`);
+    
+    const response = await amadeus.referenceData.urls.checkinLinks.get({
+      airlineCode,
+      language: language || 'en-GB',
+    });
+
+    console.log(`✅ Found ${response.data.length} check-in links`);
+    return response.data;
+  } catch (error) {
+    console.error('Flight check-in links error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export interface FlightStatusParams {
+  carrierCode: string;
+  flightNumber: string;
+  scheduledDepartureDate: string; // YYYY-MM-DD
+  operationalSuffix?: string;
+}
+
+export async function getFlightStatus(params: FlightStatusParams): Promise<any[]> {
+  try {
+    console.log(`📡 Getting flight status:`, params);
+    
+    const response = await amadeus.schedule.flights.get({
+      carrierCode: params.carrierCode,
+      flightNumber: params.flightNumber,
+      scheduledDepartureDate: params.scheduledDepartureDate,
+      operationalSuffix: params.operationalSuffix,
+    });
+
+    console.log(`✅ Flight status retrieved`);
+    return response.data;
+  } catch (error) {
+    console.error('Flight status error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+// ============================================================================
+// Hotel Discovery
+// ============================================================================
+
+export interface HotelListByCityParams {
+  cityCode: string;
+  radius?: number;
+  radiusUnit?: 'KM' | 'MILE';
+  chainCodes?: string;
+  amenities?: string;
+  ratings?: string;
+  hotelSource?: 'ALL' | 'BEDBANK' | 'DIRECTCHAIN';
+}
+
+export async function searchHotelsByCity(params: HotelListByCityParams): Promise<any[]> {
+  try {
+    console.log('🏨 Hotel List by City Request:', params);
+    
+    const response = await amadeus.referenceData.locations.hotels.byCity.get({
+      cityCode: params.cityCode,
+      radius: params.radius || 50,
+      radiusUnit: params.radiusUnit || 'KM',
+      chainCodes: params.chainCodes,
+      amenities: params.amenities,
+      ratings: params.ratings,
+      hotelSource: params.hotelSource || 'ALL',
+    });
+
+    console.log(`✅ Found ${response.data.length} hotels`);
+    return response.data;
+  } catch (error) {
+    console.error('Hotel list by city error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export interface HotelListByGeocodeParams {
+  latitude: number;
+  longitude: number;
+  radius?: number;
+  radiusUnit?: 'KM' | 'MILE';
+  chainCodes?: string;
+  amenities?: string;
+  ratings?: string;
+  hotelSource?: 'ALL' | 'BEDBANK' | 'DIRECTCHAIN';
+}
+
+export async function searchHotelsByGeocode(params: HotelListByGeocodeParams): Promise<any[]> {
+  try {
+    console.log('🗺️  Hotel List by Geocode Request:', params);
+    
+    const response = await amadeus.referenceData.locations.hotels.byGeocode.get({
+      latitude: params.latitude,
+      longitude: params.longitude,
+      radius: params.radius || 50,
+      radiusUnit: params.radiusUnit || 'KM',
+      chainCodes: params.chainCodes,
+      amenities: params.amenities,
+      ratings: params.ratings,
+      hotelSource: params.hotelSource || 'ALL',
+    });
+
+    console.log(`✅ Found ${response.data.length} hotels`);
+    return response.data;
+  } catch (error) {
+    console.error('Hotel list by geocode error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export async function searchHotelsByIds(hotelIds: string): Promise<any[]> {
+  try {
+    console.log('🏨 Hotel List by IDs Request:', hotelIds);
+    
+    const response = await amadeus.referenceData.locations.hotels.byHotels.get({
+      hotelIds,
+    });
+
+    console.log(`✅ Found ${response.data.length} hotels`);
+    return response.data;
+  } catch (error) {
+    console.error('Hotel list by IDs error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export interface HotelNameAutocompleteParams {
+  keyword: string;
+  subType: 'HOTEL_LEISURE' | 'HOTEL_GDS';
+  countryCode?: string;
+  lang?: string;
+  max?: number;
+}
+
+export async function autocompleteHotelName(params: HotelNameAutocompleteParams): Promise<any[]> {
+  try {
+    console.log('🔍 Hotel Name Autocomplete Request:', params);
+    
+    const response = await amadeus.referenceData.locations.hotel.get({
+      keyword: params.keyword,
+      subType: params.subType,
+      countryCode: params.countryCode,
+      lang: params.lang || 'EN',
+      max: params.max || 20,
+    });
+
+    console.log(`✅ Found ${response.data.length} hotel suggestions`);
+    return response.data;
+  } catch (error) {
+    console.error('Hotel name autocomplete error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export async function getHotelRatings(hotelIds: string): Promise<any[]> {
+  try {
+    console.log('⭐ Hotel Ratings Request:', hotelIds);
+    
+    const response = await amadeus.eReputation.hotelSentiments.get({
+      hotelIds,
+    });
+
+    console.log(`✅ Found ratings for ${response.data.length} hotels`);
+    return response.data;
+  } catch (error) {
+    console.error('Hotel ratings error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+// ============================================================================
+// Destination Content - Tours & Activities
+// ============================================================================
+
+export interface ToursActivitiesParams {
+  latitude: number;
+  longitude: number;
+  radius?: number; // km
+}
+
+export async function searchToursActivities(params: ToursActivitiesParams): Promise<any[]> {
+  try {
+    console.log('🎭 Tours & Activities Search Request:', params);
+    
+    const response = await amadeus.shopping.activities.get({
+      latitude: params.latitude,
+      longitude: params.longitude,
+      radius: params.radius || 1,
+    });
+
+    console.log(`✅ Found ${response.data.length} activities`);
+    return response.data;
+  } catch (error) {
+    console.error('Tours & activities search error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export interface ToursActivitiesBySquareParams {
+  north: number;
+  west: number;
+  south: number;
+  east: number;
+}
+
+export async function searchToursActivitiesBySquare(params: ToursActivitiesBySquareParams): Promise<any[]> {
+  try {
+    console.log('🗺️  Tours & Activities by Square Request:', params);
+    
+    const response = await amadeus.shopping.activities.bySquare.get({
+      north: params.north,
+      west: params.west,
+      south: params.south,
+      east: params.east,
+    });
+
+    console.log(`✅ Found ${response.data.length} activities`);
+    return response.data;
+  } catch (error) {
+    console.error('Tours & activities by square error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
+  }
+}
+
+export async function getActivityDetails(activityId: string): Promise<any> {
+  try {
+    console.log('🎭 Activity Details Request:', activityId);
+    
+    const response = await amadeus.shopping.activity(activityId).get();
+
+    console.log(`✅ Activity details retrieved`);
+    return response.data;
+  } catch (error) {
+    console.error('Activity details error:', error);
+    const parsedError = parseAmadeusError(error);
+    throw parsedError;
   }
 }

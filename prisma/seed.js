@@ -27,15 +27,15 @@ async function main() {
   const reservationData = [
     {
       category: "Travel",
-      types: ["Flight", "Train", "Car Rental", "Bus", "Ferry", "Cruise"],
+      types: ["Flight", "Train", "Car Rental", "Private Driver", "Ride Share", "Taxi", "Bus", "Ferry", "Cruise", "Parking"],
     },
     {
       category: "Stay",
-      types: ["Hotel", "Airbnb", "Hostel", "Resort", "Vacation Rental"],
+      types: ["Hotel", "Airbnb", "Hostel", "Resort", "Vacation Rental", "Ski Resort"],
     },
     {
       category: "Activity",
-      types: ["Tour", "Event Tickets", "Museum", "Hike", "Excursion", "Adventure", "Sport", "Concert", "Theater"],
+      types: ["Tour", "Event Tickets", "Museum", "Hike", "Excursion", "Adventure", "Sport", "Concert", "Theater", "Ski Pass", "Equipment Rental", "Spa & Wellness", "Golf"],
     },
     {
       category: "Dining",
@@ -80,145 +80,131 @@ async function main() {
   }
   console.log("✓ Reservation statuses seeded");
 
+  // Seed Image Prompt Styles (define styles first)
+  const imagePromptStyles = [
+    {
+      name: "Retro Gouache",
+      slug: "retro_gouache",
+      description: "Classic mid-century travel poster aesthetic with gouache paint style",
+      isDefault: true,
+      isActive: true,
+      sortOrder: 1,
+    },
+    {
+      name: "Golden Hour",
+      slug: "golden_hour",
+      description: "Dramatic lighting and silhouettes at sunset",
+      isDefault: false,
+      isActive: true,
+      sortOrder: 2,
+    },
+    {
+      name: "Stylized Map Journey",
+      slug: "map_journey",
+      description: "Artistic cartography and illustrated maps",
+      isDefault: false,
+      isActive: true,
+      sortOrder: 3,
+    },
+    {
+      name: "Travel Scrapbook",
+      slug: "scrapbook_collage",
+      description: "Nostalgic collage with layered memories and ephemera",
+      isDefault: false,
+      isActive: true,
+      sortOrder: 4,
+    },
+  ];
+
+  for (const styleData of imagePromptStyles) {
+    await prisma.imagePromptStyle.upsert({
+      where: { slug: styleData.slug },
+      update: {
+        name: styleData.name,
+        description: styleData.description,
+        isDefault: styleData.isDefault,
+        isActive: styleData.isActive,
+        sortOrder: styleData.sortOrder,
+      },
+      create: styleData,
+    });
+  }
+  console.log("✓ Image prompt styles seeded");
+
+  // Get style IDs for prompt seeding
+  const retroStyle = await prisma.imagePromptStyle.findUnique({ where: { slug: "retro_gouache" } });
+  const goldenStyle = await prisma.imagePromptStyle.findUnique({ where: { slug: "golden_hour" } });
+  const mapStyle = await prisma.imagePromptStyle.findUnique({ where: { slug: "map_journey" } });
+  const scrapbookStyle = await prisma.imagePromptStyle.findUnique({ where: { slug: "scrapbook_collage" } });
+
   // Seed Image Prompts
   // Detailed, prescriptive prompts for high-quality AI image generation
   const imagePrompts = [
     // 1. Retro Gouache Travel Poster - TRIP
     {
-      name: "Retro Gouache Travel Poster",
+      name: "Retro Gouache - Trip",
       category: "trip",
-      style: "retro_gouache",
+      styleId: retroStyle.id,
       lightness: "light",
-      prompt: `Create a vertical, high-end travel magazine background image.
+      isActive: true,
+      sortOrder: 1,
+      prompt: `Create a vintage mid-century travel poster (1950s/60s). Vertical 9:16 format.
 
-VISUAL STYLE & MEDIUM
-- Create a vintage mid-century travel poster illustration (1950s/60s era)
-- Emulate the look of gouache paint: matte finish, opaque colors, and visible dry-brush texture at the edges of shapes
-- Simplify the geographic features of the destination into stylized, confident geometric shapes
-- Flatten the perspective to create a two-dimensional poster aesthetic
-- Use bold, simplified forms for landmarks, landscape features, and architectural elements
+STYLE: Gouache paint aesthetic - matte finish, opaque colors, dry-brush texture. Stylized geometric shapes, flattened perspective, bold simplified forms.
 
-COMPOSITION
-- Vertical format optimized for 9:16 or 2:3 aspect ratio
-- Feature the most iconic view or landmark of the destination as the central focal point
-- Include 2-3 layers of depth: foreground detail, mid-ground subject, background sky/mountains
-- Leave some breathing room at top and bottom (where text would traditionally go in vintage posters, though NO TEXT will be included)
-- Create strong diagonal or curved compositional lines to guide the eye
+COMPOSITION: Iconic landmark/view as focal point. 2-3 depth layers (foreground, mid-ground, background). Strong diagonal/curved lines.
 
-LIGHTING & ATMOSPHERE
-- The lighting should capture the mood of the travel dates provided (warm golden tones for summer months, cooler tones for winter, fresh bright tones for spring, rich warm tones for autumn)
-- Time of day should reflect the season and destination character: golden hour for romantic destinations, bright midday for vibrant cities
-- The scene should feel romanticized and idyllic, not documentary
+COLOR: Rich vintage palette - mustard yellow, terracotta red, teal blue, olive green, cream. Accents: burnt orange, sage, dusty rose, navy. 4-6 colors max.
 
-COLOR PALETTE
-- Rich, warm, slightly desaturated "vintage" colors with visible texture
-- Primary palette: mustard yellows, terracotta reds, teal blues, olive greens, and cream whites
-- Secondary accents: burnt orange, sage green, dusty rose, navy blue
-- Avoid neon, fluorescent, or digital-looking colors
-- Use a limited palette of 4-6 colors maximum for authentic mid-century feel
+LIGHTING: Season-appropriate mood (warm for summer, cool for winter). Romanticized, idyllic feel.
 
-ABSOLUTE RULES
-- NO text, typography, logos, or written words of any kind
-- NO modern elements (smartphones, modern cars, contemporary fashion) even if implied by the description
-- NO photorealism - must be clearly illustrated/painted
-- NO people's faces in detail - use silhouettes or simplified forms only
-- Must be vertical orientation
+RULES: NO text, logos, modern elements, photorealism, or detailed faces. Illustrated/painted only. Vertical orientation.
 
 TRAVEL CONTEXT TO VISUALIZE:`
     },
 
     // 1. Retro Gouache Travel Poster - SEGMENT
     {
-      name: "Retro Gouache Travel Poster",
+      name: "Retro Gouache - Segment",
       category: "segment",
-      style: "retro_gouache",
+      styleId: retroStyle.id,
       lightness: "medium",
-      prompt: `Create a vertical, high-end travel magazine background image.
+      isActive: true,
+      sortOrder: 1,
+      prompt: `Create vintage mid-century journey poster (1950s/60s). Vertical 9:16 format.
 
-VISUAL STYLE & MEDIUM
-- Create a vintage mid-century travel poster illustration (1950s/60s era) focusing on transportation and journey
-- Emulate gouache paint technique: matte, opaque colors with visible dry-brush texture
-- Simplify the mode of transportation into confident, stylized shapes
-- Flatten perspective and create graphic, poster-style composition
-- Show the journey/route in an artistic, non-literal way
+STYLE: Gouache paint - matte, opaque, dry-brush texture. Stylized transportation shapes, flattened perspective, graphic composition.
 
-COMPOSITION
-- Vertical format (9:16 or 2:3 aspect ratio)
-- Feature the transportation mode (plane, train, car, boat) as a simplified silhouette or stylized form
-- Include visual elements suggesting movement: curved paths, motion lines, or journey progression
-- Show departure and arrival environments in simplified, layered forms
-- Create a sense of adventure and transition between the two locations
+COMPOSITION: Transportation mode (plane, train, car, boat) as simplified silhouette. Movement elements (curved paths, motion lines). Departure/arrival environments in layered forms. Adventure and transition feel.
 
-LIGHTING & ATMOSPHERE
-- Lighting appropriate to the segment timing: morning light for early departures, golden hour for afternoon journeys, twilight for evening segments
-- Season-appropriate atmosphere based on travel dates
-- Capture the excitement and anticipation of the journey itself
-- More dynamic than trip-level images, suggesting motion and transition
+COLOR: Warm vintage palette, slightly saturated. Mustard, terracotta, teal, olive, cream. Transport accents: aviation blue, rail red, road orange.
 
-COLOR PALETTE
-- Warm vintage palette consistent with retro gouache style
-- Slightly more saturated than trip-level to show energy of travel
-- Mustard, terracotta, teal, olive, cream as base colors
-- Add transport-specific accent colors: aviation blue for flights, rail red for trains, road orange for drives
-- Maintain vintage matte finish
+LIGHTING: Timing-appropriate (morning, golden hour, twilight). Season-based atmosphere. Dynamic, suggesting motion.
 
-ABSOLUTE RULES
-- NO text, typography, or logos
-- NO modern technology visible (use vintage-era transportation silhouettes)
-- NO photorealism
-- NO detailed human faces
-- Must be vertical orientation
-- NO route maps with lines and dots - show journey artistically
+RULES: NO text, logos, modern tech, photorealism, detailed faces, or literal route maps. Vertical orientation.
 
 TRAVEL CONTEXT TO VISUALIZE:`
     },
 
     // 1. Retro Gouache Travel Poster - RESERVATION
     {
-      name: "Retro Gouache Travel Poster",
+      name: "Retro Gouache - Reservation",
       category: "reservation",
-      style: "retro_gouache",
+      styleId: retroStyle.id,
       lightness: "dark",
-      prompt: `Create a vertical, high-end travel magazine background image.
+      isActive: true,
+      sortOrder: 1,
+      prompt: `Create intimate vintage mid-century illustration (1950s/60s). Vertical 9:16 format.
 
-VISUAL STYLE & MEDIUM
-- Create a vintage mid-century travel illustration (1950s/60s era) focusing on intimate destination detail
-- Emulate gouache paint: matte finish, opaque colors, visible dry-brush texture
-- Simplify the specific activity, venue, or accommodation into stylized, confident shapes
-- More intimate and detailed than trip/segment level while maintaining vintage poster aesthetic
-- Slightly darker, richer tones to create depth and intimacy
+STYLE: Gouache paint - matte, opaque, dry-brush texture. Stylized shapes, darker/richer tones for intimacy.
 
-COMPOSITION
-- Vertical format (9:16 or 2:3)
-- Focus on the specific reservation type: hotel room view, restaurant setting, activity scene, or attraction detail
-- Create an intimate vignette rather than wide landscape
-- Include characteristic elements of the venue type (hotel: window with view and bed; restaurant: table setting; activity: key equipment or environment)
-- More closeup perspective than trip-level, personal and inviting
+COMPOSITION: Focus on reservation type - hotel room view, restaurant setting, activity scene. Intimate vignette, closeup perspective. Characteristic venue elements (hotel: window/bed, restaurant: table, activity: equipment/environment).
 
-LIGHTING & ATMOSPHERE
-- Warmer, more intimate lighting than trip-level
-- Evening or golden hour preferred for romantic, sophisticated mood
-- For indoor reservations: warm interior glow with hints of outside environment
-- For outdoor reservations: rich afternoon or early evening light
-- Capture the specific time of day the reservation occurs when provided
-- Deeper shadows and richer tones create visual weight
+COLOR: Deep rich vintage tones. Base: deep terracotta, warm mustard, rich teal, olive, cream. Category accents - Hotel: warm gold/deep blue. Dining: burgundy/amber. Activity: environment colors (ocean blue, forest green, sunset orange).
 
-COLOR PALETTE
-- Deeper, richer vintage tones than trip/segment level
-- Base palette: deep terracotta, warm mustard, rich teal, olive green, cream
-- Add category-specific accents:
-  * Hotel/Stay: warm golden interiors, deep blue twilight outside
-  * Dining: rich food tones, deep burgundy, warm amber
-  * Activity: environment-specific colors (ocean blue, forest green, sunset orange)
-- Maintain vintage matte gouache texture with more saturation and depth
+LIGHTING: Warm intimate. Evening/golden hour for sophistication. Indoor: warm interior glow. Outdoor: rich afternoon/evening light. Deeper shadows.
 
-ABSOLUTE RULES
-- NO text, typography, logos, or written words
-- NO modern elements or technology
-- NO photorealism - clearly illustrated/painted style
-- NO detailed faces - use silhouettes or simplified forms
-- Must be vertical orientation
-- NO generic stock imagery - must reflect the specific location and activity type
+RULES: NO text, logos, modern elements, photorealism, or detailed faces. Illustrated style. Vertical orientation.
 
 TRAVEL CONTEXT TO VISUALIZE:`
     },
@@ -227,8 +213,10 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Golden Hour Silhouette",
       category: "trip",
-      style: "golden_hour",
+      styleId: goldenStyle.id,
       lightness: "light",
+      isActive: true,
+      sortOrder: 1,
       prompt: `Create a vertical, high-end travel magazine background image.
 
 VISUAL STYLE & MEDIUM
@@ -277,8 +265,10 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Golden Hour Silhouette",
       category: "segment",
-      style: "golden_hour",
+      styleId: goldenStyle.id,
       lightness: "medium",
+      isActive: true,
+      sortOrder: 1,
       prompt: `Create a vertical, high-end travel magazine background image.
 
 VISUAL STYLE & MEDIUM
@@ -327,8 +317,10 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Golden Hour Silhouette",
       category: "reservation",
-      style: "golden_hour",
+      styleId: goldenStyle.id,
       lightness: "dark",
+      isActive: true,
+      sortOrder: 1,
       prompt: `Create a vertical, high-end travel magazine background image.
 
 VISUAL STYLE & MEDIUM
@@ -378,8 +370,10 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Stylized Map Journey",
       category: "trip",
-      style: "map_journey",
+      styleId: mapStyle.id,
       lightness: "light",
+      isActive: true,
+      sortOrder: 1,
       prompt: `Create a vertical, high-end travel magazine background image.
 
 VISUAL STYLE & MEDIUM
@@ -428,8 +422,10 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Stylized Map Journey",
       category: "segment",
-      style: "map_journey",
+      styleId: mapStyle.id,
       lightness: "medium",
+      isActive: true,
+      sortOrder: 1,
       prompt: `Create a vertical, high-end travel magazine background image.
 
 VISUAL STYLE & MEDIUM
@@ -478,8 +474,10 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Stylized Map Journey",
       category: "reservation",
-      style: "map_journey",
+      styleId: mapStyle.id,
       lightness: "dark",
+      isActive: true,
+      sortOrder: 1,
       prompt: `Create a vertical, high-end travel magazine background image.
 
 VISUAL STYLE & MEDIUM
@@ -535,72 +533,17 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Travel Scrapbook - Trip",
       category: "trip",
-      style: "scrapbook_collage",
+      styleId: scrapbookStyle.id,
       lightness: "light",
-      prompt: `Create a rich, textured travel scrapbook page featuring a collage of photos and textures inspired by the destinations listed below.
+      isActive: true,
+      sortOrder: 1,
+      prompt: `Create a vintage travel scrapbook page with layered memories. Vertical 9:16 format.
 
-VISUAL STYLE & MEDIUM
-- Create a busy, layered scrapbook page with vintage travel ephemera
-- Include overlapping vintage photos (slightly faded, warm tones)
-- Add map fragments, postage stamps, ticket stubs, and travel stickers
-- Show visible paper textures with torn or deckled edges
-- Include washi tape, photo corners, and adhesive marks for authenticity
-- Warm, nostalgic color palette with aged paper tones (cream, sepia, warm whites)
-- Subtle shadows and depth to show physical layering of elements
+CENTER: Clean white rectangular card with journey dates, title, and duration in dark serif font. Add one simple line-art icon (beach umbrella, mountain, cityscape). Tape/photo corners attach card to background.
 
-THE LAYOUT (CRITICAL)
-In the center of this busy scrapbook page, place a CLEAN, WHITE, RECTANGULAR CARD made of smooth, high-quality paper. This card should look like it is physically taped or glued onto the scrapbook page with visible corner attachments (tape pieces or photo corners).
+BACKGROUND: Layered vintage travel ephemera - faded photos, map fragments, postage stamps, ticket stubs, travel stickers. Warm nostalgic palette (cream, sepia, faded blues). Visible paper textures, torn edges, washi tape. Soft overhead lighting with subtle shadows.
 
-The white card should be:
-- Perfectly centered in the composition
-- Large enough to be prominent but leaving scrapbook elements visible around the edges
-- Pristine white with subtle shadow underneath to show elevation
-- Clearly separate from the busy background
-
-THE CONTENT (RENDERED ON THE WHITE CARD ONLY)
-Inside the clean white card, render this content in a sharp, dark serif font:
-- Journey dates (at the top)
-- Journey title (prominent, centered or left-aligned)
-- Journey duration (subtle, smaller text)
-
-And include one simple, minimalist line-art icon representing the journey character (beach umbrella for beach journeys, mountain peak for mountain journeys, city skyline for city journeys, etc.)
-
-The text and icon must be strictly confined to the white card and must NOT bleed into the scrapbook background.
-
-SCRAPBOOK BACKGROUND DETAILS
-- Layered vintage travel photos showing abstract destination imagery (beaches, mountains, cities - non-specific)
-- Fragments of vintage maps with visible geographic features
-- Colorful vintage postage stamps from various countries
-- Ticket stubs and boarding passes (aged, weathered look)
-- Travel stickers and destination badges
-- Handwritten-style decorative elements (NO readable text, just decorative loops and marks)
-- Warm color palette: sepia tones, faded blues, vintage reds, cream, tan, dusty yellow
-- Elements should frame the white card, creating visual interest without competing
-
-COMPOSITION
-- Vertical format (9:16 or 2:3 aspect ratio)
-- White card positioned in center third of the image
-- Scrapbook elements distributed around the card, denser at edges
-- Some elements may slightly overlap the card edges but NOT the text area
-- Create visual balance with layers and textures
-- Maintain breathing room around the white card
-
-LIGHTING & ATMOSPHERE
-- Soft, even lighting as if photographed from above
-- Warm, nostalgic mood suggesting cherished memories
-- Subtle shadows creating depth between layers
-- Aged, vintage feel with slightly faded colors in background
-- Clean, crisp white card contrasts with warm, textured background
-
-ABSOLUTE RULES
-- NO readable text anywhere except on the white card (dates, title, duration)
-- White card must be centered, prominent, and unobstructed
-- Scrapbook background elements are decorative only - NO actual readable words on stamps, tickets, or photos
-- Must be vertical orientation
-- NO corporate logos or modern branding
-- NO digital/modern elements (smartphones, QR codes, etc.)
-- The white card must remain the clear focal point
-- Background should enhance but not overwhelm
+RULES: NO readable text except on white card. NO logos, modern elements, or digital items. Background decorative only - frame the card without overwhelming it.
 
 TRAVEL CONTEXT TO VISUALIZE:`
     },
@@ -609,73 +552,17 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Travel Scrapbook - Segment",
       category: "segment",
-      style: "scrapbook_collage",
+      styleId: scrapbookStyle.id,
       lightness: "medium",
-      prompt: `Create a rich, textured travel scrapbook page featuring a collage focused on the journey between two destinations.
+      isActive: true,
+      sortOrder: 1,
+      prompt: `Create a vintage travel scrapbook page focused on journey between destinations. Vertical 9:16 format.
 
-VISUAL STYLE & MEDIUM
-- Layered scrapbook aesthetic focused on travel and transportation
-- Include vintage photos of transportation modes (planes, trains, roads, boats - non-specific, artistic)
-- Add route maps (stylized, decorative), compass roses, and directional elements
-- Show ticket stubs, boarding passes, and travel documents (aged look)
-- Include vintage travel stamps and transportation-themed stickers
-- Warm, adventurous color palette suggesting movement and journey
-- Visible paper textures, torn edges, and layered ephemera
-- Medium saturation with more energy than trip-level scrapbooks
+CENTER: Clean white card with chapter name, departure→arrival cities, times, and duration in dark serif font. Add simple transportation icon (plane, train, car, ship). Tape/corners attach card.
 
-THE LAYOUT (CRITICAL)
-In the center of this busy scrapbook page, place a CLEAN, WHITE, RECTANGULAR CARD made of smooth, high-quality paper. This card should look like it is physically taped or glued onto the scrapbook page.
+BACKGROUND: Layered transportation ephemera - vintage travel photos, route maps, compass roses, boarding passes, tickets, luggage tags, travel stamps. Warm palette (blues for aviation, reds for rail, earth tones for road). Dynamic composition suggesting movement.
 
-The white card should be:
-- Centered in the composition
-- Prominent and elevated above the busy background
-- Clean, crisp white with subtle shadow for depth
-- Corners may show tape or photo corner attachments
-
-THE CONTENT (RENDERED ON THE WHITE CARD ONLY)
-Inside the clean white card, render this content in a sharp, dark serif font:
-- Chapter name/description (prominent)
-- Departure city → Arrival city (with arrow or vs.)
-- Departure and arrival times
-- Chapter duration
-
-And include one simple, minimalist line-art icon representing the transportation mode (airplane silhouette, train, car, ship, etc.)
-
-All text and icon must be confined to the white card only.
-
-SCRAPBOOK BACKGROUND DETAILS
-- Focus on chapter-themed ephemera: route maps, compass imagery, directional arrows
-- Vintage transportation photos (abstract, artistic - no specific identifiable vehicles)
-- Boarding passes, tickets, luggage tags (aged, weathered)
-- Travel stamps showing movement between locations
-- Map fragments highlighting routes and paths (decorative, not literal)
-- Warm color palette: vintage blues (aviation), warm reds (rail), earthy tones (road travel)
-- Elements suggest motion, adventure, and transition
-- More dynamic composition than journey-level to show movement
-
-COMPOSITION
-- Vertical format (9:16 or 2:3 aspect ratio)
-- White card centered with chapter details
-- Background elements suggest directionality (top to bottom, or left to right flow)
-- Transportation-themed elements distributed around the card
-- Slightly more energetic arrangement than journey-level
-
-LIGHTING & ATMOSPHERE
-- Bright, optimistic lighting suggesting adventure
-- Time-of-day appropriate to the journey timing
-- Dynamic feel with sense of movement
-- Warm, nostalgic tones mixed with travel excitement
-- Clean white card contrasts with textured background
-
-ABSOLUTE RULES
-- NO readable text except on the white card
-- White card must be centered and prominent
-- Background elements are decorative only
-- Must be vertical orientation
-- NO modern technology visible (no smartphones, digital displays)
-- NO corporate airline/train logos or branding
-- Transportation icons should be vintage/timeless silhouettes
-- Background maps and routes should be artistic, not literal GPS paths
+RULES: NO readable text except on white card. NO logos, modern tech, or branding. Background decorative only - artistic routes, not GPS.
 
 TRAVEL CONTEXT TO VISUALIZE:`
     },
@@ -684,82 +571,17 @@ TRAVEL CONTEXT TO VISUALIZE:`
     {
       name: "Travel Scrapbook - Reservation",
       category: "reservation",
-      style: "scrapbook_collage",
+      styleId: scrapbookStyle.id,
       lightness: "dark",
-      prompt: `Create a rich, textured travel scrapbook page featuring a collage focused on a specific activity or venue.
+      isActive: true,
+      sortOrder: 1,
+      prompt: `Create an intimate vintage scrapbook page for a specific moment/venue. Vertical 9:16 format.
 
-VISUAL STYLE & MEDIUM
-- Intimate, detailed scrapbook page focused on moment type
-- Layered vintage photos suggesting the activity or venue type
-- Include venue-specific ephemera: restaurant menus (decorative), hotel keys, activity tickets, attraction passes
-- Rich, warm textures with deeper tones than journey/chapter levels
-- Visible paper layering with sophisticated, curated feel
-- Darker, more saturated color palette suggesting special moments
-- Elements specific to moment category (dining, lodging, activities)
+CENTER: Clean white card with moment name, venue, date/time, and duration in dark serif font. Add simple icon (bed for hotel, fork/knife for dining, activity-specific icon). Attach with tape/corners.
 
-THE LAYOUT (CRITICAL)
-In the center of this scrapbook page, place a CLEAN, WHITE, RECTANGULAR CARD made of smooth, high-quality paper. This card should look like it is physically attached to the scrapbook page with corner details.
+BACKGROUND: Category-specific ephemera - Hotel: keys, postcards, city views. Dining: menu fragments, wine labels. Activity: tickets, badges, trail maps. Rich saturated palette (deep blues for hotels, burgundy/amber for dining, environment colors for activities). Intimate, curated layering.
 
-The white card should be:
-- Prominently centered
-- Clean, bright white contrasting with richer background
-- Elevated with visible shadow for depth
-- Corners showing attachment method (tape, corners, or pins)
-
-THE CONTENT (RENDERED ON THE WHITE CARD ONLY)
-Inside the clean white card, render this content in a sharp, dark serif font:
-- Moment name (prominent)
-- Venue or provider name
-- Date and time of moment
-- Duration (if applicable)
-
-And include one simple, minimalist line-art icon representing the moment type:
-- Hotel/Stay: bed or building icon
-- Dining: fork and knife or plate icon
-- Activity: relevant activity icon (hiking boot, theater mask, museum column, etc.)
-- Attraction: landmark or ticket icon
-
-All content must be confined to the white card only.
-
-SCRAPBOOK BACKGROUND DETAILS
-- Category-specific imagery:
-  * Hotel/Stay: vintage hotel photos, room keys, postcards, city views
-  * Dining: menu fragments, recipe cards, food photography (artistic), wine labels
-  * Activity: equipment photos, trail maps, adventure stamps, activity badges
-  * Attraction: vintage attraction posters, entry tickets, souvenir stamps
-- Rich, warm color palette appropriate to category:
-  * Hotel: deep blues, warm golds, evening tones
-  * Dining: burgundy, amber, rich food tones
-  * Activity: environment-specific (ocean blues, forest greens, mountain grays)
-- Deeper saturation and richer tones than journey/chapter levels
-- More intimate scale showing venue details
-- Layered ephemera creating sophisticated, curated look
-
-COMPOSITION
-- Vertical format (9:16 or 2:3 aspect ratio)
-- White card centered with moment details
-- Background elements focused on venue character and experience type
-- More intimate, close-up perspective than journey/chapter
-- Dense, rich layering suggesting special experience
-- Elements frame the white card, creating visual richness
-
-LIGHTING & ATMOSPHERE
-- Warmer, more intimate lighting than journey/chapter levels
-- Evening or golden hour preferred for sophisticated mood
-- Richer shadows and deeper tones creating visual weight
-- Special occasion feel - romantic, exciting, or adventurous depending on type
-- Time-of-day appropriate to moment timing when provided
-- Clean white card provides bright focal point against rich background
-
-ABSOLUTE RULES
-- NO readable text except on the white card (name, venue, time, duration)
-- White card must be centered, prominent, and easily readable
-- Background elements are decorative only - NO actual readable menu items, signs, or labels
-- Must be vertical orientation
-- NO corporate logos or recognizable branding
-- NO modern technology (no smartphones, digital screens)
-- Category-specific elements must be clearly suggested but remain artistic/abstract
-- Background should create ambiance without competing with card content
+RULES: NO readable text except on white card. NO logos or modern elements. Background decorative only - vintage/artistic style.
 
 TRAVEL CONTEXT TO VISUALIZE:`
     },
@@ -771,8 +593,10 @@ TRAVEL CONTEXT TO VISUALIZE:`
       update: {
         prompt: prompt.prompt,
         category: prompt.category,
-        style: prompt.style,
-        lightness: prompt.lightness
+        styleId: prompt.styleId,
+        lightness: prompt.lightness,
+        isActive: prompt.isActive,
+        sortOrder: prompt.sortOrder
       },
       create: prompt,
     });

@@ -1,39 +1,188 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Travel Planner v2
+
+A comprehensive AI-powered travel planning application built with Next.js, featuring intelligent trip creation, real-time collaboration, and integration with multiple travel APIs.
+
+## Features
+
+- 🤖 **AI-Powered Planning** - Chat with GPT-4o to plan trips
+- 🗺️ **Interactive Maps** - Google Maps integration with route visualization
+- ✈️ **Flight Search** - Real-time flight search via Amadeus API
+- 🏨 **Hotel & Restaurant Search** - Integrated with Google Places and Yelp
+- 🎨 **AI Image Generation** - Automatic trip images with Vertex AI Imagen
+- 🌤️ **Weather Forecasts** - Real-time weather for destinations
+- 🎯 **Activity Recommendations** - Tours and activities via Viator
+- 📱 **Responsive Design** - Works on desktop and mobile
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+ 
+- PostgreSQL database (or Neon serverless)
+- API keys for external services (see [API Documentation](./docs/API_REFERENCE.md))
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Set up environment variables:
+
+```bash
+cp .env.example .env
+```
+
+Fill in your API keys and database URL. See [API Reference](./docs/API_REFERENCE.md) for required variables.
+
+4. Set up the database:
+
+```bash
+npx prisma generate
+npx prisma migrate deploy
+```
+
+5. Run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Documentation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### API Documentation
 
-## Learn More
+Comprehensive documentation for all integrated APIs:
 
-To learn more about Next.js, take a look at the following resources:
+- **[API Reference](./docs/API_REFERENCE.md)** - Overview of all APIs
+- **[API Specifications](./docs/api-specs/)** - Detailed specs for each API:
+  - [OpenAI](./docs/api-specs/openai.md) - Chat, structured outputs, image generation
+  - [Google Maps](./docs/api-specs/google-maps.md) - Maps, geocoding, places
+  - [Amadeus](./docs/api-specs/amadeus.md) - Flights, hotels, airports
+  - [Vertex AI Imagen](./docs/api-specs/vertex-ai-imagen.md) - AI image generation
+  - [OpenWeatherMap](./docs/api-specs/openweather.md) - Weather forecasts
+  - [Yelp Fusion](./docs/api-specs/yelp.md) - Restaurant search
+  - [Viator](./docs/api-specs/viator.md) - Tours and activities
+  - [UploadThing](./docs/api-specs/uploadthing.md) - File uploads
+  - [NextAuth.js](./docs/api-specs/auth.md) - OAuth authentication
+  - [Vercel AI SDK](./docs/api-specs/vercel-ai-sdk.md) - AI utilities
+  - [Neon PostgreSQL](./docs/api-specs/neon.md) - Database platform
+  - [Prisma ORM](./docs/api-specs/prisma.md) - Database ORM
+- **[Usage Examples](./docs/API_USAGE_EXAMPLES.md)** - Real-world code examples
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### System Documentation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **[Image Generation System](./docs/IMAGE_GENERATION_SYSTEM.md)** - Complete architecture, troubleshooting, and maintenance guide
+
+### Implementation Guides
+
+Check the various `*_COMPLETE.md` files in the root directory for detailed implementation documentation on specific features.
+
+## Technology Stack
+
+### Frontend
+- **Next.js 15** - React framework with App Router
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **React Google Maps** - Map components
+
+### Backend
+- **Next.js API Routes** - Serverless API
+- **Prisma** - Database ORM
+- **Neon PostgreSQL** - Serverless database
+
+### AI & Machine Learning
+- **OpenAI GPT-4o** - Chat and content generation
+- **Vertex AI Gemini 3 Pro Image** - AI image generation with text support
+- **Vertex AI Imagen 4.0** - Fast image generation
+- **Vercel AI SDK** - AI streaming and utilities
+
+### External APIs
+- **Google Maps Platform** - Location services
+- **Amadeus** - Flight and hotel search
+- **Yelp Fusion** - Restaurant data
+- **Viator** - Tours and activities
+- **OpenWeatherMap** - Weather data
+
+### Authentication & Storage
+- **NextAuth.js** - OAuth authentication
+- **UploadThing** - File uploads
+
+## Project Structure
+
+```
+travel-planner-v2/
+├── app/                    # Next.js app directory
+│   ├── api/               # API routes
+│   ├── admin/             # Admin panel
+│   ├── trip/              # Trip management
+│   ├── view/              # Trip viewing
+│   └── exp/               # Experimental features
+├── components/            # React components
+├── lib/                   # Utilities and libraries
+│   ├── actions/          # Server actions
+│   ├── ai/               # AI generation functions
+│   ├── schemas/          # Zod schemas
+│   └── types/            # TypeScript types
+├── prisma/               # Database schema and migrations
+├── docs/                 # Documentation
+│   ├── API_REFERENCE.md  # API overview
+│   ├── api-specs/        # Detailed API specs
+│   ├── API_USAGE_EXAMPLES.md  # Code examples
+│   └── IMAGE_GENERATION_SYSTEM.md  # Image generation guide
+└── public/               # Static assets
+```
+
+## Development
+
+### Running Tests
+
+```bash
+npm test
+```
+
+### Building for Production
+
+```bash
+npm run build
+npm start
+```
+
+### Database Management
+
+```bash
+# Generate Prisma client
+npx prisma generate
+
+# Create migration
+npx prisma migrate dev
+
+# Open Prisma Studio
+npx prisma studio
+
+# Seed database
+npx prisma db seed
+```
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The easiest way to deploy is using the [Vercel Platform](https://vercel.com/new).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Push to GitHub
+2. Import project in Vercel
+3. Add environment variables
+4. Deploy
+
+See [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Contributing
+
+This is a private project. For questions or issues, contact the development team.
 
 ## Project Progress Log (hour by hour, Pacific Time)
 

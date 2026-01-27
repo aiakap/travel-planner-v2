@@ -259,11 +259,14 @@ export interface HotelEntity {
 // Stage Outputs (Restructured for 4-Stage Pipeline)
 // ============================================================================
 
+import type { Card } from "@/lib/schemas/exp-response-schema";
+
 // Stage 1: Content Generation - Plain text with intentions
 export interface Stage1Output {
   text: string; // Full response including LOOKUP_REQUIREMENTS
   naturalLanguageSection: string; // Just the natural language part
   lookupRequirements: string; // Structured requirements section
+  cards?: Card[]; // Structured cards from AI (when using exp prompt)
   tripSuggestion?: any; // Optional trip metadata for trip suggestion mode
 }
 

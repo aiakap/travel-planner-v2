@@ -53,6 +53,10 @@ export interface V0Segment {
   endDate: string
   startLocation?: string
   endLocation?: string
+  startTimeZone?: string      // Abbreviated timezone (e.g., "EST")
+  endTimeZone?: string        // Abbreviated timezone (e.g., "PST")
+  startTimeZoneId?: string    // Full timezone ID (e.g., "America/New_York")
+  endTimeZoneId?: string      // Full timezone ID (e.g., "America/Los_Angeles")
   image?: string
   days: V0Day[]
 }

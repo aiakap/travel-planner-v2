@@ -27,7 +27,7 @@ function formatChatTimestamp(date: Date): string {
 export default async function ExpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tripId?: string }>
+  searchParams: Promise<{ tripId?: string; segmentId?: string; reservationId?: string; action?: string }>
 }) {
   const session = await auth()
 
@@ -37,6 +37,8 @@ export default async function ExpPage({
 
   const params = await searchParams
   const tripId = params.tripId
+  const segmentId = params.segmentId
+  const reservationId = params.reservationId
   let selectedTrip = null
   let selectedConversation = null
   let conversations: any[] = []
@@ -104,22 +106,90 @@ export default async function ExpPage({
       },
     })
 
-    // Get latest conversation or create first one
-    selectedConversation = conversations[0]
-
+    // Handle segmentId or reservationId from URL
+    if (reservationId) {
+      // Find existing reservation conversation
+      const reservationConv = conversations.find(c => 
+        c.chatType === 'RESERVATION' && c.reservationId === reservationId
+      )
+      
+      if (reservationConv) {
+        selectedConversation = reservationConv
+      } else {
+        // Create new reservation conversation
+        const reservation = tripToLoad.segments
+          .flatMap(s => s.reservations)
+          .find(r => r.id === reservationId)
+        
+        if (reservation) {
+          const segment = tripToLoad.segments.find(s => 
+            s.reservations.some(r => r.id === reservationId)
+          )
+          
+          selectedConversation = await prisma.chatConversation.create({
+            data: {
+              userId: session.user.id,
+              tripId: tripToLoad.id,
+              segmentId: segment?.id,
+              reservationId: reservationId,
+              chatType: 'RESERVATION',
+              title: `${reservation.title} - ${formatChatTimestamp(new Date())}`,
+            },
+            include: {
+              messages: true,
+            },
+          })
+          conversations = [selectedConversation, ...conversations]
+        }
+      }
+    } else if (segmentId) {
+      // Find existing segment conversation
+      const segmentConv = conversations.find(c => 
+        c.chatType === 'SEGMENT' && c.segmentId === segmentId
+      )
+      
+      if (segmentConv) {
+        selectedConversation = segmentConv
+      } else {
+        // Create new segment conversation
+        const segment = tripToLoad.segments.find(s => s.id === segmentId)
+        
+        if (segment) {
+          selectedConversation = await prisma.chatConversation.create({
+            data: {
+              userId: session.user.id,
+              tripId: tripToLoad.id,
+              segmentId: segmentId,
+              chatType: 'SEGMENT',
+              title: `${segment.title} - ${formatChatTimestamp(new Date())}`,
+            },
+            include: {
+              messages: true,
+            },
+          })
+          conversations = [selectedConversation, ...conversations]
+        }
+      }
+    }
+    
+    // If no specific entity selected, use latest conversation or create trip conversation
     if (!selectedConversation) {
-      selectedConversation = await prisma.chatConversation.create({
-        data: {
-          userId: session.user.id,
-          tripId: tripToLoad.id,
-          chatType: 'TRIP',
-          title: `${tripToLoad.title} - ${formatChatTimestamp(new Date())}`,
-        },
-        include: {
-          messages: true,
-        },
-      })
-      conversations = [selectedConversation]
+      selectedConversation = conversations[0]
+
+      if (!selectedConversation) {
+        selectedConversation = await prisma.chatConversation.create({
+          data: {
+            userId: session.user.id,
+            tripId: tripToLoad.id,
+            chatType: 'TRIP',
+            title: `${tripToLoad.title} - ${formatChatTimestamp(new Date())}`,
+          },
+          include: {
+            messages: true,
+          },
+        })
+        conversations = [selectedConversation]
+      }
     }
   }
 

@@ -33,3 +33,13 @@ export { restaurantExtractionPlugin } from './plugins/restaurant-extraction-plug
 export { eventExtractionPlugin } from './plugins/event-extraction-plugin';
 export { cruiseExtractionPlugin } from './plugins/cruise-extraction-plugin';
 export { genericReservationPlugin } from './plugins/generic-reservation-plugin';
+
+// Type mapping utility (shared between detection and extraction APIs)
+export type { HandlerInfo } from './type-mapping';
+export {
+  getTypeMapping,
+  getHandlerForType,
+  getAllHandlers,
+  getTypesForHandler,
+  clearTypeMapping,
+} from './type-mapping';

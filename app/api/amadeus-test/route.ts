@@ -92,14 +92,17 @@ export async function POST(request: NextRequest) {
       const hotelParams = params as HotelSearchParams;
       const apiStartTime = Date.now();
       
+      console.log('🔍 [API ROUTE] Hotel search request received');
+      console.log('📋 [API ROUTE] Parameters:', JSON.stringify(hotelParams, null, 2));
+      
       try {
         const hotels = await searchHotels(hotelParams);
         const apiDuration = Date.now() - apiStartTime;
         const totalDuration = Date.now() - startTime;
         
-        console.log(`✅ Success: Found ${hotels.length} hotel offers in ${apiDuration}ms`);
+        console.log(`✅ [API ROUTE] Success: Found ${hotels.length} hotel offers in ${apiDuration}ms`);
         
-        return NextResponse.json({
+        const response = {
           success: true,
           type: 'hotel',
           params: hotelParams,
@@ -113,12 +116,23 @@ export async function POST(request: NextRequest) {
             },
             environment: 'test',
           },
-        });
+          debug: {
+            requestParams: hotelParams,
+            resultCount: hotels.length,
+            sampleResult: hotels[0] || null,
+          }
+        };
+        
+        console.log('📤 [API ROUTE] Sending response:', JSON.stringify(response, null, 2));
+        return NextResponse.json(response);
       } catch (error: any) {
         const apiDuration = Date.now() - apiStartTime;
         const totalDuration = Date.now() - startTime;
         
-        console.error('❌ Hotel search failed:', error);
+        console.error('❌ [API ROUTE] Hotel search failed:', error);
+        console.error('❌ [API ROUTE] Error name:', error.name);
+        console.error('❌ [API ROUTE] Error message:', error.message);
+        console.error('❌ [API ROUTE] Error stack:', error.stack);
         
         // Use our structured error handling
         const errorResponse = {
@@ -145,8 +159,14 @@ export async function POST(request: NextRequest) {
             },
             environment: 'test',
           },
+          debug: {
+            requestParams: hotelParams,
+            errorType: error.constructor.name,
+            errorString: String(error),
+          }
         };
         
+        console.log('📤 [API ROUTE] Sending error response:', JSON.stringify(errorResponse, null, 2));
         const statusCode = error.statusCode || 400;
         return NextResponse.json(errorResponse, { status: statusCode });
       }

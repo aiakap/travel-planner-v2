@@ -92,6 +92,13 @@ async function findAvailableSlots(
 
   // Calculate the date for this day
   const tripStartDate = new Date(trip.startDate);
+  
+  // Validate trip start date
+  if (isNaN(tripStartDate.getTime())) {
+    console.error(`[findAvailableSlots] Invalid trip start date:`, trip.startDate);
+    return [];
+  }
+  
   const targetDate = new Date(tripStartDate);
   targetDate.setDate(targetDate.getDate() + day - 1);
 
@@ -310,6 +317,16 @@ export async function getTripDays(tripId: string): Promise<
   const days: Array<{ day: number; date: string; dayOfWeek: string }> = [];
   const startDate = new Date(trip.startDate);
   const endDate = new Date(trip.endDate);
+  
+  // Validate dates
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    console.error(`[getTripDays] Invalid trip dates:`, {
+      tripId,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+    });
+    return [];
+  }
 
   const currentDate = new Date(startDate);
   let dayNumber = 1;

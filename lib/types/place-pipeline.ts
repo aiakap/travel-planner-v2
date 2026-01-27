@@ -78,6 +78,19 @@ export type MessageSegment =
       type: "chat_loading";
       conversationId: string;
     }
+  | {
+      type: "get_lucky_loader";
+      loaderId: string;
+      stages: Array<{
+        id: string;
+        status: 'pending' | 'loading' | 'complete' | 'error';
+        message: string;
+        items?: Array<{
+          text: string;
+          data?: any;
+        }>;
+      }>;
+    }
   | Card; // All structured card types from exp-response-schema
 
 // Stage outputs
