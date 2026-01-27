@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ExtractionStatus } from "@prisma/client";
+import { ExtractionStatus } from "@/app/generated/prisma/client";
 import { ExtractedTravelData } from "@/lib/schemas/travel-extraction-schema";
 
 export interface QueueItem {

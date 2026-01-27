@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plane, CheckCircle, Mail, Hotel } from "lucide-react";
+import { Loader2, Plane, CheckCircle, Mail, Hotel, Car } from "lucide-react";
 import { ApiTestLayout } from "../apis/_components/api-test-layout";
 import { DetailSection } from "../apis/_components/detail-section";
 import { InfoGrid } from "../apis/_components/info-grid";
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { addFlightsToTrip } from "@/lib/actions/add-flights-to-trip";
 import { addHotelsToTrip } from "@/lib/actions/add-hotels-to-trip";
+import { addCarRentalToTrip } from "@/lib/actions/add-car-rentals-to-trip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Trip {
@@ -61,7 +62,36 @@ interface ClusterPreview {
   };
 }
 
-type ExtractionType = "flight" | "hotel";
+interface HotelPreview {
+  hotel: any;
+  matchedSegment?: {
+    id: string;
+    name: string;
+    score: number;
+  };
+  willCreateSegment: boolean;
+  suggestedSegmentName?: string;
+}
+
+interface CarRentalPreview {
+  carRental: any;
+  matchedSegment?: {
+    id: string;
+    name: string;
+    score: number;
+  };
+  willCreateSegment: boolean;
+  suggestedSegmentName?: string;
+  isOneWay: boolean;
+}
+
+type ExtractionType = "flight" | "hotel" | "car-rental";
+
+// Helper to parse .eml files
+async function parseEMLFile(file: File): Promise<string> {
+  const text = await file.text();
+  return text;
+}
 
 export default function EmailExtractionPage() {
   const [emailText, setEmailText] = useState("");
@@ -77,6 +107,10 @@ export default function EmailExtractionPage() {
   const [addSuccess, setAddSuccess] = useState(false);
   const [clusterPreview, setClusterPreview] = useState<ClusterPreview | null>(null);
   const [loadingClusters, setLoadingClusters] = useState(false);
+  const [hotelPreview, setHotelPreview] = useState<HotelPreview | null>(null);
+  const [loadingHotelPreview, setLoadingHotelPreview] = useState(false);
+  const [carRentalPreview, setCarRentalPreview] = useState<CarRentalPreview | null>(null);
+  const [loadingCarRentalPreview, setLoadingCarRentalPreview] = useState(false);
 
   // Fetch user trips on mount
   useEffect(() => {
@@ -153,8 +187,7 @@ export default function EmailExtractionPage() {
     setClusterPreview(null);
     
     try {
-      // Import clustering functions client-side
-      const { clusterFlightsByTime } = await import('@/lib/utils/flight-clustering');
+      // Import matching functions client-side
       const { findBestSegmentForCluster } = await import('@/lib/utils/segment-matching');
       const { suggestSegmentForCluster } = await import('@/lib/utils/segment-suggestions');
       
@@ -162,16 +195,38 @@ export default function EmailExtractionPage() {
       const trip = trips.find(t => t.id === tripId);
       if (!trip) return;
       
-      // Cluster flights
-      const clusters = clusterFlightsByTime(extractedData.flights, 48);
+      // Helper to convert time string to 24-hour format
+      const convertTo24Hour = (time: string): string => {
+        const match = time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return "12:00:00";
+        
+        let [_, hours, minutes, period] = match;
+        let h = parseInt(hours);
+        
+        if (period.toUpperCase() === 'PM' && h !== 12) h += 12;
+        if (period.toUpperCase() === 'AM' && h === 12) h = 0;
+        
+        return `${h.toString().padStart(2, '0')}:${minutes}:00`;
+      };
       
-      // Match/suggest segments for each cluster
-      const preview = clusters.map(cluster => {
-        const match = findBestSegmentForCluster(cluster, trip.segments);
-        const suggestion = !match ? suggestSegmentForCluster(cluster, trip.segments) : null;
+      // Process each flight individually (no clustering)
+      const preview = extractedData.flights.map((flight: any) => {
+        // Create a single-flight "cluster" for matching
+        const singleFlightCluster = {
+          flights: [flight],
+          startTime: new Date(`${flight.departureDate}T${convertTo24Hour(flight.departureTime)}`),
+          endTime: new Date(`${flight.arrivalDate}T${convertTo24Hour(flight.arrivalTime)}`),
+          startLocation: flight.departureCity,
+          endLocation: flight.arrivalCity,
+          startAirport: flight.departureAirport,
+          endAirport: flight.arrivalAirport,
+        };
+        
+        const match = findBestSegmentForCluster(singleFlightCluster, trip.segments);
+        const suggestion = !match ? suggestSegmentForCluster(singleFlightCluster, trip.segments) : null;
         
         return {
-          ...cluster,
+          ...singleFlightCluster,
           matchedSegment: match ? {
             id: match.segmentId,
             name: match.segmentName,
@@ -189,16 +244,130 @@ export default function EmailExtractionPage() {
         clusters: preview,
         summary: {
           totalFlights: extractedData.flights.length,
-          totalClusters: clusters.length,
-          matchedClusters: preview.filter(c => c.matchedSegment).length,
-          suggestedClusters: preview.filter(c => c.suggestedSegment).length
+          totalClusters: extractedData.flights.length, // Each flight is its own "cluster"
+          matchedClusters: preview.filter((c: any) => c.matchedSegment).length,
+          suggestedClusters: preview.filter((c: any) => c.suggestedSegment).length
         }
       });
     } catch (err) {
-      console.error('Clustering preview error:', err);
-      setError('Failed to preview flight clustering');
+      console.error('Flight preview error:', err);
+      setError('Failed to preview flight assignments');
     } finally {
       setLoadingClusters(false);
+    }
+  };
+
+  const previewHotelMatching = async (tripId: string) => {
+    if (extractionType !== 'hotel' || !extractedData) return;
+    
+    setLoadingHotelPreview(true);
+    setHotelPreview(null);
+    
+    try {
+      // Import matching functions client-side
+      const { createHotelCluster } = await import('@/lib/utils/hotel-clustering');
+      const { findBestSegmentForHotel } = await import('@/lib/utils/segment-matching');
+      
+      // Get trip segments
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) return;
+      
+      // Create hotel cluster
+      const hotelCluster = createHotelCluster(extractedData);
+      
+      // Find best match
+      const match = findBestSegmentForHotel(hotelCluster, trip.segments, 70);
+      
+      // Determine if we'll create a new segment
+      const willCreateSegment = !match;
+      let suggestedSegmentName = '';
+      
+      if (willCreateSegment) {
+        // Extract city from address
+        const cityMatch = extractedData.address.match(/([^,]+),/);
+        const city = cityMatch ? cityMatch[1].trim() : extractedData.hotelName;
+        suggestedSegmentName = `Stay in ${city}`;
+      }
+      
+      setHotelPreview({
+        hotel: extractedData,
+        matchedSegment: match ? {
+          id: match.segmentId,
+          name: match.segmentName,
+          score: match.score
+        } : undefined,
+        willCreateSegment,
+        suggestedSegmentName
+      });
+    } catch (err) {
+      console.error('Hotel preview error:', err);
+      setError('Failed to preview hotel assignment');
+    } finally {
+      setLoadingHotelPreview(false);
+    }
+  };
+
+  const previewCarRentalMatching = async (tripId: string) => {
+    if (extractionType !== 'car-rental' || !extractedData) return;
+    
+    setLoadingCarRentalPreview(true);
+    setCarRentalPreview(null);
+    
+    try {
+      // Import matching functions client-side
+      const { createCarRentalCluster } = await import('@/lib/utils/car-rental-clustering');
+      const { findBestSegmentForCarRental } = await import('@/lib/utils/segment-matching');
+      
+      // Get trip segments
+      const trip = trips.find(t => t.id === tripId);
+      if (!trip) return;
+      
+      // Create car rental cluster
+      const carRentalCluster = createCarRentalCluster(extractedData);
+      
+      // Find best match
+      const match = findBestSegmentForCarRental(carRentalCluster, trip.segments, 70);
+      
+      // Determine if we'll create a new segment
+      const willCreateSegment = !match;
+      let suggestedSegmentName = '';
+      
+      // Determine if one-way rental
+      const isOneWay = extractedData.pickupLocation !== extractedData.returnLocation || 
+                       extractedData.oneWayCharge > 0;
+      
+      if (willCreateSegment) {
+        // Extract city from pickup address
+        const extractCity = (address: string, location: string) => {
+          if (!address) return location;
+          const parts = address.split(',');
+          return parts.length >= 2 ? parts[0].trim() : location;
+        };
+        
+        const pickupCity = extractCity(extractedData.pickupAddress, extractedData.pickupLocation);
+        const returnCity = extractCity(extractedData.returnAddress, extractedData.returnLocation);
+        
+        suggestedSegmentName = isOneWay 
+          ? `Drive from ${pickupCity} to ${returnCity}`
+          : `Drive in ${pickupCity}`;
+      }
+      
+      setCarRentalPreview({
+        carRental: extractedData,
+        matchedSegment: match ? {
+          id: match.segmentId,
+          name: match.segmentName,
+          score: match.score
+        } : undefined,
+        willCreateSegment,
+        suggestedSegmentName,
+        isOneWay
+      });
+    } catch (err) {
+      console.error('Car rental preview error:', err);
+      setError('Failed to preview car rental assignment');
+    } finally {
+      setLoadingCarRentalPreview(false);
     }
   };
 
@@ -213,24 +382,34 @@ export default function EmailExtractionPage() {
       if (extractionType === 'flight') {
         await addFlightsToTrip(
           selectedTripId,
-          null, // segmentId - let auto-clustering handle it
+          null, // segmentId - process each flight individually
           extractedData,
           {
-            autoCluster: true,
+            autoCluster: false, // Process each flight as individual reservation
             maxGapHours: 48,
             createSuggestedSegments: true
           }
         );
-      } else if (extractionType === 'hotel' && selectedSegmentId) {
+      } else if (extractionType === 'hotel') {
         await addHotelsToTrip({
           tripId: selectedTripId,
-          segmentId: selectedSegmentId,
-          hotels: extractedData.hotels,
-          bookingInfo: {
-            confirmationNumber: extractedData.confirmationNumber || '',
-            totalCost: extractedData.totalCost || 0,
-            currency: extractedData.currency || 'USD',
-            purchaseDate: extractedData.purchaseDate || ''
+          segmentId: selectedSegmentId || null, // Use manual selection if provided, otherwise auto-match
+          hotelData: extractedData,
+          options: {
+            autoMatch: !selectedSegmentId, // Only auto-match if no manual selection
+            minScore: 70,
+            createSuggestedSegments: !selectedSegmentId // Only create segment if no manual selection
+          }
+        });
+      } else if (extractionType === 'car-rental') {
+        await addCarRentalToTrip({
+          tripId: selectedTripId,
+          segmentId: selectedSegmentId || null, // Use manual selection if provided, otherwise auto-match
+          carRentalData: extractedData,
+          options: {
+            autoMatch: !selectedSegmentId, // Only auto-match if no manual selection
+            minScore: 70,
+            createSuggestedSegments: !selectedSegmentId // Only create segment if no manual selection
           }
         });
       }
@@ -248,7 +427,6 @@ export default function EmailExtractionPage() {
     <ApiTestLayout
       title="Email Extraction"
       description="Extract flight or hotel booking information from confirmation emails"
-      icon={<Mail className="h-6 w-6" />}
     >
       <div className="space-y-6">
         {/* Input */}
@@ -375,6 +553,8 @@ export default function EmailExtractionPage() {
                       setSelectedTripId(value);
                       if (extractionType === 'flight') {
                         previewClustering(value);
+                      } else if (extractionType === 'hotel') {
+                        previewHotelMatching(value);
                       }
                     }}
                   >
@@ -397,7 +577,7 @@ export default function EmailExtractionPage() {
                   </Select>
                 </div>
 
-                {/* Flight Clustering Preview */}
+                {/* Flight Assignment Preview */}
                 {extractionType === 'flight' && selectedTripId && (
                   <div className="space-y-4 mt-6">
                     {loadingClusters ? (
@@ -407,9 +587,9 @@ export default function EmailExtractionPage() {
                     ) : clusterPreview ? (
                       <>
                         <div>
-                          <h3 className="text-lg font-semibold mb-2">Flight Clustering Preview</h3>
+                          <h3 className="text-lg font-semibold mb-2">Flight Assignment Preview</h3>
                           <p className="text-sm text-muted-foreground mb-4">
-                            Your {clusterPreview.summary.totalFlights} flight(s) will be grouped into {clusterPreview.summary.totalClusters} reservation(s)
+                            Each of your {clusterPreview.summary.totalFlights} flight(s) will be added as a separate reservation
                           </p>
                         </div>
 
@@ -417,7 +597,7 @@ export default function EmailExtractionPage() {
                           <Card key={idx} className="border-2">
                             <CardHeader className="pb-3">
                               <CardTitle className="text-base">
-                                Cluster {idx + 1}: {cluster.flights.length} flight(s)
+                                Flight {idx + 1}: {cluster.flights[0].flightNumber}
                               </CardTitle>
                               <CardDescription>
                                 {cluster.startLocation} → {cluster.endLocation}
@@ -426,12 +606,10 @@ export default function EmailExtractionPage() {
                             <CardContent className="space-y-3">
                               {/* Flight details */}
                               <div className="space-y-2">
-                                {cluster.flights.map((flight: any, fIdx: number) => (
-                                  <div key={fIdx} className="text-sm">
-                                    <Badge variant="outline" className="mr-2">{flight.flightNumber}</Badge>
-                                    {flight.departureAirport} → {flight.arrivalAirport}
-                                  </div>
-                                ))}
+                                <div className="text-sm">
+                                  <Badge variant="outline" className="mr-2">{cluster.flights[0].flightNumber}</Badge>
+                                  {cluster.flights[0].departureAirport} → {cluster.flights[0].arrivalAirport}
+                                </div>
                               </div>
 
                               {/* Segment matching */}
@@ -439,7 +617,7 @@ export default function EmailExtractionPage() {
                                 <Alert>
                                   <CheckCircle className="h-4 w-4" />
                                   <AlertDescription>
-                                    ✓ Matched to segment: <strong>{cluster.matchedSegment.name}</strong> (confidence: {Math.round(cluster.matchedSegment.score * 100)}%)
+                                    ✓ Will be added to segment: <strong>{cluster.matchedSegment.name}</strong> (confidence: {Math.round(cluster.matchedSegment.score * 100)}%)
                                   </AlertDescription>
                                 </Alert>
                               ) : cluster.suggestedSegment ? (
@@ -466,7 +644,7 @@ export default function EmailExtractionPage() {
                         {/* Summary */}
                         <Alert>
                           <AlertDescription>
-                            <strong>Summary:</strong> {clusterPreview.summary.matchedClusters} will be added to existing segments
+                            <strong>Summary:</strong> {clusterPreview.summary.matchedClusters} flight(s) will be added to existing segments
                             {clusterPreview.summary.suggestedClusters > 0 && `, ${clusterPreview.summary.suggestedClusters} will create new segments`}
                           </AlertDescription>
                         </Alert>
@@ -520,29 +698,27 @@ export default function EmailExtractionPage() {
                   <InfoGrid
                     items={[
                       { label: "Confirmation Number", value: extractedData.confirmationNumber || "N/A" },
-                      { label: "Purchase Date", value: formatDate(extractedData.purchaseDate) },
+                      { label: "Guest Name", value: extractedData.guestName || "N/A" },
+                      { label: "Purchase Date", value: formatDate(extractedData.bookingDate) },
                       { label: "Total Cost", value: formatPrice(extractedData.totalCost, extractedData.currency) },
-                      { label: "Hotels", value: `${extractedData.hotels?.length || 0} booking(s)` },
                     ]}
                   />
                 </DetailSection>
 
-                {/* Hotels */}
-                {extractedData.hotels?.map((hotel: any, index: number) => (
-                  <DetailSection key={index} title={hotel.name || `Hotel ${index + 1}`}>
-                    <InfoGrid
-                      items={[
-                        { label: "Hotel Name", value: hotel.name || "N/A" },
-                        { label: "Location", value: hotel.address || "N/A" },
-                        { label: "Check-in", value: `${formatDate(hotel.checkInDate)} ${hotel.checkInTime || ''}` },
-                        { label: "Check-out", value: `${formatDate(hotel.checkOutDate)} ${hotel.checkOutTime || ''}` },
-                        { label: "Room Type", value: hotel.roomType || "N/A" },
-                        { label: "Guests", value: hotel.guests?.toString() || "N/A" },
-                        { label: "Nights", value: hotel.nights?.toString() || "N/A" },
-                      ]}
-                    />
-                  </DetailSection>
-                ))}
+                {/* Hotel Details */}
+                <DetailSection title={extractedData.hotelName || "Hotel"}>
+                  <InfoGrid
+                    items={[
+                      { label: "Hotel Name", value: extractedData.hotelName || "N/A" },
+                      { label: "Location", value: extractedData.address || "N/A" },
+                      { label: "Check-in", value: `${formatDate(extractedData.checkInDate)} ${extractedData.checkInTime || ''}` },
+                      { label: "Check-out", value: `${formatDate(extractedData.checkOutDate)} ${extractedData.checkOutTime || ''}` },
+                      { label: "Room Type", value: extractedData.roomType || "N/A" },
+                      { label: "Rooms", value: extractedData.numberOfRooms?.toString() || "1" },
+                      { label: "Guests", value: extractedData.numberOfGuests?.toString() || "N/A" },
+                    ]}
+                  />
+                </DetailSection>
               </CardContent>
             </Card>
 
@@ -551,13 +727,19 @@ export default function EmailExtractionPage() {
               <CardHeader>
                 <CardTitle>Add to Trip</CardTitle>
                 <CardDescription>
-                  Select a trip and segment to add these hotels as reservations
+                  Select a trip to add this hotel reservation
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="trip-select">Select Trip</Label>
-                  <Select value={selectedTripId} onValueChange={setSelectedTripId}>
+                  <Select 
+                    value={selectedTripId} 
+                    onValueChange={(value) => {
+                      setSelectedTripId(value);
+                      previewHotelMatching(value);
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a trip..." />
                     </SelectTrigger>
@@ -577,25 +759,92 @@ export default function EmailExtractionPage() {
                   </Select>
                 </div>
 
-                {selectedTrip && (
-                  <div className="space-y-2">
-                    <Label htmlFor="segment-select">Select Segment</Label>
-                    <Select value={selectedSegmentId} onValueChange={setSelectedSegmentId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a segment..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedTrip.segments.length === 0 ? (
-                          <SelectItem value="none" disabled>No segments found</SelectItem>
-                        ) : (
-                          selectedTrip.segments.map((segment) => (
-                            <SelectItem key={segment.id} value={segment.id}>
-                              {segment.name} - {segment.startTitle} → {segment.endTitle}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                {/* Hotel Assignment Preview */}
+                {selectedTripId && (
+                  <div className="space-y-4 mt-6">
+                    {loadingHotelPreview ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : hotelPreview ? (
+                      <>
+                        <div>
+                          <h3 className="text-lg font-semibold mb-2">Hotel Assignment Preview</h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Your hotel will be automatically assigned to the best matching segment
+                          </p>
+                        </div>
+
+                        <Card className="border-2">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">
+                              {hotelPreview.hotel.hotelName}
+                            </CardTitle>
+                            <CardDescription>
+                              {formatDate(hotelPreview.hotel.checkInDate)} → {formatDate(hotelPreview.hotel.checkOutDate)}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {/* Segment matching */}
+                            {hotelPreview.matchedSegment ? (
+                              <Alert>
+                                <CheckCircle className="h-4 w-4" />
+                                <AlertDescription>
+                                  ✓ Will be added to segment: <strong>{hotelPreview.matchedSegment.name}</strong> (confidence: {Math.round(hotelPreview.matchedSegment.score)}%)
+                                  <br />
+                                  <span className="text-xs text-muted-foreground mt-1 block">
+                                    You can change this later if needed
+                                  </span>
+                                </AlertDescription>
+                              </Alert>
+                            ) : hotelPreview.willCreateSegment ? (
+                              <>
+                                <Alert>
+                                  <AlertDescription>
+                                    ⭐ Will create new segment: <strong>{hotelPreview.suggestedSegmentName}</strong>
+                                    <br />
+                                    <span className="text-xs text-muted-foreground mt-1 block">
+                                      No existing segment matches this hotel stay
+                                    </span>
+                                  </AlertDescription>
+                                </Alert>
+                                
+                                {/* Manual segment selection */}
+                                <div className="space-y-2">
+                                  <Label htmlFor="manual-segment-hotel" className="text-sm">
+                                    Or choose an existing segment:
+                                  </Label>
+                                  <Select
+                                    value={selectedSegmentId}
+                                    onValueChange={(value) => setSelectedSegmentId(value)}
+                                  >
+                                    <SelectTrigger id="manual-segment-hotel">
+                                      <SelectValue placeholder="Select a segment (optional)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {trips.find(t => t.id === selectedTripId)?.segments.map((segment) => (
+                                        <SelectItem key={segment.id} value={segment.id}>
+                                          {segment.name} ({formatDate(segment.startTime || '')} - {formatDate(segment.endTime || '')})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <p className="text-xs text-muted-foreground">
+                                    Leave empty to create the suggested new segment
+                                  </p>
+                                </div>
+                              </>
+                            ) : (
+                              <Alert variant="destructive">
+                                <AlertDescription>
+                                  ⚠️ No matching segment found - manual assignment needed
+                                </AlertDescription>
+                              </Alert>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </>
+                    ) : null}
                   </div>
                 )}
 
@@ -604,7 +853,7 @@ export default function EmailExtractionPage() {
                   disabled={
                     addingToTrip || 
                     !selectedTripId || 
-                    (extractionType === 'hotel' && !selectedSegmentId)
+                    (extractionType === 'hotel' && !hotelPreview)
                   }
                   className="w-full"
                 >
@@ -617,6 +866,226 @@ export default function EmailExtractionPage() {
                     <>
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Add Hotel to Trip
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Car Rental Display */}
+        {extractedData && extractionType === 'car-rental' && (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Car className="h-5 w-5" />
+                  Car Rental Booking Details
+                </CardTitle>
+                <CardDescription>
+                  Extracted from confirmation email
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DetailSection title="Rental Information" defaultOpen>
+                  <InfoGrid
+                    items={[
+                      { label: "Company", value: extractedData.company },
+                      { label: "Confirmation", value: extractedData.confirmationNumber },
+                      { label: "Guest Name", value: extractedData.guestName },
+                      { label: "Vehicle Class", value: extractedData.vehicleClass || "Not specified" },
+                      { label: "Vehicle Model", value: extractedData.vehicleModel || "Not specified" },
+                    ]}
+                  />
+                </DetailSection>
+
+                <DetailSection title="Pickup Details">
+                  <InfoGrid
+                    items={[
+                      { label: "Location", value: extractedData.pickupLocation },
+                      { label: "Address", value: extractedData.pickupAddress || "Not provided" },
+                      { label: "Date", value: formatDate(extractedData.pickupDate) },
+                      { label: "Time", value: extractedData.pickupTime || "Not specified" },
+                      { label: "Flight", value: extractedData.pickupFlightNumber || "N/A" },
+                    ]}
+                  />
+                </DetailSection>
+
+                <DetailSection title="Return Details">
+                  <InfoGrid
+                    items={[
+                      { label: "Location", value: extractedData.returnLocation },
+                      { label: "Address", value: extractedData.returnAddress || "Not provided" },
+                      { label: "Date", value: formatDate(extractedData.returnDate) },
+                      { label: "Time", value: extractedData.returnTime || "Not specified" },
+                    ]}
+                  />
+                </DetailSection>
+
+                {extractedData.options && extractedData.options.length > 0 && (
+                  <DetailSection title="Options & Accessories">
+                    <div className="flex flex-wrap gap-2">
+                      {extractedData.options.map((option: string, idx: number) => (
+                        <Badge key={idx} variant="secondary">{option}</Badge>
+                      ))}
+                    </div>
+                  </DetailSection>
+                )}
+
+                <DetailSection title="Cost">
+                  <InfoGrid
+                    items={[
+                      { 
+                        label: "Total Cost", 
+                        value: extractedData.totalCost > 0 
+                          ? formatPrice(extractedData.totalCost, extractedData.currency) 
+                          : "Not provided" 
+                      },
+                      { 
+                        label: "One-way Charge", 
+                        value: extractedData.oneWayCharge > 0 
+                          ? formatPrice(extractedData.oneWayCharge, extractedData.currency) 
+                          : "N/A (Round-trip)" 
+                      },
+                    ]}
+                  />
+                </DetailSection>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Add to Trip</CardTitle>
+                <CardDescription>
+                  Choose a trip to add this car rental to
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="trip-select-car">Select Trip</Label>
+                  <Select
+                    value={selectedTripId}
+                    onValueChange={(value) => {
+                      setSelectedTripId(value);
+                      setAddSuccess(false);
+                      previewCarRentalMatching(value);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a trip..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {trips.map((trip) => (
+                        <SelectItem key={trip.id} value={trip.id}>
+                          {trip.title} ({formatDate(trip.startDate)} - {formatDate(trip.endDate)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedTripId && (
+                  <div className="border rounded-lg p-4 bg-muted/50">
+                    {loadingCarRentalPreview ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : carRentalPreview ? (
+                      <>
+                        <div>
+                          <h3 className="text-lg font-semibold mb-2">Car Rental Assignment Preview</h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Your car rental will be automatically assigned to the best matching segment
+                          </p>
+                        </div>
+
+                        <Card className="border-2">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">
+                              {carRentalPreview.carRental.company} - {carRentalPreview.carRental.vehicleClass || 'Car Rental'}
+                            </CardTitle>
+                            <CardDescription>
+                              {formatDate(carRentalPreview.carRental.pickupDate)} → {formatDate(carRentalPreview.carRental.returnDate)}
+                              {carRentalPreview.isOneWay && <Badge variant="outline" className="ml-2">One-way</Badge>}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {/* Segment matching */}
+                            {carRentalPreview.matchedSegment ? (
+                              <Alert>
+                                <CheckCircle className="h-4 w-4" />
+                                <AlertDescription>
+                                  ✓ Will be added to segment: <strong>{carRentalPreview.matchedSegment.name}</strong> (confidence: {Math.round(carRentalPreview.matchedSegment.score)}%)
+                                  <br />
+                                  <span className="text-xs text-muted-foreground mt-1 block">
+                                    You can change this later if needed
+                                  </span>
+                                </AlertDescription>
+                              </Alert>
+                            ) : carRentalPreview.willCreateSegment ? (
+                              <>
+                                <Alert>
+                                  <AlertDescription>
+                                    ⭐ Will create new segment: <strong>{carRentalPreview.suggestedSegmentName}</strong>
+                                    <br />
+                                    <span className="text-xs text-muted-foreground mt-1 block">
+                                      No existing segment matches this car rental
+                                    </span>
+                                  </AlertDescription>
+                                </Alert>
+                                
+                                {/* Manual segment selection */}
+                                <div className="space-y-2">
+                                  <Label htmlFor="manual-segment-car" className="text-sm">
+                                    Or choose an existing segment:
+                                  </Label>
+                                  <Select
+                                    value={selectedSegmentId}
+                                    onValueChange={(value) => setSelectedSegmentId(value)}
+                                  >
+                                    <SelectTrigger id="manual-segment-car">
+                                      <SelectValue placeholder="Select a segment (optional)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {trips.find(t => t.id === selectedTripId)?.segments.map((segment) => (
+                                        <SelectItem key={segment.id} value={segment.id}>
+                                          {segment.name} ({formatDate(segment.startTime || '')} - {formatDate(segment.endTime || '')})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <p className="text-xs text-muted-foreground">
+                                    Leave empty to create the suggested new segment
+                                  </p>
+                                </div>
+                              </>
+                            ) : null}
+                          </CardContent>
+                        </Card>
+                      </>
+                    ) : null}
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleAddToTrip}
+                  disabled={
+                    addingToTrip || 
+                    !selectedTripId || 
+                    (extractionType === 'car-rental' && !carRentalPreview)
+                  }
+                  className="w-full"
+                >
+                  {addingToTrip ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Adding to Trip...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Add Car Rental to Trip
                     </>
                   )}
                 </Button>

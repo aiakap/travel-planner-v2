@@ -294,9 +294,12 @@ export function ExpClient({
           console.log("✅ [Refetch] URL updated to:", `/exp?tripId=${newestTrip.id}`)
           
           // Fetch conversations for the new trip
-          console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)          let convResponse
+          console.log("🔄 [Refetch] Fetching conversations for trip:", newestTrip.id)
+          let convResponse
           try {
-            convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)          } catch (fetchError: any) {            throw fetchError
+            convResponse = await fetch(`/api/conversations?tripId=${newestTrip.id}`)
+          } catch (fetchError: any) {
+            throw fetchError
           }
           
           console.log("🔄 [Refetch] Conversations API response:", convResponse.status, convResponse.ok)

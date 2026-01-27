@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: Request,
-  { params }: { params: { entityType: string; entityId: string } }
+  { params }: { params: Promise<{ entityType: string; entityId: string }> }
 ) {
   try {
-    const { entityType, entityId } = params;
+    const { entityType, entityId } = await params;
 
     switch (entityType) {
       case "trip": {

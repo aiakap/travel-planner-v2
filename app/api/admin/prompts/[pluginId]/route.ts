@@ -4,10 +4,10 @@ import { BASE_EXP_PROMPT } from "@/app/exp/lib/prompts/base-exp-prompt";
 
 export async function GET(
   request: Request,
-  { params }: { params: { pluginId: string } }
+  { params }: { params: Promise<{ pluginId: string }> }
 ) {
   try {
-    const { pluginId } = params;
+    const { pluginId } = await params;
 
     // Handle base prompt specially
     if (pluginId === "base") {
@@ -54,10 +54,11 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { pluginId: string } }
+  { params }: { params: Promise<{ pluginId: string }> }
 ) {
   try {
     const body = await request.json();
+    const { pluginId } = await params;
 
     // Validate
     if (!body.name || !body.content) {
@@ -69,7 +70,7 @@ export async function PUT(
 
     // TODO: Persist to file system or database
     // For now, just acknowledge the update
-    console.log(`[Admin API] Would update plugin ${params.pluginId}:`, {
+    console.log(`[Admin API] Would update plugin ${pluginId}:`, {
       name: body.name,
       priority: body.priority,
       contentLength: body.content.length,
@@ -78,7 +79,7 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       message: "Plugin update acknowledged (not persisted - preview only)",
-      pluginId: params.pluginId,
+      pluginId: pluginId,
     });
   } catch (error) {
     console.error("[Admin API] Error updating plugin:", error);

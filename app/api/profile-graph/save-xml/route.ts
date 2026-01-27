@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       create: { userId: session.user.id, graphData: xmlData }
     });
 
-    console.log("✅ [Save XML API] XML saved successfully, length:", result.graphData.length);
+    console.log("✅ [Save XML API] XML saved successfully, length:", result.graphData?.length || 0);
 
     // Revalidate paths so other pages see the changes
     revalidatePath("/profile/graph");

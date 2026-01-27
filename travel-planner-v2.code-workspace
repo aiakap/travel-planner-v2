@@ -1,0 +1,33 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    // Panel and sidebar layout preferences
+    "workbench.panel.defaultLocation": "bottom",
+    "workbench.sideBar.location": "right",
+    "workbench.activityBar.visible": true,
+    
+    // Editor preferences
+    "workbench.editor.enablePreview": false,
+    "workbench.editor.showTabs": "multiple",
+    
+    // Layout persistence (inherited from global settings)
+    "window.restoreWindows": "all",
+    "workbench.editor.restoreViewState": true,
+    
+    // Project-specific settings can be added here
+    "files.exclude": {
+      "**/.git": true,
+      "**/node_modules": true,
+      "**/.next": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      // Add any extensions you want to recommend for this workspace
+    ]
+  }
+}

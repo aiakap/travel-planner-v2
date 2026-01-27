@@ -36,9 +36,9 @@ export function DateChangeModal({
   currentTripEnd,
   onApply,
 }: DateChangeModalProps) {
-  if (!isOpen) return null;
-
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+
+  if (!isOpen) return null;
 
   const isAdding = daysDelta > 0;
   const daysText = Math.abs(daysDelta) === 1 ? '1 day' : `${Math.abs(daysDelta)} days`;

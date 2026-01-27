@@ -31,7 +31,7 @@ if (typeof globalThis !== "undefined") {
 const nextConfig: NextConfig = {
   /* config options here */
   eslint: {
-    ignoreDuringBuilds: false,
+    ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: false,

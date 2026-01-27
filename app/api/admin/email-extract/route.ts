@@ -2,45 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { 
-  flightExtractionSchema, 
   validateFlightExtraction 
 } from "@/lib/schemas/flight-extraction-schema";
 import {
-  hotelExtractionSchema,
   validateHotelExtraction
 } from "@/lib/schemas/hotel-extraction-schema";
+import {
+  validateCarRentalExtraction
+} from "@/lib/schemas/car-rental-extraction-schema";
 import { 
-  validateOpenAISchema, 
-  isOpenAICompatible 
+  validateOpenAISchema 
 } from "@/lib/schemas/validate-openai-schema";
+import { buildExtractionPrompt } from "@/lib/email-extraction";
 
-type ReservationType = "flight" | "hotel";
-
-// Detect reservation type from email content
-function detectReservationType(emailText: string): ReservationType {
-  const lowerText = emailText.toLowerCase();
-  
-  // Keywords for hotel/accommodation
-  const hotelKeywords = [
-    'hotel', 'reservation', 'check-in', 'check-out', 'room', 'guest', 'nights',
-    'accommodation', 'booking', 'stay', 'resort', 'inn', 'lodge'
-  ];
-  
-  // Keywords for flights
-  const flightKeywords = [
-    'flight', 'airline', 'boarding', 'departure', 'arrival', 'terminal', 
-    'gate', 'seat', 'passenger', 'aircraft', 'aviation'
-  ];
-  
-  const hotelScore = hotelKeywords.filter(keyword => lowerText.includes(keyword)).length;
-  const flightScore = flightKeywords.filter(keyword => lowerText.includes(keyword)).length;
-  
-  // Log detection for debugging
-  console.log(`🔍 Type detection - Hotel score: ${hotelScore}, Flight score: ${flightScore}`);
-  
-  // Return type with higher score
-  return hotelScore > flightScore ? 'hotel' : 'flight';
-}
+type ReservationType = "flight" | "hotel" | "car-rental";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,13 +31,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Detect reservation type
-    const reservationType = detectReservationType(emailText);
-    console.log(`📋 Detected reservation type: ${reservationType}`);
+    // Build extraction prompt using plugin system
+    console.log(`🔌 Building extraction prompt with plugin system...`);
+    let extractionResult;
+    try {
+      extractionResult = buildExtractionPrompt({
+        emailText,
+        emailLength: emailText.length,
+        detectedPatterns: []
+      });
+    } catch (error: any) {
+      console.error('❌ Failed to build extraction prompt:', error.message);
+      return NextResponse.json(
+        { 
+          error: error.message || "Unable to determine reservation type from email content",
+          suggestion: "The email may not contain recognizable booking information. Please verify it's a confirmation email."
+        },
+        { status: 400 }
+      );
+    }
 
-    // Select appropriate schema and validator
-    const schema = reservationType === 'hotel' ? hotelExtractionSchema : flightExtractionSchema;
-    const validator = reservationType === 'hotel' ? validateHotelExtraction : validateFlightExtraction;
+    const { prompt, schema, extractionType, activePlugins, stats } = extractionResult;
+    
+    // Map plugin id to reservation type
+    let reservationType: ReservationType;
+    let validator: (data: unknown) => { success: boolean; data?: any; error?: string };
+    
+    if (extractionType === 'hotel-extraction') {
+      reservationType = 'hotel';
+      validator = validateHotelExtraction;
+    } else if (extractionType === 'car-rental-extraction') {
+      reservationType = 'car-rental';
+      validator = validateCarRentalExtraction;
+    } else {
+      reservationType = 'flight';
+      validator = validateFlightExtraction;
+    }
+    
+    console.log(`📋 Detected reservation type: ${reservationType}`);
+    console.log(`🔌 Active plugins: ${activePlugins.join(', ')}`);
+    console.log(`📊 Prompt stats: ${stats.totalLength} chars, ${stats.pluginCount} sections`);
     
     // Validate schema compatibility in development mode
     if (process.env.NODE_ENV === 'development') {
@@ -81,49 +89,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create type-specific prompt
-    const prompt = reservationType === 'hotel' 
-      ? `Extract hotel booking information from the following email.
-
-Parse all reservation details, guest information, and stay information.
-
-IMPORTANT DATE FORMAT:
-- All dates MUST be in ISO format: YYYY-MM-DD (e.g., "2026-01-28")
-- Convert any date format you see to ISO format
-- Examples: "Jan 28, 2026" → "2026-01-28", "January 28, 2026" → "2026-01-28", "Thu, Jan 29, 2026" → "2026-01-29"
-
-IMPORTANT TIME FORMAT:
-- Keep times in 12-hour format with AM/PM (e.g., "3:00 PM", "10:15 AM")
-- Do not convert to 24-hour format
-
-IMPORTANT: If any optional information is not available in the email, use an empty string ("") for text fields and 0 for numeric fields. Do NOT use null.
-
-Email content:
-${emailText}`
-      : `Extract flight booking information from the following email.
-
-Parse all flight segments, passenger details, and booking information.
-
-IMPORTANT DATE FORMAT:
-- All dates MUST be in ISO format: YYYY-MM-DD (e.g., "2026-01-28")
-- Convert any date format you see to ISO format
-- Examples: "Jan 28, 2026" → "2026-01-28", "January 28, 2026" → "2026-01-28", "Thu, Jan 29, 2026" → "2026-01-29"
-
-IMPORTANT TIME FORMAT:
-- Keep times in 12-hour format with AM/PM (e.g., "10:15 AM", "02:50 PM")
-- Do not convert to 24-hour format
-
-IMPORTANT: If any optional information is not available in the email, use an empty string ("") for text fields and 0 for numeric fields. Do NOT use null.
-
-Email content:
-${emailText}`;
-
     console.log(`🤖 Starting AI extraction with ${reservationType} schema...`);
     const startTime = Date.now();
     const result = await generateObject({
       model: openai("gpt-4o"),
       schema,
-      prompt,
+      prompt: `${prompt}\n\nEmail content:\n${emailText}`,
     });
     const duration = Date.now() - startTime;
     console.log(`⏱️ AI extraction completed in ${duration}ms`);
@@ -145,6 +116,8 @@ ${emailText}`;
     // Log success with type-specific message
     if (reservationType === 'hotel') {
       console.log(`✅ Successfully extracted hotel booking in ${duration}ms`);
+    } else if (reservationType === 'car-rental') {
+      console.log(`✅ Successfully extracted car rental booking in ${duration}ms`);
     } else {
       console.log(`✅ Successfully extracted ${(validation.data as any).flights.length} flight(s) in ${duration}ms`);
     }
@@ -157,6 +130,7 @@ ${emailText}`;
       metadata: {
         duration,
         ...(reservationType === 'flight' && { flightCount: (validation.data as any).flights.length }),
+        ...(reservationType === 'car-rental' && { company: (validation.data as any).company }),
       }
     });
   } catch (error: any) {

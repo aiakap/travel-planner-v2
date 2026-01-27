@@ -1,5 +1,7 @@
 "use server";
 
+import { getTimeZoneForLocation } from '@/lib/actions/timezone';
+
 const PLACES_API_BASE = "https://maps.googleapis.com/maps/api/place";
 
 function getApiKey(): string | undefined {
@@ -28,19 +30,23 @@ interface PlaceDetailsResult {
   };
 }
 
-/**
- * Autocomplete search for geographic locations (cities, regions, countries)
- * Returns results with guaranteed images
- */
-export async function searchPlacesAutocomplete(
-  query: string
-): Promise<Array<{
+export interface PlaceResult {
   name: string;
   image: string | null;
   placeId: string;
   lat: number;
   lng: number;
-}>> {
+  timezone?: string;
+  timezoneOffset?: number;
+}
+
+/**
+ * Autocomplete search for geographic locations (cities, regions, countries)
+ * Returns results with guaranteed images, coordinates, and timezone data
+ */
+export async function searchPlacesAutocomplete(
+  query: string
+): Promise<PlaceResult[]> {
   const GOOGLE_PLACES_API_KEY = getApiKey();
   if (!GOOGLE_PLACES_API_KEY) {
     console.error("Google Places API key not configured");
@@ -98,6 +104,12 @@ export async function searchPlacesAutocomplete(
           imageUrl = `https://source.unsplash.com/800x600/?${locationName},travel,landmark`;
         }
 
+        // Fetch timezone data for this location
+        const timezoneData = await getTimeZoneForLocation(
+          place.geometry.location.lat,
+          place.geometry.location.lng
+        );
+
         // Use clean name instead of formatted_address
         return {
           name: place.name, // Clean name like "Paris", "Tokyo", "California"
@@ -105,6 +117,8 @@ export async function searchPlacesAutocomplete(
           placeId: prediction.place_id,
           lat: place.geometry.location.lat,
           lng: place.geometry.location.lng,
+          timezone: timezoneData?.timeZoneId,
+          timezoneOffset: timezoneData ? (timezoneData.offset + timezoneData.dstOffset) / 3600 : undefined,
         };
       } catch (error) {
         console.error(`Error fetching details for place ${prediction.place_id}:`, error);

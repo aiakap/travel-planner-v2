@@ -196,6 +196,6 @@ Keep responses brief and natural.`,
   },
 
   cardStyle: {
-    defaultStyle: "standard",
+    defaultStyle: "card",
   },
 };

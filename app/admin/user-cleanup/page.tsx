@@ -142,7 +142,7 @@ export default function UserCleanupPage() {
     confirmAction(
       "Delete Profile",
       `Are you sure you want to delete the profile for ${selectedUser.email}? This will remove personal information but keep trips and chat history.`,
-      () => deleteUserProfile(selectedUser.id)
+      async () => { await deleteUserProfile(selectedUser.id); }
     );
   };
 
@@ -151,7 +151,7 @@ export default function UserCleanupPage() {
     confirmAction(
       "Delete Profile Graph",
       `Are you sure you want to delete the profile graph for ${selectedUser.email}? This will remove all relational profile data.`,
-      () => deleteUserProfileGraph(selectedUser.id)
+      async () => { await deleteUserProfileGraph(selectedUser.id); }
     );
   };
 
@@ -182,7 +182,7 @@ export default function UserCleanupPage() {
     confirmAction(
       "Delete ALL Trips",
       `Are you sure you want to delete ALL ${selectedUser._count.trips} trips for ${selectedUser.email}? This will delete all segments, reservations, and associated chats. This action cannot be undone.`,
-      () => deleteAllUserTrips(selectedUser.id)
+      async () => { await deleteAllUserTrips(selectedUser.id); }
     );
   };
 
@@ -191,7 +191,7 @@ export default function UserCleanupPage() {
     confirmAction(
       "NUCLEAR OPTION: Delete ALL User Data",
       `⚠️ EXTREME CAUTION: This will DELETE EVERYTHING for ${selectedUser.email}:\n- Profile & Profile Graph\n- All ${selectedUser._count.trips} trips\n- All segments & reservations\n- All ${selectedUser._count.conversations} conversations\n- All contacts, hobbies, and preferences\n\nTHIS CANNOT BE UNDONE!`,
-      () => deleteAllUserData(selectedUser.id)
+      async () => { await deleteAllUserData(selectedUser.id); }
     );
   };
 

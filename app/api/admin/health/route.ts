@@ -38,12 +38,30 @@ export async function GET() {
       hasAppId: !!process.env.UPLOADTHING_APP_ID,
     };
 
+    const weather = {
+      configured: !!process.env.OPENWEATHER_API_KEY,
+      hasKey: !!process.env.OPENWEATHER_API_KEY,
+    };
+
+    const yelp = {
+      configured: !!process.env.YELP_API_KEY,
+      hasKey: !!process.env.YELP_API_KEY,
+    };
+
+    const viator = {
+      configured: !!process.env.VIATOR_API_KEY,
+      hasKey: !!process.env.VIATOR_API_KEY,
+    };
+
     return NextResponse.json({
       googleMaps,
       amadeus,
       openai,
       imagen,
       uploadthing,
+      weather,
+      yelp,
+      viator,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

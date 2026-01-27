@@ -23,20 +23,29 @@ interface PluginData {
   description: string;
 }
 
-export default function PluginEditorPage({ params }: { params: { pluginId: string } }) {
+export default function PluginEditorPage({ params }: { params: Promise<{ pluginId: string }> }) {
   const router = useRouter();
   const [plugin, setPlugin] = useState<PluginData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [pluginId, setPluginId] = useState<string>("");
 
   useEffect(() => {
-    fetchPlugin();
-  }, [params.pluginId]);
+    params.then(p => {
+      setPluginId(p.pluginId);
+    });
+  }, [params]);
+
+  useEffect(() => {
+    if (pluginId) {
+      fetchPlugin();
+    }
+  }, [pluginId]);
 
   const fetchPlugin = async () => {
     try {
-      const response = await fetch(`/api/admin/prompts/${params.pluginId}`);
+      const response = await fetch(`/api/admin/prompts/${pluginId}`);
       if (response.ok) {
         const data = await response.json();
         setPlugin(data);
@@ -55,7 +64,7 @@ export default function PluginEditorPage({ params }: { params: { pluginId: strin
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/admin/prompts/${params.pluginId}`, {
+      const response = await fetch(`/api/admin/prompts/${pluginId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

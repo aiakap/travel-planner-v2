@@ -1,6 +1,6 @@
 "use client";
 
-import { ExtractionStatus } from "@prisma/client";
+import { ExtractionStatus } from "@/app/generated/prisma/client";
 import { QueueItem } from "@/lib/services/extraction-queue-manager";
 import {
   Table,

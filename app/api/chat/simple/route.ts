@@ -442,7 +442,6 @@ export async function POST(req: Request) {
       
       stage1Output = await generatePlaceSuggestions(fullQuery, undefined, undefined, customPrompt);
       console.log(`✅ Stage 1 complete (${Date.now() - stage1Start}ms)`);
-      console.log(`   Generated ${stage1Output.places.length} place suggestions`);
       console.log(`   Text length: ${stage1Output.text.length} chars`);
       
       // Validate AI response structure

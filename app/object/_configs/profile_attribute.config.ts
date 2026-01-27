@@ -12,7 +12,7 @@ import { RelatedSuggestionsCard } from "../_cards/related-suggestions-card";
 import { TopicChoiceCard } from "../_cards/topic-choice-card";
 import { fetchProfileData } from "@/lib/object/data-fetchers/profile";
 import { PROFILE_TOPICS } from "./profile-topics";
-import { categorizeItem, validateCategory } from "@/lib/object/category-processor";
+import { categorizeItem, validateCategorySlug } from "@/lib/object/category-processor";
 import { PROFILE_PROCESSOR_CONFIG } from "@/lib/object/processors/profile-category-rules";
 
 // Build topic list for AI prompt
@@ -258,28 +258,30 @@ Keep responses brief and natural.`,
         matchedKeyword: categorized.matchedKeyword
       });
       
+      // Split categorySlug into category and subcategory
+      const [category, subcategory] = categorized.categorySlug.split('/');
+      
       return {
         value: categorized.value,
-        categorySlug: categorized.categorySlug,
+        category: category || 'other',
+        subcategory: subcategory || 'general',
         metadata: {
           confidence: categorized.confidence,
           matchedKeyword: categorized.matchedKeyword,
-          autoProcessed: true
+          autoProcessed: true,
+          originalCategorySlug: categorized.categorySlug
         }
       };
     },
     
-    validateItem: async (item) => {
+    validateItem: (item) => {
       if (!item.value || item.value.trim() === '') {
         return "Value cannot be empty";
       }
       
-      // Validate category slug exists in database
-      const { validateCategorySlug } = await import("@/lib/object/category-processor");
-      const isValid = await validateCategorySlug(item.categorySlug);
-      
-      if (!isValid) {
-        return `Invalid category slug: ${item.categorySlug}`;
+      // Basic validation - category and subcategory should exist
+      if (!item.category || !item.subcategory) {
+        return "Category and subcategory are required";
       }
       
       return true;
@@ -300,8 +302,17 @@ Keep responses brief and natural.`,
   
   autoActions: {
     autoActionCards: ["auto_add"],
-    onAutoAction: async (cards, onDataUpdate, userId) => {
+    onAutoAction: async (cards, onDataUpdate) => {
       console.log('🔵 [Profile Config] onAutoAction called with', cards.length, 'cards');
+      
+      // Get userId from session
+      const { auth } = await import("@/auth");
+      const session = await auth();
+      if (!session?.user?.id) {
+        console.error('❌ [Profile Config] No user session');
+        return;
+      }
+      const userId = session.user.id;
       
       for (const card of cards) {
         if (card.type === "auto_add") {
@@ -309,7 +320,8 @@ Keep responses brief and natural.`,
             // Use helper to transform item
             let transformed: {
               value: string;
-              categorySlug: string;
+              category: string;
+              subcategory: string;
               metadata?: Record<string, any>;
             };
             
@@ -341,12 +353,15 @@ Keep responses brief and natural.`,
             
             console.log('📤 [Profile Config] Calling upsert-relational API for:', transformed);
             
+            // Convert category/subcategory to categorySlug
+            const categorySlug = `${transformed.category}/${transformed.subcategory}`;
+            
             const response = await fetch("/api/object/profile/upsert-relational", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 value: transformed.value,
-                categorySlug: transformed.categorySlug,
+                categorySlug: categorySlug,
                 metadata: {
                   ...(transformed.metadata || {}),
                   addedAt: new Date().toISOString(),
@@ -364,7 +379,8 @@ Keep responses brief and natural.`,
                 // Trigger a data refresh by calling the data fetcher
                 const { fetchProfileData } = await import("@/lib/object/data-fetchers/profile");
                 const freshData = await fetchProfileData(userId);
-                onDataUpdate(freshData);
+                // onDataUpdate expects graphData/xmlData format
+                onDataUpdate({ graphData: freshData });
               }
             } else {
               console.error('❌ [Profile Config] Upsert failed:', response.status);

@@ -435,9 +435,9 @@ export function ReservationDetailModal({
                     <label className="text-xs font-medium text-muted-foreground">Start Date</label>
                     <Input
                       type="date"
-                      value={formatDateForInput(editedReservation.startTime)}
+                      value={formatDateForInput(editedReservation.startTime?.toISOString())}
                       onChange={(e) => {
-                        const time = formatTimeForInput(editedReservation.startTime) || "12:00"
+                        const time = formatTimeForInput(editedReservation.startTime?.toISOString()) || "12:00"
                         updateField('startTime', combineDateAndTime(e.target.value, time))
                       }}
                       className="mt-1"
@@ -447,9 +447,9 @@ export function ReservationDetailModal({
                     <label className="text-xs font-medium text-muted-foreground">Start Time</label>
                     <Input
                       type="time"
-                      value={formatTimeForInput(editedReservation.startTime)}
+                      value={formatTimeForInput(editedReservation.startTime?.toISOString())}
                       onChange={(e) => {
-                        const date = formatDateForInput(editedReservation.startTime) || new Date().toISOString().split('T')[0]
+                        const date = formatDateForInput(editedReservation.startTime?.toISOString()) || new Date().toISOString().split('T')[0]
                         updateField('startTime', combineDateAndTime(date, e.target.value))
                       }}
                       className="mt-1"
@@ -461,9 +461,9 @@ export function ReservationDetailModal({
                     <label className="text-xs font-medium text-muted-foreground">End Date</label>
                     <Input
                       type="date"
-                      value={formatDateForInput(editedReservation.endTime)}
+                      value={formatDateForInput(editedReservation.endTime?.toISOString())}
                       onChange={(e) => {
-                        const time = formatTimeForInput(editedReservation.endTime) || "12:00"
+                        const time = formatTimeForInput(editedReservation.endTime?.toISOString()) || "12:00"
                         updateField('endTime', combineDateAndTime(e.target.value, time))
                       }}
                       className="mt-1"
@@ -473,9 +473,9 @@ export function ReservationDetailModal({
                     <label className="text-xs font-medium text-muted-foreground">End Time</label>
                     <Input
                       type="time"
-                      value={formatTimeForInput(editedReservation.endTime)}
+                      value={formatTimeForInput(editedReservation.endTime?.toISOString())}
                       onChange={(e) => {
-                        const date = formatDateForInput(editedReservation.endTime) || new Date().toISOString().split('T')[0]
+                        const date = formatDateForInput(editedReservation.endTime?.toISOString()) || new Date().toISOString().split('T')[0]
                         updateField('endTime', combineDateAndTime(date, e.target.value))
                       }}
                       className="mt-1"
@@ -541,8 +541,8 @@ export function ReservationDetailModal({
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Website</label>
                 <Input
-                  value={editedReservation.website || ""}
-                  onChange={(e) => setEditedReservation({ ...editedReservation, website: e.target.value })}
+                  value={editedReservation.url || ""}
+                  onChange={(e) => setEditedReservation({ ...editedReservation, url: e.target.value })}
                   className="mt-1"
                 />
               </div>
@@ -717,7 +717,7 @@ export function ReservationDetailModal({
               {/* Contact Options */}
               {(selectedReservation.reservation.contactPhone ||
                 selectedReservation.reservation.contactEmail ||
-                selectedReservation.reservation.website) && (
+                selectedReservation.reservation.url) && (
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase">Contact</h3>
                   <div className="flex flex-wrap gap-2">
@@ -744,7 +744,7 @@ export function ReservationDetailModal({
                         Email
                       </Button>
                     )}
-                    {selectedReservation.reservation.website && (
+                    {selectedReservation.reservation.url && (
                       <Button variant="outline" size="sm" className="text-xs bg-transparent" title="Visit website">
                         <Globe className="h-3 w-3 mr-1" />
                         Website
@@ -789,7 +789,7 @@ export function ReservationDetailModal({
           ) : (
             <>
               <div className="flex gap-2">
-                {selectedReservation.reservation.status !== "confirmed" && onConfirm && (
+                {selectedReservation.reservation.reservationStatus.name !== "confirmed" && onConfirm && (
                   <Button
                     variant="outline"
                     size="sm"

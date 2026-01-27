@@ -1,12 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { searchPlacesAutocomplete } from '../actions/google-places-autocomplete';
+import { searchPlacesAutocomplete, type PlaceResult } from '../actions/google-places-autocomplete';
+
+export interface PlaceData {
+  name: string;
+  image: string | null;
+  placeId: string;
+  lat: number;
+  lng: number;
+  timezone?: string;
+  timezoneOffset?: number;
+}
 
 interface PlaceAutocompleteLiveProps {
   value: string;
   onChange: (value: string, imageUrl: string | null) => void;
-  onPlaceSelected?: (value: string, imageUrl: string | null) => void;
+  onPlaceSelected?: (value: string, imageUrl: string | null, placeData?: PlaceData) => void;
   placeholder: string;
   icon?: React.ComponentType<{ size?: number; className?: string }>;
   className?: string;
@@ -21,13 +31,7 @@ export function PlaceAutocompleteLive({
   className 
 }: PlaceAutocompleteLiveProps) {
   const [query, setQuery] = useState(value || '');
-  const [results, setResults] = useState<Array<{
-    name: string;
-    image: string | null;
-    placeId: string;
-    lat: number;
-    lng: number;
-  }>>([]);
+  const [results, setResults] = useState<PlaceResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,11 +85,22 @@ export function PlaceAutocompleteLive({
     onChange(val, null);
   };
 
-  const handleSelect = (place: typeof results[0]) => {
+  const handleSelect = (place: PlaceResult) => {
     setQuery(place.name);
     setIsOpen(false);
     onChange(place.name, place.image);
-    onPlaceSelected?.(place.name, place.image);
+    
+    // Pass complete place data to onPlaceSelected
+    const placeData: PlaceData = {
+      name: place.name,
+      image: place.image,
+      placeId: place.placeId,
+      lat: place.lat,
+      lng: place.lng,
+      timezone: place.timezone,
+      timezoneOffset: place.timezoneOffset
+    };
+    onPlaceSelected?.(place.name, place.image, placeData);
   };
 
   return (

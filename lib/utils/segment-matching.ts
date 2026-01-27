@@ -1,11 +1,13 @@
 /**
  * Segment Matching Utility
  * 
- * Intelligently matches flight clusters to existing trip segments
+ * Intelligently matches flight clusters and hotel reservations to existing trip segments
  * based on date overlap, location matching, and segment type.
  */
 
 import { FlightCluster } from './flight-clustering';
+import { HotelCluster } from './hotel-clustering';
+import { CarRentalCluster } from './car-rental-clustering';
 
 export interface Segment {
   id: string;
@@ -232,4 +234,322 @@ export function matchClustersToSegments(
   return clusters.map(cluster => 
     findBestSegmentForCluster(cluster, segments, minScore)
   );
+}
+
+/**
+ * Calculate date overlap score for hotels (0-50 points)
+ * Hotels get higher weight on dates since they're stationary
+ */
+function calculateHotelDateOverlapScore(
+  hotel: HotelCluster,
+  segment: Segment
+): number {
+  if (!segment.startTime || !segment.endTime) {
+    return 0; // No dates on segment
+  }
+
+  const segmentStart = new Date(segment.startTime);
+  const segmentEnd = new Date(segment.endTime);
+  const hotelStart = hotel.startTime;
+  const hotelEnd = hotel.endTime;
+
+  // Check if hotel stay is completely within segment
+  if (hotelStart >= segmentStart && hotelEnd <= segmentEnd) {
+    return 50; // Perfect date overlap
+  }
+
+  // Check if there's any overlap
+  const hasOverlap = (
+    (hotelStart >= segmentStart && hotelStart <= segmentEnd) ||
+    (hotelEnd >= segmentStart && hotelEnd <= segmentEnd) ||
+    (hotelStart <= segmentStart && hotelEnd >= segmentEnd)
+  );
+
+  if (hasOverlap) {
+    return 35; // Partial overlap
+  }
+
+  // Check if hotel is within 24 hours of segment
+  const dayInMs = 24 * 60 * 60 * 1000;
+  const beforeSegment = segmentStart.getTime() - hotelEnd.getTime();
+  const afterSegment = hotelStart.getTime() - segmentEnd.getTime();
+
+  if (beforeSegment > 0 && beforeSegment <= dayInMs) {
+    return 20; // Within 24h before segment
+  }
+
+  if (afterSegment > 0 && afterSegment <= dayInMs) {
+    return 20; // Within 24h after segment
+  }
+
+  return 0; // No meaningful date relationship
+}
+
+/**
+ * Calculate location match score for hotels (0-30 points)
+ * Hotels are stationary, so we check if hotel location matches segment location
+ */
+function calculateHotelLocationScore(
+  hotel: HotelCluster,
+  segment: Segment
+): number {
+  let score = 0;
+
+  // Check if hotel location matches segment start or end location
+  if (locationsMatch(hotel.location, segment.startTitle)) {
+    score += 15;
+  }
+
+  if (locationsMatch(hotel.location, segment.endTitle)) {
+    score += 15;
+  }
+
+  return score;
+}
+
+/**
+ * Calculate segment type score for hotels (0-20 points)
+ * Prefers "Stay" segment types
+ */
+function calculateHotelSegmentTypeScore(segment: Segment): number {
+  const segmentTypeName = segment.segmentType?.name?.toLowerCase() || '';
+  
+  const stayTypes = ['stay', 'accommodation', 'lodging'];
+  
+  if (stayTypes.some(type => segmentTypeName.includes(type))) {
+    return 20;
+  }
+
+  return 10; // Generic segment
+}
+
+/**
+ * Find the best matching segment for a hotel reservation
+ * 
+ * Scoring:
+ * - Date overlap: 0-50 points (higher weight than flights)
+ * - Location match: 0-30 points
+ * - Segment type: 0-20 points
+ * 
+ * Threshold: Score >= 70 to match (higher than flights due to higher date weight)
+ * 
+ * @param hotel Hotel cluster to match
+ * @param segments Available segments
+ * @param minScore Minimum score threshold (default: 70)
+ * @returns Best matching segment or null if no good match
+ */
+export function findBestSegmentForHotel(
+  hotel: HotelCluster,
+  segments: Segment[],
+  minScore: number = 70
+): SegmentMatch | null {
+  if (segments.length === 0) {
+    return null;
+  }
+
+  let bestMatch: SegmentMatch | null = null;
+
+  for (const segment of segments) {
+    const dateScore = calculateHotelDateOverlapScore(hotel, segment);
+    const locationScore = calculateHotelLocationScore(hotel, segment);
+    const typeScore = calculateHotelSegmentTypeScore(segment);
+
+    const totalScore = dateScore + locationScore + typeScore;
+
+    // Build reason string
+    const reasons: string[] = [];
+    if (dateScore >= 35) reasons.push('dates overlap');
+    if (locationScore >= 20) reasons.push('location matches');
+    if (locationScore >= 10 && locationScore < 20) reasons.push('partial location match');
+    if (typeScore === 20) reasons.push('stay segment type');
+
+    const match: SegmentMatch = {
+      segmentId: segment.id,
+      segmentName: segment.name,
+      score: totalScore,
+      reason: reasons.length > 0 ? reasons.join(', ') : 'basic match',
+      breakdown: {
+        dateOverlap: dateScore,
+        locationMatch: locationScore,
+        segmentType: typeScore,
+      },
+    };
+
+    // Keep track of best match
+    if (!bestMatch || totalScore > bestMatch.score) {
+      bestMatch = match;
+    }
+  }
+
+  // Only return if score meets threshold
+  if (bestMatch && bestMatch.score >= minScore) {
+    return bestMatch;
+  }
+
+  return null;
+}
+
+/**
+ * Calculate date overlap score for car rentals (0-50 points)
+ * Car rentals get higher weight on dates since they span the entire rental period
+ */
+function calculateCarRentalDateOverlapScore(
+  carRental: CarRentalCluster,
+  segment: Segment
+): number {
+  if (!segment.startTime || !segment.endTime) {
+    return 0; // No dates on segment
+  }
+
+  const segmentStart = new Date(segment.startTime);
+  const segmentEnd = new Date(segment.endTime);
+  const rentalStart = carRental.pickupDate;
+  const rentalEnd = carRental.returnDate;
+
+  // Check if rental period is completely within segment
+  if (rentalStart >= segmentStart && rentalEnd <= segmentEnd) {
+    return 50; // Perfect date overlap
+  }
+
+  // Check if there's any overlap
+  const hasOverlap = (
+    (rentalStart >= segmentStart && rentalStart <= segmentEnd) ||
+    (rentalEnd >= segmentStart && rentalEnd <= segmentEnd) ||
+    (rentalStart <= segmentStart && rentalEnd >= segmentEnd)
+  );
+
+  if (hasOverlap) {
+    return 35; // Partial overlap
+  }
+
+  // Check if rental is within 24 hours of segment
+  const dayInMs = 24 * 60 * 60 * 1000;
+  const beforeSegment = segmentStart.getTime() - rentalEnd.getTime();
+  const afterSegment = rentalStart.getTime() - segmentEnd.getTime();
+
+  if (beforeSegment > 0 && beforeSegment <= dayInMs) {
+    return 20; // Within 24h before segment
+  }
+
+  if (afterSegment > 0 && afterSegment <= dayInMs) {
+    return 20; // Within 24h after segment
+  }
+
+  return 0; // No meaningful date relationship
+}
+
+/**
+ * Calculate location match score for car rentals (0-30 points)
+ * Check if pickup/return locations match segment start/end locations
+ */
+function calculateCarRentalLocationScore(
+  carRental: CarRentalCluster,
+  segment: Segment
+): number {
+  let score = 0;
+
+  // Check pickup location matches segment start (15 points)
+  if (locationsMatch(carRental.pickupLocation, segment.startTitle)) {
+    score += 15;
+  }
+
+  // Check return location matches segment end (15 points)
+  if (locationsMatch(carRental.returnLocation, segment.endTitle)) {
+    score += 15;
+  }
+
+  return score;
+}
+
+/**
+ * Calculate segment type score for car rentals (0-20 points)
+ * Prefers "Drive" or "Travel" segment types
+ */
+function calculateCarRentalSegmentTypeScore(segment: Segment): number {
+  const segmentTypeName = segment.segmentType?.name?.toLowerCase() || '';
+  
+  const driveTypes = ['drive', 'road trip', 'car'];
+  const travelTypes = ['travel', 'transport', 'transit'];
+  
+  if (driveTypes.some(type => segmentTypeName.includes(type))) {
+    return 20; // Perfect match for drive segments
+  }
+  
+  if (travelTypes.some(type => segmentTypeName.includes(type))) {
+    return 15; // Good match for travel segments
+  }
+  
+  // Generic segment gets some points
+  return 10;
+}
+
+/**
+ * Find the best matching segment for a car rental
+ * 
+ * Scoring:
+ * - Date overlap: 0-50 points (rental period vs segment dates)
+ * - Location match: 0-30 points (pickup/return vs segment start/end)
+ * - Segment type: 0-20 points (prefers "Drive" or "Travel" types)
+ * 
+ * Total: 0-100 points
+ * Threshold: 70 points for high confidence match
+ */
+export function findBestSegmentForCarRental(
+  carRental: CarRentalCluster,
+  segments: Segment[],
+  minScore: number = 70
+): SegmentMatch | null {
+  if (segments.length === 0) {
+    return null;
+  }
+
+  let bestMatch: SegmentMatch | null = null;
+
+  for (const segment of segments) {
+    const dateScore = calculateCarRentalDateOverlapScore(carRental, segment);
+    const locationScore = calculateCarRentalLocationScore(carRental, segment);
+    const typeScore = calculateCarRentalSegmentTypeScore(segment);
+
+    const totalScore = dateScore + locationScore + typeScore;
+
+    // Build reason string
+    const reasons: string[] = [];
+    if (dateScore >= 35) reasons.push('dates overlap');
+    if (locationScore >= 20) reasons.push('locations match');
+    if (locationScore >= 10 && locationScore < 20) reasons.push('partial location match');
+    if (typeScore === 20) reasons.push('drive segment type');
+
+    const match: SegmentMatch = {
+      segmentId: segment.id,
+      segmentName: segment.name,
+      score: totalScore,
+      reason: reasons.length > 0 ? reasons.join(', ') : 'basic match',
+      breakdown: {
+        dateOverlap: dateScore,
+        locationMatch: locationScore,
+        segmentType: typeScore
+      }
+    };
+
+    // Keep track of best match
+    if (!bestMatch || totalScore > bestMatch.score) {
+      bestMatch = match;
+    }
+  }
+
+  // Only return if score meets threshold
+  if (bestMatch && bestMatch.score >= minScore) {
+    return bestMatch;
+  }
+
+  return null;
+}
+
+/**
+ * Extended interface for car rental matches
+ */
+export interface CarRentalMatch extends SegmentMatch {
+  isOneWay: boolean;
+  pickupLocation: string;
+  returnLocation: string;
 }

@@ -4,16 +4,18 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await params;
+
   const conversation = await prisma.chatConversation.findFirst({
     where: {
-      id: params.id,
+      id: id,
       userId: session.user.id,
     },
     include: {

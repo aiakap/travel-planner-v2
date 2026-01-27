@@ -2,6 +2,10 @@ import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import type { UploadedFileData } from "uploadthing/types";
 
+// Image provider configuration
+type ImageProvider = 'dalle' | 'imagen';
+const IMAGE_PROVIDER: ImageProvider = (process.env.IMAGE_PROVIDER as ImageProvider) || 'imagen';
+
 // Type definitions
 interface ImagePrompt {
   id: string;
@@ -49,12 +53,17 @@ export async function generateAndUploadImageImmediate(
   // 2. Build complete prompt with all entity data
   const fullPrompt = buildContextualPrompt(selectedPrompt, entity, entityType);
 
-  // 3. Generate image with DALL-E (returns URL directly)
-  const imageUrl = await generateImageWithDALLE(fullPrompt);
+  // 3. Generate image based on configured provider
+  let imageSource: string;
+  if (IMAGE_PROVIDER === 'imagen') {
+    imageSource = await generateImageWithImagen(fullPrompt);
+  } else {
+    imageSource = await generateImageWithDALLE(fullPrompt);
+  }
 
-  // 4. Download and upload to UploadThing for permanent storage
+  // 4. Upload to UploadThing for permanent storage
   const permanentUrl = await uploadImageToStorage(
-    imageUrl,
+    imageSource,
     `${entityType}-${entity.id || Date.now()}`
   );
 
@@ -186,16 +195,46 @@ export function buildContextualPrompt(
 
   if (entityType === "trip") {
     const segments = entity.segments || [];
+    const allLocations = segments.map((s: any) => s.startTitle).filter(Boolean);
+    const uniqueLocations = [...new Set(allLocations)];
     const firstSegment = segments[0];
+    const lastSegment = segments[segments.length - 1];
+    
+    // Build chapter summary
+    const chapterSummary = segments.map((s: any, i: number) => 
+      `Chapter ${i + 1}: ${s.name} (${s.days} days in ${s.startTitle || 'TBD'})`
+    ).join("; ");
+    
     travelContext = `
-Destination: ${entity.title}
+TRIP OVERVIEW:
+Title: ${entity.title}
 Description: ${entity.description}
 Travel Dates: ${formatDate(entity.startDate)} to ${formatDate(entity.endDate)}
 Season: ${getSeason(entity.startDate)}
 Duration: ${getDurationInDays(entity.startDate, entity.endDate)} days
-${segments.length > 0 ? `Key Locations: ${segments.map((s: any) => `${s.startTitle} → ${s.endTitle}`).join(", ")}` : ""}
-${firstSegment ? `Primary Coordinates: ${firstSegment.startLat}, ${firstSegment.startLng}` : ""}
-${firstSegment ? `Geographic Region: ${getRegionFromCoordinates(firstSegment.startLat, firstSegment.startLng)}` : ""}`;
+Number of Chapters: ${segments.length}
+
+JOURNEY STRUCTURE:
+${chapterSummary}
+
+LOCATIONS VISITED:
+Primary Destinations: ${uniqueLocations.slice(0, 5).join(", ")}${uniqueLocations.length > 5 ? ` and ${uniqueLocations.length - 5} more` : ""}
+Journey Type: ${firstSegment?.startTitle === lastSegment?.endTitle ? "Round-trip" : "One-way journey"}
+Starting Point: ${firstSegment?.startTitle || "Unknown"}
+Ending Point: ${lastSegment?.endTitle || "Unknown"}
+
+GEOGRAPHIC CONTEXT:
+Primary Region: ${firstSegment ? getRegionFromCoordinates(firstSegment.startLat, firstSegment.startLng) : "Unknown"}
+Coordinates: ${firstSegment ? `${firstSegment.startLat}, ${firstSegment.startLng}` : "N/A"}
+${segments.length > 1 ? `Multi-destination journey covering ${segments.length} locations` : "Single-destination trip"}
+
+TRIP CHARACTER:
+${segments.some((s: any) => s.segmentType?.name === "STAY") ? "Includes extended stays" : ""}
+${segments.some((s: any) => s.segmentType?.name === "TRAVEL") ? "Includes travel segments" : ""}
+${segments.some((s: any) => s.segmentType?.name === "TOUR") ? "Includes guided tours" : ""}
+${segments.some((s: any) => s.segmentType?.name === "ROAD_TRIP") ? "Includes road trip adventures" : ""}
+${segments.some((s: any) => s.segmentType?.name === "RETREAT") ? "Includes retreat experiences" : ""}
+`;
   } else if (entityType === "segment") {
     travelContext = `
 Journey Name: ${entity.name}
@@ -232,6 +271,36 @@ ${entity.segment ? `Regional Context: ${getRegionFromCoordinates(entity.segment.
   );
 }
 
+// Generate image using Google Vertex AI Imagen (exported for queue processor)
+export async function generateImageWithImagen(prompt: string): Promise<string> {
+  const { getVertexAIClient } = await import("@/image-generator/lib/vertex-ai-client");
+  
+  // Add explicit NO TEXT instruction
+  const finalPrompt = `${prompt}
+
+CRITICAL: Do not include any text, words, letters, labels, signs, or typography in the image. No readable characters of any kind.`;
+
+  const client = getVertexAIClient();
+  const filename = `trip-${Date.now()}.png`;
+  
+  const result = await client.generateImage(
+    {
+      prompt: finalPrompt,
+      aspectRatio: "9:16", // Vertical format for mobile
+      addWatermark: false,
+      safetySetting: "block_few"
+    },
+    filename
+  );
+
+  if (!result.success || !result.imagePath) {
+    throw new Error(result.error?.message || "Image generation failed");
+  }
+
+  // Return the local file path for upload
+  return result.imagePath;
+}
+
 // Generate image using OpenAI DALL-E 3 (exported for queue processor)
 export async function generateImageWithDALLE(prompt: string): Promise<string> {
   const openai = new OpenAI({
@@ -261,15 +330,25 @@ CRITICAL: Do not include any text, words, letters, labels, signs, or typography 
   return imageUrl;
 }
 
-// Download DALL-E image and upload to UploadThing for permanent storage (exported for queue processor)
+// Upload image to UploadThing for permanent storage (exported for queue processor)
+// Handles both URLs (DALL-E) and local file paths (Imagen)
 export async function uploadImageToStorage(
-  imageUrl: string,
+  imageSource: string,
   fileName: string
 ): Promise<string> {
-  // Download image from OpenAI's temporary URL
-  const response = await fetch(imageUrl);
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  let buffer: Buffer;
+  
+  // Check if it's a local file path or URL
+  if (imageSource.startsWith('http')) {
+    // Download from URL (DALL-E case)
+    const response = await fetch(imageSource);
+    const arrayBuffer = await response.arrayBuffer();
+    buffer = Buffer.from(arrayBuffer);
+  } else {
+    // Read from local file system (Imagen case)
+    const fs = await import('fs/promises');
+    buffer = await fs.readFile(imageSource);
+  }
 
   // Convert buffer to File-like object
   const file = new File([buffer], `generated-${fileName}-${Date.now()}.png`, {

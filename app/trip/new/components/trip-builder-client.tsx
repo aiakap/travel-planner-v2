@@ -23,9 +23,10 @@ import {
   updateTripMetadata, 
   syncSegments 
 } from '../actions/trip-builder-actions';
+import { finalizeTrip } from '../actions/finalize-trip';
 import { HandDrawnTooltip } from '@/components/ui/hand-drawn-tooltip';
 import { TooltipOverlay } from '@/components/ui/tooltip-overlay';
-import { LocationPromptModal } from './location-prompt-modal';
+import { LocationManagerModal } from './location-manager-modal';
 import { DateChangeModal } from './date-change-modal';
 
 interface Segment {
@@ -38,6 +39,15 @@ interface Segment {
   end_location: string;
   start_image: string | null;
   end_image: string | null;
+  start_lat?: number;
+  start_lng?: number;
+  end_lat?: number;
+  end_lng?: number;
+  start_timezone?: string;
+  end_timezone?: string;
+  start_timezone_offset?: number;
+  end_timezone_offset?: number;
+  sameLocation?: boolean;
 }
 
 interface TripBuilderClientProps {
@@ -45,6 +55,7 @@ interface TripBuilderClientProps {
   initialTrip?: any; // Pre-loaded trip from Journey Architect
   initialSegments?: Segment[]; // Pre-loaded segments
   onUpdate?: (data: any) => void; // Callback for updates
+  onComplete?: (tripId: string) => void; // Callback when trip is finalized
 }
 
 // Parse date string as local timezone to avoid UTC conversion issues
@@ -72,11 +83,17 @@ const addDays = (date: Date | string, days: number) => {
   return result;
 };
 
+// Helper to determine if a segment type should default to same location
+const defaultSameLocation = (type: string): boolean => {
+  return ['STAY', 'RETREAT', 'TOUR'].includes(type.toUpperCase());
+};
+
 export function TripBuilderClient({ 
   segmentTypeMap, 
   initialTrip, 
   initialSegments,
-  onUpdate 
+  onUpdate,
+  onComplete 
 }: TripBuilderClientProps) {
   const router = useRouter();
   const [journeyName, setJourneyName] = useState("");
@@ -106,15 +123,16 @@ export function TripBuilderClient({
   const tripIdRef = useRef<string | null>(null);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   
-  // Location prompt modal state
-  const [locationPromptModal, setLocationPromptModal] = useState<{
-    sourceIndex: number;
-    sourceSegment: string;
-    field: 'start_location' | 'end_location';
-    value: string;
-    imageUrl: string | null;
-    suggestions: LocationSuggestion[];
-  } | null>(null);
+  // Location manager modal state
+  const [locationManagerState, setLocationManagerState] = useState<{
+    isOpen: boolean;
+    initialFocusIndex?: number;
+    initialFocusField?: 'start_location' | 'end_location';
+  }>({
+    isOpen: false,
+    initialFocusIndex: undefined,
+    initialFocusField: undefined
+  });
   
   // Date change modal state
   const [dateChangeModal, setDateChangeModal] = useState<{
@@ -154,7 +172,8 @@ export function TripBuilderClient({
         start_location: seg.startTitle,
         end_location: seg.endTitle,
         start_image: seg.imageUrl,
-        end_image: null
+        end_image: null,
+        sameLocation: defaultSameLocation(seg.segmentType?.name || 'Stay'),
       }));
       setSegments(mappedSegments);
     }
@@ -184,6 +203,7 @@ export function TripBuilderClient({
       end_location: end,
       start_image: null,
       end_image: null,
+      sameLocation: defaultSameLocation(type),
     });
 
     if (totalDays === 1) {
@@ -772,6 +792,28 @@ export function TripBuilderClient({
       else setStartDate(calculateStartDate(endDate, newDuration));
     }
   };
+
+  // --- LOCATION MANAGER HANDLERS ---
+  const openLocationManager = (chapterIndex: number, field: 'start_location' | 'end_location') => {
+    setLocationManagerState({
+      isOpen: true,
+      initialFocusIndex: chapterIndex,
+      initialFocusField: field
+    });
+  };
+
+  const handleLocationManagerSave = (updatedSegments: Segment[]) => {
+    setHasUserInteracted(true);
+    setSegments(updatedSegments);
+  };
+
+  const closeLocationManager = () => {
+    setLocationManagerState({
+      isOpen: false,
+      initialFocusIndex: undefined,
+      initialFocusField: undefined
+    });
+  };
   
   const handleInsertSegment = (indexBefore: number) => {
     setHasUserInteracted(true);
@@ -784,6 +826,7 @@ export function TripBuilderClient({
       end_location: "",
       start_image: null,
       end_image: null,
+      sameLocation: defaultSameLocation('STAY'),
     };
     const newSegments = [...segments];
     newSegments.splice(indexBefore + 1, 0, newSegment);
@@ -1098,29 +1141,62 @@ export function TripBuilderClient({
                           {/* Location inputs */}
                           <div ref={index === 0 ? firstLocationRef : undefined} className="mb-2">
                             {isSingleLocation ? (
-                              <PlaceAutocompleteLive
-                                value={segment.start_location}
-                                onChange={(val, img) => handleLocationTyping(index, 'start_location', val, img)}
-                                onPlaceSelected={(val, img) => handleLocationSelected(index, 'start_location', val, img)}
-                                placeholder="Where to?"
-                                className="text-gray-800"
-                              />
+                              <div
+                                onClick={() => openLocationManager(index, 'start_location')}
+                                className={`cursor-pointer px-3 py-2 rounded-lg border transition-all ${
+                                  bgImage 
+                                    ? 'border-white/30 hover:border-white/50 bg-white/10 hover:bg-white/20' 
+                                    : 'border-gray-200 hover:border-indigo-400 bg-white/50 hover:bg-white'
+                                }`}
+                              >
+                                {segment.start_location ? (
+                                  <span className={`text-sm font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
+                                    {segment.start_location}
+                                  </span>
+                                ) : (
+                                  <span className={`text-sm ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
+                                    Click to set location
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <div className="flex flex-col gap-2">
-                                <PlaceAutocompleteLive
-                                  value={segment.start_location}
-                                  onChange={(val, img) => handleLocationTyping(index, 'start_location', val, img)}
-                                  onPlaceSelected={(val, img) => handleLocationSelected(index, 'start_location', val, img)}
-                                  placeholder="From"
-                                  className="text-gray-800"
-                                />
-                                <PlaceAutocompleteLive
-                                  value={segment.end_location}
-                                  onChange={(val, img) => handleLocationTyping(index, 'end_location', val, img)}
-                                  onPlaceSelected={(val, img) => handleLocationSelected(index, 'end_location', val, img)}
-                                  placeholder="To"
-                                  className="text-gray-800"
-                                />
+                                <div
+                                  onClick={() => openLocationManager(index, 'start_location')}
+                                  className={`cursor-pointer px-3 py-2 rounded-lg border transition-all ${
+                                    bgImage 
+                                      ? 'border-white/30 hover:border-white/50 bg-white/10 hover:bg-white/20' 
+                                      : 'border-gray-200 hover:border-indigo-400 bg-white/50 hover:bg-white'
+                                  }`}
+                                >
+                                  {segment.start_location ? (
+                                    <span className={`text-sm font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
+                                      From: {segment.start_location}
+                                    </span>
+                                  ) : (
+                                    <span className={`text-sm ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
+                                      Click to set start location
+                                    </span>
+                                  )}
+                                </div>
+                                <div
+                                  onClick={() => openLocationManager(index, 'end_location')}
+                                  className={`cursor-pointer px-3 py-2 rounded-lg border transition-all ${
+                                    bgImage 
+                                      ? 'border-white/30 hover:border-white/50 bg-white/10 hover:bg-white/20' 
+                                      : 'border-gray-200 hover:border-indigo-400 bg-white/50 hover:bg-white'
+                                  }`}
+                                >
+                                  {segment.end_location ? (
+                                    <span className={`text-sm font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
+                                      To: {segment.end_location}
+                                    </span>
+                                  ) : (
+                                    <span className={`text-sm ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
+                                      Click to set end location
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1246,7 +1322,27 @@ export function TripBuilderClient({
                 {tripId && (
                   <div className="flex justify-center">
                     <button
-                      onClick={() => router.push(`/exp?tripId=${tripId}`)}
+                      onClick={async () => {
+                        try {
+                          // Update status and trigger image generation
+                          await finalizeTrip(tripId);
+                          
+                          // Use callback if provided, otherwise navigate
+                          if (onComplete) {
+                            onComplete(tripId);
+                          } else {
+                            router.push(`/exp?tripId=${tripId}`);
+                          }
+                        } catch (error) {
+                          console.error("Failed to finalize trip:", error);
+                          // Still navigate/callback even if finalization fails
+                          if (onComplete) {
+                            onComplete(tripId);
+                          } else {
+                            router.push(`/exp?tripId=${tripId}`);
+                          }
+                        }
+                      }}
                       className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg"
                     >
                       Continue to Journey Planning
@@ -1307,25 +1403,15 @@ export function TripBuilderClient({
         />
       )}
 
-      {/* Location Prompt Modal */}
-      {locationPromptModal && (
-        <LocationPromptModal
-          isOpen={true}
-          onClose={() => setLocationPromptModal(null)}
-          sourceChapter={locationPromptModal.sourceSegment}
-          field={locationPromptModal.field}
-          value={locationPromptModal.value}
-          suggestions={locationPromptModal.suggestions}
-          onApply={(selections) => {
-            applyLocationToSegments(
-              selections,
-              locationPromptModal.value,
-              locationPromptModal.imageUrl
-            );
-            setLocationPromptModal(null);
-          }}
-        />
-      )}
+      {/* Location Manager Modal */}
+      <LocationManagerModal
+        isOpen={locationManagerState.isOpen}
+        onClose={closeLocationManager}
+        segments={segments}
+        onSave={handleLocationManagerSave}
+        initialFocusIndex={locationManagerState.initialFocusIndex}
+        initialFocusField={locationManagerState.initialFocusField}
+      />
 
       {/* Tooltip System */}
       {!tourDismissed && currentTooltipStep && (
