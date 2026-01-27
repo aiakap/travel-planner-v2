@@ -131,6 +131,16 @@ export function DashboardHero({ upcomingTrips, userName }: DashboardHeroProps) {
             </div>
           </div>
         </div>
+
+        {/* Trip Builder Modal */}
+        <TripBuilderModal
+          isOpen={tripModalOpen}
+          onClose={() => setTripModalOpen(false)}
+          onComplete={(tripId) => {
+            setTripModalOpen(false);
+            router.push(`/exp?tripId=${tripId}`);
+          }}
+        />
       </section>
     );
   }
