@@ -202,6 +202,30 @@ export function ExpClient({
   const sendMessage = async (text: string) => {
     if (!currentConversationId || !text.trim()) return;
 
+    // Check if this might be a pasted reservation (long text with keywords)
+    if (text.length > 200) {
+      try {
+        const detection = await fetch('/api/chat/detect-paste', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        
+        if (detection.ok) {
+          const result = await detection.json();
+          
+          if (result.isReservation && result.confidence > 0.7) {
+            console.log(`[sendMessage] Detected reservation paste: ${result.detectedType}, confidence: ${result.confidence}`);
+            await handleReservationPaste(text, result.detectedType);
+            return; // Don't send as normal message
+          }
+        }
+      } catch (error) {
+        console.error('[sendMessage] Detection error:', error);
+        // Continue with normal message if detection fails
+      }
+    }
+
     // Add user message immediately
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -333,6 +357,208 @@ export function ExpClient({
       setIsLoading(false);
     }
   }
+
+  // Handle pasted reservation extraction
+  const handleReservationPaste = async (text: string, detectedType?: string) => {
+    if (!selectedTripId) {
+      // No trip selected - show error
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: "I detected a booking confirmation, but you need to select or create a trip first before I can add reservations to it."
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      return;
+    }
+
+    setIsLoading(true);
+    setHasStartedPlanning(true);
+
+    const progressMessageId = `extraction-${Date.now()}`;
+    const progressSteps = [
+      "Analyzing your booking confirmation...",
+      "Extracting reservation details...",
+      "Adding to your trip...",
+      "Geocoding location...",
+      "Fetching images from Google Places...",
+      "Creating reservation...",
+      "Done! Let's review the details."
+    ];
+
+    let currentStep = 0;
+
+    // Helper to update progress
+    const updateProgress = (step: number, message: string) => {
+      currentStep = step;
+      setMessages(prev => {
+        const filtered = prev.filter(m => m.id !== progressMessageId);
+        return [...filtered, {
+          id: progressMessageId,
+          role: 'assistant',
+          content: '',
+          segments: [{
+            type: 'extraction_progress' as const,
+            step,
+            totalSteps: progressSteps.length,
+            message
+          }]
+        }];
+      });
+    };
+
+    try {
+      // Step 1: Show initial progress
+      updateProgress(1, progressSteps[0]);
+
+      // Step 2: Extract data
+      updateProgress(2, progressSteps[1]);
+      const extractionResponse = await fetch('/api/admin/email-extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailText: text })
+      });
+
+      if (!extractionResponse.ok) {
+        throw new Error('Extraction failed');
+      }
+
+      const extractionResult = await extractionResponse.json();
+      const { type, data } = extractionResult;
+
+      console.log(`[handleReservationPaste] Extracted ${type}:`, data);
+
+      // Step 3: Add to trip
+      updateProgress(3, `Found a ${type} booking! Adding to your trip...`);
+
+      let result: any;
+
+      // Import the appropriate action dynamically
+      if (type === 'hotel') {
+        const { addHotelsToTrip } = await import('@/lib/actions/add-hotels-to-trip');
+        result = await addHotelsToTrip({
+          tripId: selectedTripId,
+          segmentId: null,
+          hotelData: data,
+          options: {
+            autoMatch: true,
+            minScore: 60,
+            createSuggestedSegments: true
+          }
+        });
+      } else if (type === 'flight') {
+        const { addFlightsToTrip } = await import('@/lib/actions/add-flights-to-trip');
+        // addFlightsToTrip uses positional parameters, not an object
+        result = await addFlightsToTrip(
+          selectedTripId,
+          null, // segmentId
+          data, // flightData
+          {
+            autoCluster: false,
+            createSuggestedSegments: true
+          }
+        );
+      } else if (type === 'car-rental') {
+        const { addCarRentalsToTrip } = await import('@/lib/actions/add-car-rentals-to-trip');
+        result = await addCarRentalsToTrip({
+          tripId: selectedTripId,
+          segmentId: null,
+          carRentalData: data,
+          options: {
+            autoMatch: true,
+            minScore: 60,
+            createSuggestedSegments: true
+          }
+        });
+      } else if (type === 'restaurant') {
+        const { addRestaurantsToTrip } = await import('@/lib/actions/add-restaurants-to-trip');
+        result = await addRestaurantsToTrip({
+          tripId: selectedTripId,
+          segmentId: null,
+          restaurantData: data,
+          options: {
+            autoMatch: true,
+            minScore: 60,
+            createSuggestedSegments: true
+          }
+        });
+      } else if (type === 'event') {
+        const { addEventsToTrip } = await import('@/lib/actions/add-events-to-trip');
+        result = await addEventsToTrip({
+          tripId: selectedTripId,
+          segmentId: null,
+          eventData: data,
+          options: {
+            autoMatch: true,
+            minScore: 60,
+            createSuggestedSegments: true
+          }
+        });
+      } else if (type === 'generic') {
+        const { addGenericReservationToTrip } = await import('@/lib/actions/add-generic-reservation-to-trip');
+        result = await addGenericReservationToTrip({
+          tripId: selectedTripId,
+          segmentId: null,
+          reservationData: data,
+          options: {
+            autoMatch: true,
+            minScore: 60,
+            createSuggestedSegments: true
+          }
+        });
+      } else {
+        throw new Error(`Unsupported reservation type: ${type}`);
+      }
+
+      // Step 6: Complete
+      updateProgress(6, progressSteps[5]);
+
+      // Refetch trips to get updated data
+      await refetchTrip();
+
+      // Remove progress message
+      setMessages(prev => prev.filter(m => m.id !== progressMessageId));
+
+      // Add success message
+      const successMessage: ChatMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant',
+        content: `I've successfully added your ${type} booking to your trip! Let me show you the details.`
+      };
+      setMessages(prev => [...prev, successMessage]);
+
+      // Get the first reservation ID
+      const reservationId = result.reservationIds?.[0];
+
+      if (reservationId) {
+        // Fetch the full reservation from the updated trip
+        const updatedTrip = trips.find(t => t.id === selectedTripId);
+        const reservation = updatedTrip?.segments
+          .flatMap(s => s.reservations)
+          .find(r => r.id === reservationId);
+
+        if (reservation) {
+          // Create a conversation for this reservation
+          await createNewReservationChat(reservation, reservation.name);
+        }
+      }
+
+    } catch (error: any) {
+      console.error('[handleReservationPaste] Error:', error);
+      
+      // Remove progress message
+      setMessages(prev => prev.filter(m => m.id !== progressMessageId));
+      
+      // Show error
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: "I had trouble extracting that booking. Could you try pasting it again, or tell me about it in your own words?"
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Tool call handling is removed - trips are created via direct tool invocation in the chat API
 

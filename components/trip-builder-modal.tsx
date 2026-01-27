@@ -1,14 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
 import { TripBuilderClient } from '@/app/trip/new/components/trip-builder-client';
-import { initializeSegmentTypes } from '@/app/trip/new/lib/segment-types';
 
 interface TripBuilderModalProps {
   isOpen: boolean;
@@ -23,7 +21,6 @@ export function TripBuilderModal({
   onComplete,
   segmentTypeMap: providedSegmentTypeMap 
 }: TripBuilderModalProps) {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const [segmentTypeMap, setSegmentTypeMap] = useState<Record<string, string> | null>(
     providedSegmentTypeMap || null
@@ -42,7 +39,7 @@ export function TripBuilderModal({
     if (isOpen && !segmentTypeMap) {
       fetchSegmentTypes();
     }
-  }, [isOpen, providedSegmentTypeMap]);
+  }, [isOpen, providedSegmentTypeMap, segmentTypeMap]);
 
   const fetchSegmentTypes = async () => {
     try {
@@ -62,13 +59,6 @@ export function TripBuilderModal({
     }
   };
 
-  // Handle auth redirect
-  useEffect(() => {
-    if (status === 'unauthenticated' && isOpen) {
-      router.push('/api/auth/signin');
-    }
-  }, [status, isOpen, router]);
-
   // Handle completion
   const handleComplete = (tripId: string) => {
     if (onComplete) {
@@ -78,18 +68,13 @@ export function TripBuilderModal({
     }
   };
 
-  // Don't render if not authenticated
-  if (status === 'loading' || status === 'unauthenticated') {
-    return null;
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="max-w-7xl w-[95vw] max-h-[95vh] p-0 overflow-hidden"
+        className="max-w-2xl w-[95vw] max-h-[95vh] p-0 overflow-hidden"
         showCloseButton={true}
       >
-        <div className="h-full flex flex-col">
+        <div className="h-full flex flex-col overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center h-full min-h-[400px]">
               <div className="text-center">
@@ -110,7 +95,7 @@ export function TripBuilderModal({
               </div>
             </div>
           ) : segmentTypeMap ? (
-            <div className="h-full overflow-auto">
+            <div className="flex-1 overflow-y-auto overscroll-contain">
               <TripBuilderClient 
                 segmentTypeMap={segmentTypeMap}
                 onComplete={handleComplete}

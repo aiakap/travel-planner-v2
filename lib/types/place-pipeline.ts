@@ -119,6 +119,12 @@ export type MessageSegment =
       cancellationPolicy?: string;
       imageUrl?: string;
       url?: string;
+    }
+  | {
+      type: "extraction_progress";
+      step: number;
+      totalSteps: number;
+      message: string;
     };
 
 // Stage outputs

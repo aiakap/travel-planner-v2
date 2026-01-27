@@ -16,6 +16,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { addFlightsToTrip } from "@/lib/actions/add-flights-to-trip";
 import { addHotelsToTrip } from "@/lib/actions/add-hotels-to-trip";
 import { addCarRentalToTrip } from "@/lib/actions/add-car-rentals-to-trip";
+import { addTrainsToTrip } from "@/lib/actions/add-trains-to-trip";
+import { addRestaurantsToTrip } from "@/lib/actions/add-restaurants-to-trip";
+import { addEventsToTrip } from "@/lib/actions/add-events-to-trip";
+import { addCruisesToTrip } from "@/lib/actions/add-cruises-to-trip";
+import { addGenericReservationToTrip } from "@/lib/actions/add-generic-reservation-to-trip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Trip {
@@ -85,7 +90,7 @@ interface CarRentalPreview {
   isOneWay: boolean;
 }
 
-type ExtractionType = "flight" | "hotel" | "car-rental";
+type ExtractionType = "flight" | "hotel" | "car-rental" | "train" | "restaurant" | "event" | "cruise" | "generic";
 
 // Helper to parse .eml files
 async function parseEMLFile(file: File): Promise<string> {
@@ -410,6 +415,60 @@ export default function EmailExtractionPage() {
             autoMatch: !selectedSegmentId, // Only auto-match if no manual selection
             minScore: 70,
             createSuggestedSegments: !selectedSegmentId // Only create segment if no manual selection
+          }
+        });
+      } else if (extractionType === 'train') {
+        await addTrainsToTrip(
+          selectedTripId,
+          selectedSegmentId || null,
+          extractedData,
+          {
+            autoCluster: false,
+            maxGapHours: 48,
+            createSuggestedSegments: !selectedSegmentId
+          }
+        );
+      } else if (extractionType === 'restaurant') {
+        await addRestaurantsToTrip({
+          tripId: selectedTripId,
+          segmentId: selectedSegmentId || null,
+          restaurantData: extractedData,
+          options: {
+            autoMatch: !selectedSegmentId,
+            minScore: 70,
+            createSuggestedSegments: !selectedSegmentId
+          }
+        });
+      } else if (extractionType === 'event') {
+        await addEventsToTrip({
+          tripId: selectedTripId,
+          segmentId: selectedSegmentId || null,
+          eventData: extractedData,
+          options: {
+            autoMatch: !selectedSegmentId,
+            minScore: 70,
+            createSuggestedSegments: !selectedSegmentId
+          }
+        });
+      } else if (extractionType === 'cruise') {
+        await addCruisesToTrip({
+          tripId: selectedTripId,
+          segmentId: selectedSegmentId || null,
+          cruiseData: extractedData,
+          options: {
+            autoMatch: !selectedSegmentId,
+            createSuggestedSegments: !selectedSegmentId
+          }
+        });
+      } else if (extractionType === 'generic') {
+        await addGenericReservationToTrip({
+          tripId: selectedTripId,
+          segmentId: selectedSegmentId || null,
+          reservationData: extractedData,
+          options: {
+            autoMatch: !selectedSegmentId,
+            minScore: 70,
+            createSuggestedSegments: !selectedSegmentId
           }
         });
       }
@@ -1086,6 +1145,86 @@ export default function EmailExtractionPage() {
                     <>
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Add Car Rental to Trip
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Train, Restaurant, Event, Cruise, and Generic Display - Simple fallback UI */}
+        {extractedData && ['train', 'restaurant', 'event', 'cruise', 'generic'].includes(extractionType || '') && (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {extractionType === 'train' && '🚂 Train Booking'}
+                  {extractionType === 'restaurant' && '🍽️ Restaurant Reservation'}
+                  {extractionType === 'event' && '🎫 Event Tickets'}
+                  {extractionType === 'cruise' && '🚢 Cruise Booking'}
+                  {extractionType === 'generic' && '📋 Generic Reservation'}
+                </CardTitle>
+                <CardDescription>
+                  Extracted {extractionType} information
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DetailSection title="Booking Details" defaultOpen>
+                  <pre className="text-xs bg-muted p-4 rounded overflow-auto max-h-96">
+                    {JSON.stringify(extractedData, null, 2)}
+                  </pre>
+                </DetailSection>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Add to Trip</CardTitle>
+                <CardDescription>
+                  Select a trip to add this reservation
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="trip-select">Select Trip</Label>
+                  <Select 
+                    value={selectedTripId} 
+                    onValueChange={(value) => setSelectedTripId(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a trip..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadingTrips ? (
+                        <SelectItem value="loading" disabled>Loading trips...</SelectItem>
+                      ) : trips.length === 0 ? (
+                        <SelectItem value="none" disabled>No trips found</SelectItem>
+                      ) : (
+                        trips.map((trip) => (
+                          <SelectItem key={trip.id} value={trip.id}>
+                            {trip.title} - {formatDate(trip.startDate)} to {formatDate(trip.endDate)}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button
+                  onClick={handleAddToTrip}
+                  disabled={addingToTrip || !selectedTripId}
+                  className="w-full"
+                >
+                  {addingToTrip ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Adding to Trip...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Add to Trip
                     </>
                   )}
                 </Button>

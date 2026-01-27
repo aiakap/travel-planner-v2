@@ -8,6 +8,7 @@ import { SegmentCard } from "@/app/exp/components/segment-card";
 import { ReservationCard } from "@/app/exp/components/reservation-card";
 import { ContextCard } from "@/app/exp/components/context-card";
 import { HotelReservationCard } from "@/app/exp/components/hotel-reservation-card";
+import { ExtractionLoadingAnimation } from "@/app/exp/components/extraction-loading-animation";
 
 interface MessageSegmentsRendererProps {
   segments: MessageSegment[];
@@ -142,6 +143,16 @@ export function MessageSegmentsRenderer({
                 tripId={tripId}
                 onSaved={onReservationAdded}
                 onDeleted={onReservationAdded}
+              />
+            </div>
+          );
+        } else if (segment.type === "extraction_progress") {
+          return (
+            <div key={idx}>
+              <ExtractionLoadingAnimation
+                step={segment.step}
+                totalSteps={segment.totalSteps}
+                message={segment.message}
               />
             </div>
           );

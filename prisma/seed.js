@@ -27,7 +27,7 @@ async function main() {
   const reservationData = [
     {
       category: "Travel",
-      types: ["Flight", "Train", "Car Rental", "Bus", "Ferry"],
+      types: ["Flight", "Train", "Car Rental", "Bus", "Ferry", "Cruise"],
     },
     {
       category: "Stay",
@@ -35,7 +35,7 @@ async function main() {
     },
     {
       category: "Activity",
-      types: ["Tour", "Event Tickets", "Museum", "Hike", "Excursion", "Adventure", "Sport"],
+      types: ["Tour", "Event Tickets", "Museum", "Hike", "Excursion", "Adventure", "Sport", "Concert", "Theater"],
     },
     {
       category: "Dining",
@@ -723,8 +723,12 @@ TRAVEL CONTEXT TO VISUALIZE:`
   const criticalChecks = [
     { category: "Travel", type: "Flight" },
     { category: "Travel", type: "Train" },
+    { category: "Travel", type: "Car Rental" },
+    { category: "Travel", type: "Cruise" },
     { category: "Stay", type: "Hotel" },
     { category: "Activity", type: "Tour" },
+    { category: "Activity", type: "Event Tickets" },
+    { category: "Activity", type: "Museum" },
     { category: "Dining", type: "Restaurant" },
     { status: "Confirmed" },
     { status: "Pending" },

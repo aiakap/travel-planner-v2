@@ -906,10 +906,10 @@ export function TripBuilderClient({
 
   // Main UI - always show, timeline appears progressively
   return (
-    <div className="min-h-screen bg-gray-50 text-slate-800 font-sans selection:bg-indigo-100">
+    <div className="bg-gray-50 text-slate-800 font-sans selection:bg-indigo-100">
       {/* HEADER */}
-      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 py-4 space-y-4">
+      <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="px-3 py-2 space-y-2">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <input
@@ -917,7 +917,7 @@ export function TripBuilderClient({
                 type="text"
                 value={journeyName}
                 onChange={(e) => { setJourneyName(e.target.value); setHasUserInteracted(true); }}
-                className="text-2xl font-bold text-gray-900 bg-transparent border-none focus:ring-0 p-0 placeholder-gray-400 w-full"
+                className="text-lg font-bold text-gray-900 bg-transparent border-none focus:ring-0 p-0 placeholder-gray-400 w-full"
                 placeholder="Journey Name"
               />
               <div className="flex items-center gap-2">
@@ -942,16 +942,16 @@ export function TripBuilderClient({
             <textarea
               value={manualSummary !== null ? manualSummary : getGeneratedSummary()}
               onChange={(e) => { setManualSummary(e.target.value); setHasUserInteracted(true); }}
-              rows={2}
-              className="w-full bg-transparent text-gray-600 text-sm resize-none focus:ring-0 border-none p-0 placeholder-gray-300 leading-relaxed"
+              rows={1}
+              className="w-full bg-transparent text-gray-600 text-xs resize-none focus:ring-0 border-none p-0 placeholder-gray-300 leading-relaxed"
               placeholder="Describe your Journey..."
             />
           </div>
           
           {/* Guide */}
           {showGuide && (
-            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex gap-4 relative animate-in fade-in slide-in-from-top-2">
-              <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+            <div className="bg-blue-50 border border-blue-100 p-2 rounded-lg flex gap-2 relative animate-in fade-in slide-in-from-top-2">
+              <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={16} />
               <div className="text-sm text-blue-900 space-y-2">
                 <p><span className="font-bold text-blue-700 uppercase tracking-wide text-xs">Level 1: The Journey</span><br/>The master plan for your entire adventure.</p>
                 <p><span className="font-bold text-blue-700 uppercase tracking-wide text-xs">Level 2: The Chapter</span><br/>Distinct phases (Stay, Travel, Tour) that break up your journey.</p>
@@ -970,27 +970,27 @@ export function TripBuilderClient({
             <div
               ref={dateControlsRef}
               onClick={handleEditDatesClick}
-              className="group flex items-center justify-between bg-gray-50 hover:bg-white hover:ring-2 hover:ring-indigo-100 p-4 rounded-xl border border-gray-200 cursor-pointer transition-all"
+              className="group flex items-center justify-between bg-gray-50 hover:bg-white hover:ring-2 hover:ring-indigo-100 p-2 rounded-lg border border-gray-200 cursor-pointer transition-all"
             >
-              <div className="flex items-center gap-3">
-                <div className="bg-white p-2 rounded-lg border border-gray-200 text-gray-500 group-hover:text-indigo-600 transition-colors">
-                  <Calendar size={20} />
+              <div className="flex items-center gap-2">
+                <div className="bg-white p-1.5 rounded-lg border border-gray-200 text-gray-500 group-hover:text-indigo-600 transition-colors">
+                  <Calendar size={16} />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Journey Dates</span>
-                  <div className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <div className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
                     <span>{formatDateReadable(startDate)}</span>
                     <span className="text-gray-400">→</span>
                     <span>{formatDateReadable(endDate)}</span>
                     <span className="text-gray-300 mx-1">|</span>
-                    <span className="text-gray-500 text-base font-normal">{duration} Days</span>
+                    <span className="text-gray-500 text-xs font-normal">{duration} Days</span>
                   </div>
                 </div>
               </div>
-              <div className="text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">Click to Edit</div>
+              <div className="text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">Edit</div>
             </div>
           ) : (
-            <div className="relative flex flex-col md:flex-row items-center gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200 ring-2 ring-indigo-500/20 animate-in fade-in zoom-in-95 duration-200">
+            <div className="relative flex flex-col items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200 ring-2 ring-indigo-500/20 animate-in fade-in zoom-in-95 duration-200">
               <button
                 onClick={(e) => { e.stopPropagation(); setIsEditingDates(false); }}
                 className="absolute -top-3 -right-3 bg-white p-1 rounded-full shadow border border-gray-200 text-gray-400 hover:text-gray-900 z-10"
@@ -1033,7 +1033,7 @@ export function TripBuilderClient({
       </div>
 
       {/* MAIN WORKSPACE */}
-      <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col lg:flex-row gap-8">
+      <div className="px-3 py-3 flex flex-col gap-3">
         <div className="flex-1">
           {showTimeline && (
             <div ref={timelineRef}>
@@ -1059,7 +1059,7 @@ export function TripBuilderClient({
               </div>
 
               {/* Vertical segment list */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {segments.map((segment, index) => {
                   const style = getSegmentStyle(segment.type);
                   const isSingleLocation = style.singleLocation;
@@ -1068,14 +1068,14 @@ export function TripBuilderClient({
                   return (
                     <div key={segment.id} className="relative">
                       {/* Segment card */}
-                      <div className={`relative group rounded-xl border-2 shadow-sm hover:shadow-md transition-all ${bgImage ? 'border-gray-300' : style.color.replace('text-', 'border-').replace('-900', '-300')}`}>
+                      <div className={`relative group rounded-lg border-2 shadow-sm hover:shadow-md transition-all ${bgImage ? 'border-gray-300' : style.color.replace('text-', 'border-').replace('-900', '-300')}`}>
                         {bgImage && (
-                          <div className="absolute inset-0 bg-cover bg-center z-0 rounded-xl overflow-hidden" style={{ backgroundImage: `url(${bgImage})` }}>
+                          <div className="absolute inset-0 bg-cover bg-center z-0 rounded-lg overflow-hidden" style={{ backgroundImage: `url(${bgImage})` }}>
                             <div className={`absolute inset-0 ${style.overlayColor || 'bg-white/80'} backdrop-blur-[2px] mix-blend-multiply`}></div>
                           </div>
                         )}
 
-                        <div className={`relative z-10 p-2.5 ${bgImage ? 'text-white' : ''}`}>
+                        <div className={`relative z-10 p-2 ${bgImage ? 'text-white' : ''}`}>
                           {/* Header row - Type, Name, Actions */}
                           <div className="flex items-start gap-2 mb-2">
                             {/* Type selector */}
@@ -1096,25 +1096,10 @@ export function TripBuilderClient({
                                 className={`p-1.5 rounded transition-colors ${bgImage ? 'hover:bg-white/20' : 'hover:bg-gray-200'}`}
                                 title={style.label}
                               >
-                                <style.icon size={16} />
+                                <style.icon size={14} />
                               </button>
                               
-                              {/* Hover tooltip */}
-                              <div className="absolute left-full ml-2 top-0 w-72 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl opacity-0 group-hover/typetooltip:opacity-100 pointer-events-none transition-opacity z-[10000]">
-                                <div className="font-bold mb-1">{style.label}</div>
-                                <div className="mb-2">{style.description}</div>
-                                <div className="text-gray-300">
-                                  <div className="font-semibold mb-1">Typical Moments:</div>
-                                  <ul className="list-disc list-inside space-y-0.5">
-                                    {style.typicalMoments.map(moment => (
-                                      <li key={moment}>{moment}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                                <div className="mt-2 text-gray-400 text-[10px] italic">
-                                  {style.usage}
-                                </div>
-                              </div>
+                              {/* Tooltip hidden in modal context */}
                             </div>
 
                             {/* Chapter name */}
@@ -1124,7 +1109,7 @@ export function TripBuilderClient({
                               value={segment.name}
                               onChange={(e) => { setHasUserInteracted(true); const newSegs = [...segments]; newSegs[index].name = e.target.value; setSegments(newSegs); }}
                               onFocus={(e) => e.target.select()}
-                              className={`flex-1 bg-transparent border-none p-0 font-semibold text-base focus:ring-0 ${bgImage ? 'placeholder-white/50 text-white' : 'placeholder-gray-400 text-gray-900'}`}
+                              className={`flex-1 bg-transparent border-none p-0 font-semibold text-sm focus:ring-0 ${bgImage ? 'placeholder-white/50 text-white' : 'placeholder-gray-400 text-gray-900'}`}
                               placeholder="Chapter Name"
                             />
 
@@ -1134,7 +1119,7 @@ export function TripBuilderClient({
                               className={`p-1 rounded transition-colors ${bgImage ? 'hover:bg-red-500/20 text-white' : 'hover:bg-red-50 text-red-600'}`}
                               title="Delete Chapter"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={12} />
                             </button>
                           </div>
 
@@ -1143,56 +1128,56 @@ export function TripBuilderClient({
                             {isSingleLocation ? (
                               <div
                                 onClick={() => openLocationManager(index, 'start_location')}
-                                className={`cursor-pointer px-3 py-2 rounded-lg border transition-all ${
+                                className={`cursor-pointer px-2 py-1.5 rounded-md border transition-all ${
                                   bgImage 
                                     ? 'border-white/30 hover:border-white/50 bg-white/10 hover:bg-white/20' 
                                     : 'border-gray-200 hover:border-indigo-400 bg-white/50 hover:bg-white'
                                 }`}
                               >
                                 {segment.start_location ? (
-                                  <span className={`text-sm font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
+                                  <span className={`text-xs font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
                                     {segment.start_location}
                                   </span>
                                 ) : (
-                                  <span className={`text-sm ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
+                                  <span className={`text-xs ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
                                     Click to set location
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <div className="flex flex-col gap-2">
+                              <div className="flex flex-col gap-1.5">
                                 <div
                                   onClick={() => openLocationManager(index, 'start_location')}
-                                  className={`cursor-pointer px-3 py-2 rounded-lg border transition-all ${
+                                  className={`cursor-pointer px-2 py-1.5 rounded-md border transition-all ${
                                     bgImage 
                                       ? 'border-white/30 hover:border-white/50 bg-white/10 hover:bg-white/20' 
                                       : 'border-gray-200 hover:border-indigo-400 bg-white/50 hover:bg-white'
                                   }`}
                                 >
                                   {segment.start_location ? (
-                                    <span className={`text-sm font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
+                                    <span className={`text-xs font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
                                       From: {segment.start_location}
                                     </span>
                                   ) : (
-                                    <span className={`text-sm ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
+                                    <span className={`text-xs ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
                                       Click to set start location
                                     </span>
                                   )}
                                 </div>
                                 <div
                                   onClick={() => openLocationManager(index, 'end_location')}
-                                  className={`cursor-pointer px-3 py-2 rounded-lg border transition-all ${
+                                  className={`cursor-pointer px-2 py-1.5 rounded-md border transition-all ${
                                     bgImage 
                                       ? 'border-white/30 hover:border-white/50 bg-white/10 hover:bg-white/20' 
                                       : 'border-gray-200 hover:border-indigo-400 bg-white/50 hover:bg-white'
                                   }`}
                                 >
                                   {segment.end_location ? (
-                                    <span className={`text-sm font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
+                                    <span className={`text-xs font-medium ${bgImage ? 'text-white' : 'text-gray-900'}`}>
                                       To: {segment.end_location}
                                     </span>
                                   ) : (
-                                    <span className={`text-sm ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
+                                    <span className={`text-xs ${bgImage ? 'text-white/60' : 'text-gray-400'}`}>
                                       Click to set end location
                                     </span>
                                   )}
@@ -1202,7 +1187,7 @@ export function TripBuilderClient({
                           </div>
 
                           {/* Compact footer controls */}
-                          <div className={`flex items-center justify-between text-xs ${bgImage ? 'bg-white/10' : 'bg-gray-50'} rounded px-2 py-1`}>
+                          <div className={`flex items-center justify-between text-[10px] ${bgImage ? 'bg-white/10' : 'bg-gray-50'} rounded px-1.5 py-0.5`}>
                             {/* Left: Move controls */}
                             <div className="flex gap-0.5">
                               <button
@@ -1211,7 +1196,7 @@ export function TripBuilderClient({
                                 className={`p-1 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${bgImage ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-700'}`}
                                 title="Move Up"
                               >
-                                <ChevronUp size={14} />
+                                <ChevronUp size={12} />
                               </button>
                               <button
                                 onClick={() => moveSegmentDown(index)}
@@ -1219,7 +1204,7 @@ export function TripBuilderClient({
                                 className={`p-1 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${bgImage ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-700'}`}
                                 title="Move Down"
                               >
-                                <ChevronDown size={14} />
+                                <ChevronDown size={12} />
                               </button>
                             </div>
 
@@ -1232,7 +1217,7 @@ export function TripBuilderClient({
                                   className={`p-0.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${bgImage ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-700'}`}
                                   title="Decrease days"
                                 >
-                                  <Minus size={12} />
+                                  <Minus size={10} />
                                 </button>
                                 <span className={`font-semibold px-2 min-w-[40px] text-center ${bgImage ? 'text-white' : 'text-gray-900'}`}>
                                   {segment.days}d
@@ -1242,7 +1227,7 @@ export function TripBuilderClient({
                                   className={`p-0.5 rounded transition-colors ${bgImage ? 'hover:bg-white/20 text-white' : 'hover:bg-gray-200 text-gray-700'}`}
                                   title="Increase days"
                                 >
-                                  <Plus size={12} />
+                                  <Plus size={10} />
                                 </button>
                               </div>
                               <div className={`text-[10px] ${bgImage ? 'text-white/70' : 'text-gray-500'}`}>
@@ -1302,17 +1287,15 @@ export function TripBuilderClient({
               </div>
 
               {/* Helper Text and Create Journey Button */}
-              <div className="mt-8 space-y-4">
+              <div className="mt-4 space-y-3">
                 {/* Helper Text */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-                    <div className="text-sm text-blue-900">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={16} />
+                    <div className="text-xs text-blue-900">
                       <p className="font-semibold mb-1">Customize Your Journey Outline</p>
                       <p className="text-blue-800">
-                        Take a moment to refine your chapters: rename them, adjust their types (Stay, Travel, or Tour), 
-                        and add locations. This outline will help organize your journey before you add specific moments 
-                        like hotel reservations and activities.
+                        Refine your chapters: rename them, adjust their types, and add locations. This outline will help organize your journey.
                       </p>
                     </div>
                   </div>
@@ -1343,10 +1326,10 @@ export function TripBuilderClient({
                           }
                         }
                       }}
-                      className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg"
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg text-sm"
                     >
                       Continue to Journey Planning
-                      <ArrowRight size={18} />
+                      <ArrowRight size={16} />
                     </button>
                   </div>
                 )}

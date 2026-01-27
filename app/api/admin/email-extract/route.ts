@@ -10,12 +10,27 @@ import {
 import {
   validateCarRentalExtraction
 } from "@/lib/schemas/car-rental-extraction-schema";
+import {
+  validateTrainExtraction
+} from "@/lib/schemas/train-extraction-schema";
+import {
+  validateRestaurantExtraction
+} from "@/lib/schemas/restaurant-extraction-schema";
+import {
+  validateEventExtraction
+} from "@/lib/schemas/event-extraction-schema";
+import {
+  validateCruiseExtraction
+} from "@/lib/schemas/cruise-extraction-schema";
+import {
+  validateGenericReservation
+} from "@/lib/schemas/generic-reservation-schema";
 import { 
   validateOpenAISchema 
 } from "@/lib/schemas/validate-openai-schema";
 import { buildExtractionPrompt } from "@/lib/email-extraction";
 
-type ReservationType = "flight" | "hotel" | "car-rental";
+type ReservationType = "flight" | "hotel" | "car-rental" | "train" | "restaurant" | "event" | "cruise" | "generic";
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,6 +78,21 @@ export async function POST(request: NextRequest) {
     } else if (extractionType === 'car-rental-extraction') {
       reservationType = 'car-rental';
       validator = validateCarRentalExtraction;
+    } else if (extractionType === 'train-extraction') {
+      reservationType = 'train';
+      validator = validateTrainExtraction;
+    } else if (extractionType === 'restaurant-extraction') {
+      reservationType = 'restaurant';
+      validator = validateRestaurantExtraction;
+    } else if (extractionType === 'event-extraction') {
+      reservationType = 'event';
+      validator = validateEventExtraction;
+    } else if (extractionType === 'cruise-extraction') {
+      reservationType = 'cruise';
+      validator = validateCruiseExtraction;
+    } else if (extractionType === 'generic-reservation') {
+      reservationType = 'generic';
+      validator = validateGenericReservation;
     } else {
       reservationType = 'flight';
       validator = validateFlightExtraction;
@@ -118,6 +148,16 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Successfully extracted hotel booking in ${duration}ms`);
     } else if (reservationType === 'car-rental') {
       console.log(`✅ Successfully extracted car rental booking in ${duration}ms`);
+    } else if (reservationType === 'train') {
+      console.log(`✅ Successfully extracted ${(validation.data as any).trains.length} train(s) in ${duration}ms`);
+    } else if (reservationType === 'restaurant') {
+      console.log(`✅ Successfully extracted restaurant reservation in ${duration}ms`);
+    } else if (reservationType === 'event') {
+      console.log(`✅ Successfully extracted event tickets in ${duration}ms`);
+    } else if (reservationType === 'cruise') {
+      console.log(`✅ Successfully extracted cruise booking in ${duration}ms`);
+    } else if (reservationType === 'generic') {
+      console.log(`✅ Successfully extracted generic reservation (${(validation.data as any).reservationType}) in ${duration}ms`);
     } else {
       console.log(`✅ Successfully extracted ${(validation.data as any).flights.length} flight(s) in ${duration}ms`);
     }
@@ -131,6 +171,14 @@ export async function POST(request: NextRequest) {
         duration,
         ...(reservationType === 'flight' && { flightCount: (validation.data as any).flights.length }),
         ...(reservationType === 'car-rental' && { company: (validation.data as any).company }),
+        ...(reservationType === 'train' && { trainCount: (validation.data as any).trains.length }),
+        ...(reservationType === 'restaurant' && { restaurantName: (validation.data as any).restaurantName }),
+        ...(reservationType === 'event' && { eventName: (validation.data as any).eventName }),
+        ...(reservationType === 'cruise' && { cruiseLine: (validation.data as any).cruiseLine }),
+        ...(reservationType === 'generic' && { 
+          reservationType: (validation.data as any).reservationType,
+          category: (validation.data as any).category 
+        }),
       }
     });
   } catch (error: any) {

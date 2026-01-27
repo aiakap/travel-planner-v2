@@ -235,33 +235,33 @@ export function LocationManagerModal({
     <>
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+        className="fixed inset-0 bg-black/50 z-[60] animate-in fade-in duration-200"
         onClick={handleCancel}
       />
       
       {/* Modal */}
-      <div className="fixed inset-4 md:inset-8 lg:inset-16 z-50 animate-in fade-in zoom-in-95 duration-200">
+      <div className="fixed inset-2 md:inset-4 z-[60] animate-in fade-in zoom-in-95 duration-200">
         <div className="bg-white rounded-xl shadow-2xl border border-gray-200 h-full flex flex-col overflow-hidden">
           
           {/* Simple Header */}
-          <div className="flex-shrink-0 border-b border-gray-200 p-6">
+          <div className="flex-shrink-0 border-b border-gray-200 p-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-indigo-100 text-indigo-600 p-2 rounded-lg">
-                  <MapPin size={20} />
+              <div className="flex items-center gap-2">
+                <div className="bg-indigo-100 text-indigo-600 p-1.5 rounded-lg">
+                  <MapPin size={16} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900">Set Locations for Your Journey</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {segments.length} chapter{segments.length !== 1 ? 's' : ''} · Locations auto-suggested as you type
+                  <h2 className="text-base font-bold text-gray-900">Set Locations</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {segments.length} chapter{segments.length !== 1 ? 's' : ''}
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleCancel}
-                className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
           </div>
@@ -269,7 +269,7 @@ export function LocationManagerModal({
           {/* Content Area */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {/* Map View */}
-            <div className="flex-shrink-0 h-[200px] p-6 pb-3">
+            <div className="flex-shrink-0 h-[120px] md:h-[180px] p-3 pb-2">
               <JourneyMapView
                 segments={segments}
                 focusedIndex={focusedSegmentIndex}
@@ -278,8 +278,8 @@ export function LocationManagerModal({
             </div>
 
             {/* Location Inputs List */}
-            <div className="flex-1 overflow-y-auto px-6 pb-6">
-              <div className="space-y-2">
+            <div className="flex-1 overflow-y-auto px-3 pb-3">
+              <div className="space-y-1.5">
                 {segments.map((segment, index) => (
                   <SimpleLocationInput
                     key={segment.id}
@@ -300,18 +300,18 @@ export function LocationManagerModal({
           </div>
 
           {/* Simple Footer */}
-          <div className="flex-shrink-0 bg-gray-50 border-t border-gray-200 p-4 flex justify-end gap-3">
+          <div className="flex-shrink-0 bg-gray-50 border-t border-gray-200 p-3 flex justify-end gap-2">
             <button
               onClick={handleCancel}
-              className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="px-6 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+              className="px-4 py-2 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
             >
-              Save Journey
+              Save
             </button>
           </div>
         </div>

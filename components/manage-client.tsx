@@ -25,6 +25,7 @@ import {
   X,
   Check,
   ExternalLink,
+  Filter,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -104,6 +105,36 @@ function getStatusBadgeColor(statusName: string) {
   }
 }
 
+function getTripStatusBadgeColor(status: string) {
+  switch (status) {
+    case "DRAFT":
+      return "bg-slate-100 text-slate-700 border-slate-200";
+    case "PLANNING":
+      return "bg-blue-100 text-blue-700 border-blue-200";
+    case "LIVE":
+      return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    case "ARCHIVED":
+      return "bg-amber-100 text-amber-700 border-amber-200";
+    default:
+      return "bg-slate-100 text-slate-700 border-slate-200";
+  }
+}
+
+function getTripStatusLabel(status: string) {
+  switch (status) {
+    case "DRAFT":
+      return "Draft";
+    case "PLANNING":
+      return "Planning";
+    case "LIVE":
+      return "Live";
+    case "ARCHIVED":
+      return "Archived";
+    default:
+      return status;
+  }
+}
+
 export default function ManageClient({
   trips,
   segmentTimeZones,
@@ -121,6 +152,7 @@ export default function ManageClient({
   } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("non-draft"); // Show non-draft trips by default
 
   // Close dialog after transition completes and UI updates
   useEffect(() => {
@@ -179,10 +211,18 @@ export default function ManageClient({
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const upcomingTrips = trips.filter(
+  // Filter trips by status
+  const filteredTrips = 
+    statusFilter === "all" 
+      ? trips 
+      : statusFilter === "non-draft"
+      ? trips.filter((trip) => trip.status !== "DRAFT")
+      : trips.filter((trip) => trip.status === statusFilter);
+
+  const upcomingTrips = filteredTrips.filter(
     (trip) => new Date(trip.startDate) >= today
   );
-  const pastTrips = trips.filter((trip) => new Date(trip.startDate) < today);
+  const pastTrips = filteredTrips.filter((trip) => new Date(trip.startDate) < today);
 
   const renderTripSection = (
     sectionTrips: TripWithRelations[],
@@ -232,9 +272,18 @@ export default function ManageClient({
                 )}
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-lg text-slate-900 truncate">
-                    {trip.title}
-                  </h3>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-lg text-slate-900 truncate">
+                      {trip.title}
+                    </h3>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded border ${getTripStatusBadgeColor(
+                        trip.status
+                      )}`}
+                    >
+                      {getTripStatusLabel(trip.status)}
+                    </span>
+                  </div>
                   <p className="text-sm text-slate-500">
                     {new Date(trip.startDate).toLocaleDateString()} –{" "}
                     {new Date(trip.endDate).toLocaleDateString()}
@@ -644,13 +693,85 @@ export default function ManageClient({
           </div>
         </div>
 
+        {/* Status Filter */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-slate-700 font-medium">
+              <Filter className="h-4 w-4" />
+              <span>Status:</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setStatusFilter("non-draft")}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                  statusFilter === "non-draft"
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setStatusFilter("all")}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                  statusFilter === "all"
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setStatusFilter("PLANNING")}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                  statusFilter === "PLANNING"
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                Planning
+              </button>
+              <button
+                onClick={() => setStatusFilter("LIVE")}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                  statusFilter === "LIVE"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                Live
+              </button>
+              <button
+                onClick={() => setStatusFilter("ARCHIVED")}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                  statusFilter === "ARCHIVED"
+                    ? "bg-amber-600 text-white border-amber-600"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                Archived
+              </button>
+              <button
+                onClick={() => setStatusFilter("DRAFT")}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                  statusFilter === "DRAFT"
+                    ? "bg-slate-600 text-white border-slate-600"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                Draft
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Trip Sections */}
         <div className="space-y-8">
           {renderTripSection(upcomingTrips, "Upcoming Trips")}
           {renderTripSection(pastTrips, "Past Trips")}
         </div>
 
-        {trips.length === 0 && (
+        {filteredTrips.length === 0 && trips.length === 0 && (
           <div className="text-center py-16">
             <div className="w-20 h-20 mx-auto mb-4 bg-slate-100 rounded-full flex items-center justify-center">
               <MapPin className="h-10 w-10 text-slate-400" />
@@ -667,6 +788,23 @@ export default function ManageClient({
                 Create Your First Trip
               </Button>
             </Link>
+          </div>
+        )}
+
+        {filteredTrips.length === 0 && trips.length > 0 && (
+          <div className="text-center py-16">
+            <div className="w-20 h-20 mx-auto mb-4 bg-slate-100 rounded-full flex items-center justify-center">
+              <Filter className="h-10 w-10 text-slate-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-slate-700 mb-2">
+              No trips match this filter
+            </h3>
+            <p className="text-slate-500 mb-6 max-w-md mx-auto">
+              Try selecting a different status filter to see your trips.
+            </p>
+            <Button onClick={() => setStatusFilter("all")} size="lg">
+              Show All Trips
+            </Button>
           </div>
         )}
       </div>

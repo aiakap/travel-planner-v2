@@ -48,7 +48,9 @@ export default async function ManagePage() {
   }
 
   const trips = await prisma.trip.findMany({
-    where: { userId: session.user?.id },
+    where: { 
+      userId: session.user?.id,
+    },
     include: {
       segments: {
         orderBy: { order: "asc" },

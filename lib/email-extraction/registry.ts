@@ -9,6 +9,11 @@ import { ExtractionPlugin, ExtractionRegistry } from './types';
 import { hotelExtractionPlugin } from './plugins/hotel-extraction-plugin';
 import { flightExtractionPlugin } from './plugins/flight-extraction-plugin';
 import { carRentalExtractionPlugin } from './plugins/car-rental-extraction-plugin';
+import { trainExtractionPlugin } from './plugins/train-extraction-plugin';
+import { restaurantExtractionPlugin } from './plugins/restaurant-extraction-plugin';
+import { eventExtractionPlugin } from './plugins/event-extraction-plugin';
+import { cruiseExtractionPlugin } from './plugins/cruise-extraction-plugin';
+import { genericReservationPlugin } from './plugins/generic-reservation-plugin';
 
 /** Helper to register a plugin */
 function registerPlugin(registry: ExtractionRegistry, plugin: ExtractionPlugin): void {
@@ -23,9 +28,17 @@ export function createExtractionRegistry(): ExtractionRegistry {
   const registry = new Map<string, ExtractionPlugin>();
   
   // Register all built-in plugins
+  // Specific plugins (priority 10) - evaluated first
   registerPlugin(registry, hotelExtractionPlugin);
   registerPlugin(registry, flightExtractionPlugin);
   registerPlugin(registry, carRentalExtractionPlugin);
+  registerPlugin(registry, trainExtractionPlugin);
+  registerPlugin(registry, restaurantExtractionPlugin);
+  registerPlugin(registry, eventExtractionPlugin);
+  registerPlugin(registry, cruiseExtractionPlugin);
+  
+  // Generic fallback plugin (priority 999) - evaluated last
+  registerPlugin(registry, genericReservationPlugin);
   
   return registry;
 }

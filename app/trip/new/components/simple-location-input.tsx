@@ -57,30 +57,40 @@ export function SimpleLocationInput({
   return (
     <div 
       className={`
-        flex items-center gap-3 py-3 px-4 rounded-lg transition-all
+        flex flex-col md:flex-row md:items-center gap-2 md:gap-3 py-2 md:py-3 px-3 md:px-4 rounded-lg transition-all
         ${isFocused ? 'bg-indigo-50 ring-2 ring-indigo-300' : 'bg-white hover:bg-gray-50'}
       `}
     >
-      {/* Chapter Number */}
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">
-        {index + 1}
+      {/* Top row on mobile: Number, Name, Type */}
+      <div className="flex items-center gap-2 md:gap-3">
+        {/* Chapter Number */}
+        <div className="flex-shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs md:text-sm font-bold text-gray-600">
+          {index + 1}
+        </div>
+
+        {/* Chapter Name */}
+        <div className="flex-1 md:flex-shrink-0 md:w-32">
+          <div className="text-xs md:text-sm font-medium text-gray-900 truncate">
+            {segment.name}
+          </div>
+          <div className="text-[10px] md:text-xs text-gray-500">
+            {segment.days} day{segment.days !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        {/* Segment Type Badge - show on mobile */}
+        <div className="flex-shrink-0 md:hidden">
+          <div className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${getSegmentTypeColor(segment.type)}`}>
+            {formatSegmentType(segment.type)}
+          </div>
+        </div>
       </div>
 
-      {/* Chapter Name */}
-      <div className="flex-shrink-0 w-32">
-        <div className="text-sm font-medium text-gray-900 truncate">
-          {segment.name}
-        </div>
-        <div className="text-xs text-gray-500">
-          {segment.days} day{segment.days !== 1 ? 's' : ''}
-        </div>
-      </div>
-
-      {/* Toggle Button */}
-      <div className="flex-shrink-0">
+      {/* Toggle Button - full width on mobile */}
+      <div className="w-full md:w-auto md:flex-shrink-0">
         <button
           onClick={() => onToggleSameLocation(!sameLocation)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-300 hover:border-gray-400 transition-colors bg-white"
+          className="w-full md:w-auto flex items-center justify-center md:justify-start gap-2 px-3 py-1.5 rounded-md border border-gray-300 hover:border-gray-400 transition-colors bg-white"
           type="button"
         >
           <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
@@ -94,9 +104,9 @@ export function SimpleLocationInput({
         </button>
       </div>
 
-      {/* Location Inputs */}
+      {/* Location Inputs - stack on mobile */}
       {sameLocation ? (
-        <div className="flex-1 flex items-center gap-2" ref={startInputRef}>
+        <div className="w-full md:flex-1 flex flex-col md:flex-row items-stretch md:items-center gap-2" ref={startInputRef}>
           <div className="flex-1">
             <PlaceAutocompleteLive
               value={segment.start_location}
@@ -113,50 +123,59 @@ export function SimpleLocationInput({
             />
           </div>
           {isStartAutoFilled && (
-            <div className="flex-shrink-0 flex items-center gap-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+            <div className="flex-shrink-0 flex items-center gap-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded self-start md:self-center">
               <Sparkles size={12} />
               <span>auto</span>
             </div>
           )}
         </div>
       ) : (
-        <div className="flex-1 flex items-center gap-2">
-          <div className="flex-1" ref={startInputRef}>
-            <PlaceAutocompleteLive
-              value={segment.start_location}
-              onChange={(value, imageUrl) => onLocationChange('start_location', value, imageUrl)}
-              onPlaceSelected={(value, imageUrl, placeData) => onLocationChange('start_location', value, imageUrl, placeData)}
-              placeholder="From"
-              icon={MapPin}
-            />
-          </div>
-          {isStartAutoFilled && (
-            <div className="flex-shrink-0 flex items-center gap-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
-              <Sparkles size={12} />
-              <span>auto</span>
+        <div className="w-full md:flex-1 flex flex-col md:flex-row items-stretch md:items-center gap-2">
+          {/* From location */}
+          <div className="flex items-center gap-2 flex-1" ref={startInputRef}>
+            <div className="flex-1">
+              <PlaceAutocompleteLive
+                value={segment.start_location}
+                onChange={(value, imageUrl) => onLocationChange('start_location', value, imageUrl)}
+                onPlaceSelected={(value, imageUrl, placeData) => onLocationChange('start_location', value, imageUrl, placeData)}
+                placeholder="From"
+                icon={MapPin}
+              />
             </div>
-          )}
-          <div className="flex-shrink-0 text-gray-300">→</div>
-          <div className="flex-1" ref={endInputRef}>
-            <PlaceAutocompleteLive
-              value={segment.end_location}
-              onChange={(value, imageUrl) => onLocationChange('end_location', value, imageUrl)}
-              onPlaceSelected={(value, imageUrl, placeData) => onLocationChange('end_location', value, imageUrl, placeData)}
-              placeholder="To"
-              icon={MapPin}
-            />
+            {isStartAutoFilled && (
+              <div className="flex-shrink-0 flex items-center gap-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+                <Sparkles size={12} />
+                <span>auto</span>
+              </div>
+            )}
           </div>
-          {isEndAutoFilled && (
-            <div className="flex-shrink-0 flex items-center gap-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
-              <Sparkles size={12} />
-              <span>auto</span>
+          
+          {/* Arrow - hide on mobile, show on desktop */}
+          <div className="hidden md:block flex-shrink-0 text-gray-300">→</div>
+          
+          {/* To location */}
+          <div className="flex items-center gap-2 flex-1" ref={endInputRef}>
+            <div className="flex-1">
+              <PlaceAutocompleteLive
+                value={segment.end_location}
+                onChange={(value, imageUrl) => onLocationChange('end_location', value, imageUrl)}
+                onPlaceSelected={(value, imageUrl, placeData) => onLocationChange('end_location', value, imageUrl, placeData)}
+                placeholder="To"
+                icon={MapPin}
+              />
             </div>
-          )}
+            {isEndAutoFilled && (
+              <div className="flex-shrink-0 flex items-center gap-1 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+                <Sparkles size={12} />
+                <span>auto</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Segment Type Badge */}
-      <div className="flex-shrink-0">
+      {/* Segment Type Badge - show on desktop only */}
+      <div className="hidden md:block flex-shrink-0">
         <div className={`text-xs px-2 py-1 rounded font-medium ${getSegmentTypeColor(segment.type)}`}>
           {formatSegmentType(segment.type)}
         </div>
