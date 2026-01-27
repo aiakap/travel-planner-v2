@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { buildChatUrl } from "../lib/chat-integration"
+import { SectionHeading } from "./section-heading"
 
 interface WeatherSectionProps {
   itinerary: ViewItinerary
@@ -179,10 +180,11 @@ export function WeatherSection({ itinerary }: WeatherSectionProps) {
   
   return (
     <section id="weather" className="scroll-mt-32 max-w-5xl mx-auto px-4 py-12">
-      <div className="flex items-center gap-3 mb-6">
-        <Cloud className="h-6 w-6 text-sky-500" />
-        <h2 className="text-3xl font-bold">Weather & Climate</h2>
-      </div>
+      <SectionHeading 
+        icon={Cloud} 
+        title="Forecast" 
+        subtitle="5-day weather for your destinations"
+      />
       
       {loading ? (
         (() => {

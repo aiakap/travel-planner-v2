@@ -125,12 +125,12 @@ export const TEST_CASES: APITestCase[] = [
       currencyCode: 'EUR',
       oneWay: true,
     },
-    expectedStatus: 'unknown',
+    expectedStatus: 'deprecated',
     timeout: 10000,
     category: 'flight',
     sdkMethod: 'amadeus.analytics.itineraryPriceMetrics.get()',
     apiDocUrl: 'https://developers.amadeus.com/self-service/category/flights/api-doc/flight-price-analysis',
-    notes: 'Requires historical data - may have limited routes'
+    notes: 'DEPRECATED - API decommissioned by Amadeus (error code 41254, status 410)'
   },
   {
     id: 'flight-delay-prediction-1',
@@ -148,12 +148,12 @@ export const TEST_CASES: APITestCase[] = [
       flightNumber: '1816',
       duration: 'PT3H55M',
     },
-    expectedStatus: 'unknown',
+    expectedStatus: 'deprecated',
     timeout: 10000,
     category: 'flight',
     sdkMethod: 'amadeus.travel.predictions.flightDelay.get()',
     apiDocUrl: 'https://developers.amadeus.com/self-service/category/flights/api-doc/flight-delay-prediction',
-    notes: 'Complex parameters - likely to fail'
+    notes: 'DEPRECATED - API decommissioned by Amadeus (error code 41254, status 410)'
   },
 
   // ========================================================================
@@ -198,12 +198,12 @@ export const TEST_CASES: APITestCase[] = [
       airportCode: 'JFK',
       date: '2026-08-15',
     },
-    expectedStatus: 'unknown',
+    expectedStatus: 'deprecated',
     timeout: 10000,
     category: 'airport',
     sdkMethod: 'amadeus.airport.predictions.onTime.get()',
     apiDocUrl: 'https://developers.amadeus.com/self-service/category/flights/api-doc/airport-on-time-performance',
-    notes: 'May require specific date format'
+    notes: 'DEPRECATED - API decommissioned by Amadeus (error code 41254, status 410)'
   },
   {
     id: 'airline-lookup-1',

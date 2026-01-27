@@ -79,14 +79,14 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
   }
 
   return (
-    <main className="min-h-screen pb-8">
+    <main className="min-h-screen bg-slate-50 pb-8">
       {/* Trip Selector - Fixed below main nav */}
-      <div className="sticky top-20 z-30 bg-background/95 backdrop-blur border-b">
+      <div className="sticky top-20 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Plane className="h-5 w-5 text-primary" />
-              <span className="font-medium text-sm">Trip Dossier</span>
+              <Plane className="h-5 w-5 text-blue-600" />
+              <span className="font-medium text-sm text-slate-900">Trip Dossier</span>
             </div>
             <Select value={selectedTripId} onValueChange={setSelectedTripId}>
               <SelectTrigger className="w-[280px] text-sm">
@@ -96,7 +96,7 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
                 {itineraries.map((itinerary) => (
                   <SelectItem key={itinerary.id} value={itinerary.id}>
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <MapPin className="h-4 w-4 text-slate-500" />
                       <span>{itinerary.title}</span>
                     </div>
                   </SelectItem>
@@ -111,7 +111,7 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
       <FloatingNav activeSection={activeSection} />
 
       {/* Scrolling Sections */}
-      <div className="scroll-smooth">
+      <div className="scroll-smooth space-y-20">
         <HeroSection itinerary={selectedItinerary} />
         <TodoSection itinerary={selectedItinerary} />
         <ItinerarySection itinerary={selectedItinerary} />

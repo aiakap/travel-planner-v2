@@ -55,10 +55,10 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
         const totalCost = segment.reservations.reduce((sum, r) => sum + r.price, 0)
 
         return (
-          <Card key={segment.id} className="overflow-hidden">
+          <Card key={segment.id} className="overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all">
             {/* Segment Header */}
             <div
-              className="p-4 cursor-pointer hover:bg-accent/50 transition-colors"
+              className="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
               style={{ borderLeft: `4px solid ${segmentColor}` }}
               onClick={() => toggleSegment(segment.id)}
             >

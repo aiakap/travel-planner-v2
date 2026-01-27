@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import type { ViewItinerary, VisaRequirement } from "@/lib/itinerary-view-types"
-import { FileText, AlertTriangle, ExternalLink, Loader2, CheckCircle, XCircle, Check, ChevronsUpDown } from "lucide-react"
+import { FileText, AlertTriangle, ExternalLink, Loader2, CheckCircle, XCircle, Check, ChevronsUpDown, ShieldCheck, Home, AlertCircle } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -10,6 +10,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { COUNTRIES } from "@/lib/countries"
 import { cn } from "@/lib/utils"
+import { SectionHeading } from "./section-heading"
 
 interface VisaSectionProps {
   itinerary: ViewItinerary
@@ -65,19 +66,20 @@ export function VisaSection({ itinerary }: VisaSectionProps) {
   
   return (
     <section id="visa" className="scroll-mt-32 max-w-5xl mx-auto px-4 py-12 mb-12">
-      <div className="flex items-center gap-3 mb-6">
-        <FileText className="h-6 w-6 text-indigo-500" />
-        <h2 className="text-3xl font-bold">Travel Documents & Visas</h2>
-      </div>
+      <SectionHeading 
+        icon={FileText} 
+        title="Documents" 
+        subtitle="Travel requirements"
+      />
       
       {visaInfo.length === 0 ? (
         // Empty state - show form
-        <Card className="p-8">
+        <Card className="p-8 hover:shadow-lg transition-shadow">
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-6">
-              <FileText className="h-16 w-16 mx-auto text-indigo-500 mb-4" />
-              <h3 className="text-xl font-semibold mb-2">Check Visa Requirements</h3>
-              <p className="text-muted-foreground">
+              <FileText className="h-16 w-16 mx-auto text-blue-600 mb-4" />
+              <h3 className="text-xl font-semibold mb-2 text-slate-900">Check Visa Requirements</h3>
+              <p className="text-slate-600 text-sm">
                 Get visa information for your trip destinations based on your citizenship
               </p>
             </div>
@@ -200,7 +202,7 @@ export function VisaSection({ itinerary }: VisaSectionProps) {
               <Button
                 onClick={handleCheckRequirements}
                 disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-700"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold shadow-lg"
                 size="lg"
               >
                 {loading ? (
@@ -246,109 +248,99 @@ export function VisaSection({ itinerary }: VisaSectionProps) {
           </div>
           
           {/* Results cards */}
-          {visaInfo.map((visa, index) => (
-            <Card key={index} className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  {visa.visaRequired ? (
-                    <XCircle className="h-8 w-8 text-red-500" />
-                  ) : (
-                    <CheckCircle className="h-8 w-8 text-green-500" />
-                  )}
-                </div>
-                
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold mb-1">{visa.destination}</h3>
-                  
-                  <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium mb-3 ${
-                    visa.visaRequired 
-                      ? 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400'
-                      : 'bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400'
-                  }`}>
-                    {visa.visaRequired ? 'Visa Required' : 'No Visa Required'}
-                  </div>
-                  
-                  {visa.visaType && (
-                    <p className="text-sm text-muted-foreground mb-2">
-                      <strong>Type:</strong> {visa.visaType}
-                    </p>
-                  )}
-                  
-                  {visa.duration && (
-                    <p className="text-sm text-muted-foreground mb-2">
-                      <strong>Duration:</strong> {visa.duration}
-                    </p>
-                  )}
-                  
-                  {visa.advanceRegistration && (
-                    <div className="mb-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-                      <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
-                        📝 Pre-Arrival Registration Required
-                      </p>
-                      <p className="text-sm text-blue-800 dark:text-blue-200">
-                        {visa.advanceRegistration}
+          <div className="grid md:grid-cols-2 gap-6">
+            {visaInfo.map((visa, index) => (
+              <Card 
+                key={index} 
+                className={`hover:shadow-lg hover:-translate-y-1 transition-all ${
+                  visa.visaRequired 
+                    ? 'bg-slate-50 border-slate-100' 
+                    : 'bg-emerald-50 border-emerald-100'
+                }`}
+              >
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`p-2 rounded-full ${
+                      visa.visaRequired 
+                        ? 'bg-slate-200 text-slate-600' 
+                        : 'bg-emerald-100 text-emerald-600'
+                    }`}>
+                      {visa.visaRequired ? <Home size={24} /> : <ShieldCheck size={24} />}
+                    </div>
+                    <div>
+                      <h3 className={`font-bold ${visa.visaRequired ? 'text-slate-900' : 'text-emerald-900'}`}>
+                        {visa.destination}
+                      </h3>
+                      <p className={`text-xs font-semibold uppercase tracking-wide ${
+                        visa.visaRequired 
+                          ? 'text-slate-500' 
+                          : 'text-emerald-600'
+                      }`}>
+                        {visa.visaType || (visa.visaRequired ? 'Visa Required' : 'Visa Waiver Program')}
                       </p>
                     </div>
-                  )}
+                  </div>
                   
-                  {visa.processingTime && (
-                    <p className="text-sm text-muted-foreground mb-2">
-                      <strong>Processing Time:</strong> {visa.processingTime}
+                  <div className={`space-y-2 text-sm ${visa.visaRequired ? 'text-slate-800' : 'text-emerald-800'}`}>
+                    <p className={`flex justify-between border-b pb-2 ${
+                      visa.visaRequired ? 'border-slate-200' : 'border-emerald-200'
+                    }`}>
+                      <span>Status</span> 
+                      <span className="font-bold">
+                        {visa.visaRequired ? 'Visa Required' : 'No Visa Required'}
+                      </span>
                     </p>
-                  )}
+                    {visa.duration && (
+                      <p className={`flex justify-between border-b pb-2 ${
+                        visa.visaRequired ? 'border-slate-200' : 'border-emerald-200'
+                      }`}>
+                        <span>Duration</span> 
+                        <span className="font-bold">{visa.duration}</span>
+                      </p>
+                    )}
+                    {visa.advanceRegistration && (
+                      <p className={`flex justify-between pt-1`}>
+                        <span>Requirement</span> 
+                        <span className="font-bold">{visa.advanceRegistration}</span>
+                      </p>
+                    )}
+                  </div>
                   
-                  {visa.cost && (
-                    <p className="text-sm text-muted-foreground mb-2">
-                      <strong>Cost:</strong> {visa.cost}
-                    </p>
-                  )}
-                  
-                  {visa.requirements.length > 0 && (
-                    <div className="mb-3">
-                      <p className="text-sm font-medium mb-2">Requirements:</p>
-                      <ul className="list-disc list-inside space-y-1">
-                        {visa.requirements.map((req, i) => (
-                          <li key={i} className="text-sm text-muted-foreground">{req}</li>
-                        ))}
-                      </ul>
+                  {(visa.processingTime || visa.cost || visa.requirements.length > 0) && (
+                    <div className="mt-4 pt-4 border-t border-slate-200">
+                      {visa.processingTime && (
+                        <p className="text-xs text-slate-600 mb-1">
+                          <strong>Processing:</strong> {visa.processingTime}
+                        </p>
+                      )}
+                      {visa.cost && (
+                        <p className="text-xs text-slate-600 mb-1">
+                          <strong>Cost:</strong> {visa.cost}
+                        </p>
+                      )}
+                      {visa.requirements.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs font-semibold text-slate-700 mb-1">Requirements:</p>
+                          <ul className="text-xs text-slate-600 space-y-0.5 ml-4 list-disc">
+                            {visa.requirements.slice(0, 3).map((req, i) => (
+                              <li key={i}>{req}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                   
                   {visa.importantNotes && (
-                    <div className="mb-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                      <p className="text-sm font-medium text-amber-900 dark:text-amber-100 mb-1">
-                        ⚠️ Important
-                      </p>
-                      <p className="text-sm text-amber-800 dark:text-amber-200">
-                        {visa.importantNotes}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {visa.sources.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2">Official Sources:</p>
-                      <div className="space-y-2">
-                        {visa.sources.map((source, i) => (
-                          <a
-                            key={i}
-                            href={source.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            <span>{source.title}</span>
-                            <span className="text-xs text-muted-foreground">({source.domain})</span>
-                          </a>
-                        ))}
-                      </div>
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg flex gap-3 text-sm text-amber-800">
+                      <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                      <p>{visa.importantNotes}</p>
                     </div>
                   )}
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            ))}
+          </div>
           
           {/* Warning footer */}
           <Card className="p-4 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">

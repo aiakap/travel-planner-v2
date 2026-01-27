@@ -1,7 +1,6 @@
 "use client"
 
 import { LayoutGrid, CheckSquare, Calendar, Cloud, Backpack, FileText } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 interface FloatingNavProps {
   activeSection: string
@@ -20,36 +19,35 @@ export function FloatingNav({ activeSection }: FloatingNavProps) {
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id)
     if (element) {
-      const offset = 120 // Increased from 80 to prevent header cutoff
+      const offset = 120
       const top = element.getBoundingClientRect().top + window.pageYOffset - offset
       window.scrollTo({ top, behavior: 'smooth' })
     }
   }
   
   return (
-    <nav className="sticky top-[5.5rem] z-25 flex justify-center mb-6 px-4 bg-background/50 backdrop-blur-sm py-3">
-      <div className="bg-card/95 backdrop-blur-sm border rounded-full px-3 py-2 shadow-lg">
-        <div className="flex gap-1">
-          {sections.map(section => {
-            const Icon = section.icon
-            return (
-              <button
-                key={section.id}
-                onClick={() => scrollToSection(section.id)}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                  activeSection === section.id
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "hover:bg-accent"
-                )}
-              >
-                <Icon className="h-4 w-4 inline mr-1.5" />
-                <span className="hidden md:inline">{section.label}</span>
-              </button>
-            )
-          })}
-        </div>
+    <div className="sticky top-[64px] z-40 py-4 flex justify-center px-4 pointer-events-none">
+      <div className="bg-white/80 backdrop-blur-xl border border-white/50 shadow-lg shadow-slate-200/50 rounded-full p-1.5 flex gap-1 pointer-events-auto overflow-x-auto no-scrollbar">
+        {sections.map(section => {
+          const Icon = section.icon
+          const isActive = activeSection === section.id
+          
+          return (
+            <button
+              key={section.id}
+              onClick={() => scrollToSection(section.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-600 ring-offset-2' 
+                  : 'bg-white/80 text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm backdrop-blur-sm'
+              }`}
+            >
+              <Icon size={16} />
+              <span className="hidden md:inline">{section.label}</span>
+            </button>
+          )
+        })}
       </div>
-    </nav>
+    </div>
   )
 }

@@ -2,11 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   searchFlightInspiration,
   searchFlightCheapestDates,
-  analyzeFlightPrice,
-  predictFlightDelay,
   getAirportRoutes,
   getNearbyAirports,
-  getAirportOnTimePerformance,
   lookupAirlineCode,
   getAirlineRoutes,
   getFlightCheckinLinks,
@@ -47,23 +44,12 @@ export async function POST(request: NextRequest) {
           results = await searchFlightCheapestDates(params);
           break;
 
-        // Flight Intelligence
-        case 'flight-price-analysis':
-          results = await analyzeFlightPrice(params);
-          break;
-        case 'flight-delay-prediction':
-          results = await predictFlightDelay(params);
-          break;
-
         // Airport Intelligence
         case 'airport-routes':
           results = await getAirportRoutes(params.airportCode, params.max);
           break;
         case 'airport-nearby':
           results = await getNearbyAirports(params);
-          break;
-        case 'airport-ontime':
-          results = await getAirportOnTimePerformance(params.airportCode, params.date);
           break;
 
         // Airline Information

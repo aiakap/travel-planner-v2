@@ -246,27 +246,36 @@ export async function searchHotels(params: HotelSearchParams): Promise<HotelOffe
 
     // Check if response has data
     if (!offersResponse || !offersResponse.data) {
-      console.error('Hotel offers response missing data:', offersResponse);
+      console.error('❌ [AMADEUS] Hotel offers response missing data:', offersResponse);
       return [];
     }
 
     // Ensure data is an array
     if (!Array.isArray(offersResponse.data)) {
-      console.error('Hotel offers response data is not an array:', typeof offersResponse.data);
+      console.error('❌ [AMADEUS] Hotel offers response data is not an array:', typeof offersResponse.data);
+      console.error('❌ [AMADEUS] Actual data value:', offersResponse.data);
       return [];
     }
+
+    // Additional safety check - ensure data is not null/undefined
+    if (offersResponse.data === null || offersResponse.data === undefined) {
+      console.error('❌ [AMADEUS] Hotel offers data is null or undefined');
+      return [];
+    }
+
+    console.log(`📊 [AMADEUS] Processing ${offersResponse.data.length} hotel offers`);
 
     // Validate response with Zod
     const validation = validateHotelOffers(offersResponse.data);
     
     if (!validation.success) {
-      console.error('Hotel offers validation failed:', formatValidationErrors(validation.error));
+      console.error('❌ [AMADEUS] Hotel offers validation failed:', formatValidationErrors(validation.error));
       // If validation fails, try to transform manually with best effort
-      console.warn('Continuing with manual transformation despite validation errors');
+      console.warn('⚠️  [AMADEUS] Continuing with manual transformation despite validation errors');
     }
 
-    // Transform to our format
-    const offers: HotelOffer[] = offersResponse.data.map((offer: any) => {
+    // Transform to our format - with additional safety
+    const offers: HotelOffer[] = (offersResponse.data || []).map((offer: any) => {
       // Validate individual hotel offer
       const hotelValidation = SimpleHotelOfferSchema.safeParse({
         hotelId: offer.hotel?.hotelId,
@@ -488,73 +497,79 @@ export async function searchFlightCheapestDates(params: FlightCheapestDateParams
 // Flight Intelligence & Prediction
 // ============================================================================
 
-export interface FlightPriceAnalysisParams {
-  originIataCode: string;
-  destinationIataCode: string;
-  departureDate: string; // YYYY-MM-DD
-  currencyCode?: string;
-  oneWay?: boolean;
-}
+// ============================================================================
+// DEPRECATED APIS - Decommissioned by Amadeus (410 Gone)
+// ============================================================================
 
-export async function analyzeFlightPrice(params: FlightPriceAnalysisParams): Promise<any> {
-  try {
-    console.log('💰 Flight Price Analysis Request:', params);
-    
-    const response = await amadeus.analytics.itineraryPriceMetrics.get({
-      originIataCode: params.originIataCode,
-      destinationIataCode: params.destinationIataCode,
-      departureDate: params.departureDate,
-      currencyCode: params.currencyCode || 'USD',
-      oneWay: params.oneWay !== false,
-    });
+// export interface FlightPriceAnalysisParams {
+//   originIataCode: string;
+//   destinationIataCode: string;
+//   departureDate: string; // YYYY-MM-DD
+//   currencyCode?: string;
+//   oneWay?: boolean;
+// }
 
-    console.log(`✅ Price analysis complete`);
-    return response.data;
-  } catch (error) {
-    console.error('Flight price analysis error:', error);
-    const parsedError = parseAmadeusError(error);
-    throw parsedError;
-  }
-}
+// DEPRECATED: API decommissioned by Amadeus (error code 41254)
+// export async function analyzeFlightPrice(params: FlightPriceAnalysisParams): Promise<any> {
+//   try {
+//     console.log('💰 Flight Price Analysis Request:', params);
+//     
+//     const response = await amadeus.analytics.itineraryPriceMetrics.get({
+//       originIataCode: params.originIataCode,
+//       destinationIataCode: params.destinationIataCode,
+//       departureDate: params.departureDate,
+//       currencyCode: params.currencyCode || 'USD',
+//       oneWay: params.oneWay !== false,
+//     });
+//
+//     console.log(`✅ Price analysis complete`);
+//     return response.data;
+//   } catch (error) {
+//     console.error('Flight price analysis error:', error);
+//     const parsedError = parseAmadeusError(error);
+//     throw parsedError;
+//   }
+// }
 
-export interface FlightDelayPredictionParams {
-  originLocationCode: string;
-  destinationLocationCode: string;
-  departureDate: string; // YYYY-MM-DD
-  departureTime: string; // HH:mm:ss
-  arrivalDate: string;
-  arrivalTime: string;
-  aircraftCode: string;
-  carrierCode: string;
-  flightNumber: string;
-  duration: string; // ISO 8601 (PT2H30M)
-}
+// export interface FlightDelayPredictionParams {
+//   originLocationCode: string;
+//   destinationLocationCode: string;
+//   departureDate: string; // YYYY-MM-DD
+//   departureTime: string; // HH:mm:ss
+//   arrivalDate: string;
+//   arrivalTime: string;
+//   aircraftCode: string;
+//   carrierCode: string;
+//   flightNumber: string;
+//   duration: string; // ISO 8601 (PT2H30M)
+// }
 
-export async function predictFlightDelay(params: FlightDelayPredictionParams): Promise<any[]> {
-  try {
-    console.log('⏰ Flight Delay Prediction Request:', params);
-    
-    const response = await amadeus.travel.predictions.flightDelay.get({
-      originLocationCode: params.originLocationCode,
-      destinationLocationCode: params.destinationLocationCode,
-      departureDate: params.departureDate,
-      departureTime: params.departureTime,
-      arrivalDate: params.arrivalDate,
-      arrivalTime: params.arrivalTime,
-      aircraftCode: params.aircraftCode,
-      carrierCode: params.carrierCode,
-      flightNumber: params.flightNumber,
-      duration: params.duration,
-    });
-
-    console.log(`✅ Delay predictions generated`);
-    return response.data;
-  } catch (error) {
-    console.error('Flight delay prediction error:', error);
-    const parsedError = parseAmadeusError(error);
-    throw parsedError;
-  }
-}
+// DEPRECATED: API decommissioned by Amadeus (error code 41254)
+// export async function predictFlightDelay(params: FlightDelayPredictionParams): Promise<any[]> {
+//   try {
+//     console.log('⏰ Flight Delay Prediction Request:', params);
+//     
+//     const response = await amadeus.travel.predictions.flightDelay.get({
+//       originLocationCode: params.originLocationCode,
+//       destinationLocationCode: params.destinationLocationCode,
+//       departureDate: params.departureDate,
+//       departureTime: params.departureTime,
+//       arrivalDate: params.arrivalDate,
+//       arrivalTime: params.arrivalTime,
+//       aircraftCode: params.aircraftCode,
+//       carrierCode: params.carrierCode,
+//       flightNumber: params.flightNumber,
+//       duration: params.duration,
+//     });
+//
+//     console.log(`✅ Delay predictions generated`);
+//     return response.data;
+//   } catch (error) {
+//     console.error('Flight delay prediction error:', error);
+//     const parsedError = parseAmadeusError(error);
+//     throw parsedError;
+//   }
+// }
 
 // ============================================================================
 // Airport Intelligence
@@ -605,23 +620,24 @@ export async function getNearbyAirports(params: AirportNearbyParams): Promise<an
   }
 }
 
-export async function getAirportOnTimePerformance(airportCode: string, date: string): Promise<any> {
-  try {
-    console.log(`📊 Getting on-time performance for: ${airportCode} on ${date}`);
-    
-    const response = await amadeus.airport.predictions.onTime.get({
-      airportCode,
-      date,
-    });
-
-    console.log(`✅ On-time performance data retrieved`);
-    return response.data;
-  } catch (error) {
-    console.error('Airport on-time performance error:', error);
-    const parsedError = parseAmadeusError(error);
-    throw parsedError;
-  }
-}
+// DEPRECATED: API decommissioned by Amadeus (error code 41254)
+// export async function getAirportOnTimePerformance(airportCode: string, date: string): Promise<any> {
+//   try {
+//     console.log(`📊 Getting on-time performance for: ${airportCode} on ${date}`);
+//     
+//     const response = await amadeus.airport.predictions.onTime.get({
+//       airportCode,
+//       date,
+//     });
+//
+//     console.log(`✅ On-time performance data retrieved`);
+//     return response.data;
+//   } catch (error) {
+//     console.error('Airport on-time performance error:', error);
+//     const parsedError = parseAmadeusError(error);
+//     throw parsedError;
+//   }
+// }
 
 // ============================================================================
 // Airline Information

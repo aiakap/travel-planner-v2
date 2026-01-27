@@ -177,176 +177,28 @@ function FlightDiscoveryTab() {
 // Flight Intelligence Tab Component
 // ============================================================================
 function FlightIntelligenceTab() {
-  const [priceOrigin, setPriceOrigin] = useState("MAD");
-  const [priceDest, setPriceDest] = useState("CDG");
-  const [priceDate, setPriceDate] = useState("2026-08-15");
-  const [priceResult, setPriceResult] = useState<TestResult | null>(null);
-  const [priceLoading, setPriceLoading] = useState(false);
-
-  const [delayOrigin, setDelayOrigin] = useState("NCE");
-  const [delayDest, setDelayDest] = useState("IST");
-  const [delayDepDate, setDelayDepDate] = useState("2026-08-01");
-  const [delayDepTime, setDelayDepTime] = useState("18:20:00");
-  const [delayArrDate, setDelayArrDate] = useState("2026-08-01");
-  const [delayArrTime, setDelayArrTime] = useState("22:15:00");
-  const [delayCarrier, setDelayCarrier] = useState("TK");
-  const [delayFlightNum, setDelayFlightNum] = useState("1816");
-  const [delayAircraft, setDelayAircraft] = useState("321");
-  const [delayDuration, setDelayDuration] = useState("PT3H55M");
-  const [delayResult, setDelayResult] = useState<TestResult | null>(null);
-  const [delayLoading, setDelayLoading] = useState(false);
-
-  const testPriceAnalysis = async () => {
-    setPriceLoading(true);
-    const startTime = Date.now();
-    try {
-      const response = await fetch("/api/amadeus/advanced", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiType: "flight-price-analysis",
-          params: {
-            originIataCode: priceOrigin,
-            destinationIataCode: priceDest,
-            departureDate: priceDate,
-            currencyCode: "EUR",
-            oneWay: true,
-          },
-        }),
-      });
-      const duration = Date.now() - startTime;
-      const data = await response.json();
-      setPriceResult({ response: data, status: response.status, duration });
-    } catch (error: any) {
-      setPriceResult({ response: null, error: error.message });
-    } finally {
-      setPriceLoading(false);
-    }
-  };
-
-  const testDelayPrediction = async () => {
-    setDelayLoading(true);
-    const startTime = Date.now();
-    try {
-      const response = await fetch("/api/amadeus/advanced", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiType: "flight-delay-prediction",
-          params: {
-            originLocationCode: delayOrigin,
-            destinationLocationCode: delayDest,
-            departureDate: delayDepDate,
-            departureTime: delayDepTime,
-            arrivalDate: delayArrDate,
-            arrivalTime: delayArrTime,
-            aircraftCode: delayAircraft,
-            carrierCode: delayCarrier,
-            flightNumber: delayFlightNum,
-            duration: delayDuration,
-          },
-        }),
-      });
-      const duration = Date.now() - startTime;
-      const data = await response.json();
-      setDelayResult({ response: data, status: response.status, duration });
-    } catch (error: any) {
-      setDelayResult({ response: null, error: error.message });
-    } finally {
-      setDelayLoading(false);
-    }
-  };
-
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Flight Price Analysis</CardTitle>
-          <CardDescription>Compare flight prices to historical data</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Origin</Label>
-              <Input value={priceOrigin} onChange={(e) => setPriceOrigin(e.target.value.toUpperCase())} maxLength={3} />
+    <Card>
+      <CardHeader>
+        <CardTitle>Flight Intelligence APIs</CardTitle>
+        <CardDescription>Advanced flight analytics and predictions</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Deprecated APIs Removed</strong>
+            <div className="mt-2 space-y-1 text-sm">
+              <div>• Flight Price Analysis - Decommissioned by Amadeus (410 Gone)</div>
+              <div>• Flight Delay Prediction - Decommissioned by Amadeus (410 Gone)</div>
             </div>
-            <div className="space-y-2">
-              <Label>Destination</Label>
-              <Input value={priceDest} onChange={(e) => setPriceDest(e.target.value.toUpperCase())} maxLength={3} />
+            <div className="mt-3 text-xs">
+              These APIs returned error code 41254: "API is decommissioned and resource can not be accessible anymore"
             </div>
-            <div className="space-y-2">
-              <Label>Departure Date</Label>
-              <Input type="date" value={priceDate} onChange={(e) => setPriceDate(e.target.value)} />
-            </div>
-          </div>
-          <Button onClick={testPriceAnalysis} disabled={priceLoading}>
-            {priceLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Analyze Price
-          </Button>
-        </CardContent>
-      </Card>
-      {priceResult && <ApiResponseViewer response={priceResult.response} status={priceResult.status} duration={priceResult.duration} error={priceResult.error} />}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Flight Delay Prediction</CardTitle>
-          <CardDescription>Predict flight delay probability</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Origin</Label>
-              <Input value={delayOrigin} onChange={(e) => setDelayOrigin(e.target.value.toUpperCase())} maxLength={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Destination</Label>
-              <Input value={delayDest} onChange={(e) => setDelayDest(e.target.value.toUpperCase())} maxLength={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Carrier Code</Label>
-              <Input value={delayCarrier} onChange={(e) => setDelayCarrier(e.target.value.toUpperCase())} maxLength={2} />
-            </div>
-            <div className="space-y-2">
-              <Label>Flight Number</Label>
-              <Input value={delayFlightNum} onChange={(e) => setDelayFlightNum(e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Dep Date</Label>
-              <Input type="date" value={delayDepDate} onChange={(e) => setDelayDepDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Dep Time</Label>
-              <Input value={delayDepTime} onChange={(e) => setDelayDepTime(e.target.value)} placeholder="18:20:00" />
-            </div>
-            <div className="space-y-2">
-              <Label>Arr Date</Label>
-              <Input type="date" value={delayArrDate} onChange={(e) => setDelayArrDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Arr Time</Label>
-              <Input value={delayArrTime} onChange={(e) => setDelayArrTime(e.target.value)} placeholder="22:15:00" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Aircraft Code</Label>
-              <Input value={delayAircraft} onChange={(e) => setDelayAircraft(e.target.value)} placeholder="321" />
-            </div>
-            <div className="space-y-2">
-              <Label>Duration (ISO 8601)</Label>
-              <Input value={delayDuration} onChange={(e) => setDelayDuration(e.target.value)} placeholder="PT3H55M" />
-            </div>
-          </div>
-          <Button onClick={testDelayPrediction} disabled={delayLoading}>
-            {delayLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Predict Delay
-          </Button>
-        </CardContent>
-      </Card>
-      {delayResult && <ApiResponseViewer response={delayResult.response} status={delayResult.status} duration={delayResult.duration} error={delayResult.error} />}
-    </div>
+          </AlertDescription>
+        </Alert>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -363,11 +215,6 @@ function AirportDataTab() {
   const [nearbyRadius, setNearbyRadius] = useState("500");
   const [nearbyResult, setNearbyResult] = useState<TestResult | null>(null);
   const [nearbyLoading, setNearbyLoading] = useState(false);
-
-  const [ontimeAirport, setOntimeAirport] = useState("JFK");
-  const [ontimeDate, setOntimeDate] = useState("2026-08-15");
-  const [ontimeResult, setOntimeResult] = useState<TestResult | null>(null);
-  const [ontimeLoading, setOntimeLoading] = useState(false);
 
   const [airlineLookup, setAirlineLookup] = useState("BA");
   const [lookupResult, setLookupResult] = useState<TestResult | null>(null);
@@ -425,28 +272,6 @@ function AirportDataTab() {
     }
   };
 
-  const testOnTimePerformance = async () => {
-    setOntimeLoading(true);
-    const startTime = Date.now();
-    try {
-      const response = await fetch("/api/amadeus/advanced", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiType: "airport-ontime",
-          params: { airportCode: ontimeAirport, date: ontimeDate },
-        }),
-      });
-      const duration = Date.now() - startTime;
-      const data = await response.json();
-      setOntimeResult({ response: data, status: response.status, duration });
-    } catch (error: any) {
-      setOntimeResult({ response: null, error: error.message });
-    } finally {
-      setOntimeLoading(false);
-    }
-  };
-
   const testAirlineLookup = async () => {
     setLookupLoading(true);
     const startTime = Date.now();
@@ -495,80 +320,6 @@ function AirportDataTab() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Flight Price Analysis</CardTitle>
-          <CardDescription>Compare current prices to historical data</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Origin</Label>
-              <Input value={priceOrigin} onChange={(e) => setPriceOrigin(e.target.value.toUpperCase())} maxLength={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Destination</Label>
-              <Input value={priceDest} onChange={(e) => setPriceDest(e.target.value.toUpperCase())} maxLength={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Date</Label>
-              <Input type="date" value={priceDate} onChange={(e) => setPriceDate(e.target.value)} />
-            </div>
-          </div>
-          <Button onClick={testPriceAnalysis} disabled={priceLoading}>
-            {priceLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Analyze Price
-          </Button>
-        </CardContent>
-      </Card>
-      {priceResult && <ApiResponseViewer response={priceResult.response} status={priceResult.status} duration={priceResult.duration} error={priceResult.error} />}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Flight Delay Prediction</CardTitle>
-          <CardDescription>AI-powered delay probability predictions</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Origin</Label>
-              <Input value={delayOrigin} onChange={(e) => setDelayOrigin(e.target.value.toUpperCase())} maxLength={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Destination</Label>
-              <Input value={delayDest} onChange={(e) => setDelayDest(e.target.value.toUpperCase())} maxLength={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Carrier</Label>
-              <Input value={delayCarrier} onChange={(e) => setDelayCarrier(e.target.value.toUpperCase())} maxLength={2} />
-            </div>
-            <div className="space-y-2">
-              <Label>Flight #</Label>
-              <Input value={delayFlightNum} onChange={(e) => setDelayFlightNum(e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Departure</Label>
-              <Input type="date" value={delayDepDate} onChange={(e) => setDelayDepDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Dep Time</Label>
-              <Input value={delayDepTime} onChange={(e) => setDelayDepTime(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Aircraft</Label>
-              <Input value={delayAircraft} onChange={(e) => setDelayAircraft(e.target.value)} />
-            </div>
-          </div>
-          <Button onClick={testDelayPrediction} disabled={delayLoading}>
-            {delayLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Predict Delay
-          </Button>
-        </CardContent>
-      </Card>
-      {delayResult && <ApiResponseViewer response={delayResult.response} status={delayResult.status} duration={delayResult.duration} error={delayResult.error} />}
-
-      <Card>
-        <CardHeader>
           <CardTitle>Airport Routes</CardTitle>
           <CardDescription>Find all destinations from an airport</CardDescription>
         </CardHeader>
@@ -613,29 +364,15 @@ function AirportDataTab() {
       </Card>
       {nearbyResult && <ApiResponseViewer response={nearbyResult.response} status={nearbyResult.status} duration={nearbyResult.duration} error={nearbyResult.error} />}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Airport On-Time Performance</CardTitle>
-          <CardDescription>Check airport delay predictions</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Airport Code</Label>
-              <Input value={ontimeAirport} onChange={(e) => setOntimeAirport(e.target.value.toUpperCase())} maxLength={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Date</Label>
-              <Input type="date" value={ontimeDate} onChange={(e) => setOntimeDate(e.target.value)} />
-            </div>
+      <Alert variant="destructive" className="mb-4">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Airport On-Time Performance API Deprecated</strong>
+          <div className="mt-1 text-xs">
+            This API has been decommissioned by Amadeus (error code 41254).
           </div>
-          <Button onClick={testOnTimePerformance} disabled={ontimeLoading}>
-            {ontimeLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Check Performance
-          </Button>
-        </CardContent>
-      </Card>
-      {ontimeResult && <ApiResponseViewer response={ontimeResult.response} status={ontimeResult.status} duration={ontimeResult.duration} error={ontimeResult.error} />}
+        </AlertDescription>
+      </Alert>
 
       <Card>
         <CardHeader>
@@ -1364,53 +1101,106 @@ export default function AmadeusTestPage() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-lg">API Coverage Status</CardTitle>
-          <CardDescription>Amadeus APIs implemented in this admin panel</CardDescription>
+          <CardDescription>14 working APIs | 3 deprecated | 2 under investigation</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-green-600">Active</Badge>
-              <span>Flight Search</span>
+          <div className="space-y-4">
+            <div>
+              <div className="text-sm font-medium mb-2">Working APIs (14)</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Flight Search</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Airport Search</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Airport Routes</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Nearby Airports</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Airline Lookup</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Airline Routes</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Hotel List (City)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Hotel List (Geocode)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Hotel Autocomplete</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Hotel Ratings</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Tours (Radius)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Tours (Square)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Check-in Links</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="bg-green-600">✓</Badge>
+                  <span>Flight Status</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-green-600">Active</Badge>
-              <span>Hotel Search</span>
+
+            <div>
+              <div className="text-sm font-medium mb-2">Deprecated APIs (3)</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Badge variant="destructive">✗</Badge>
+                  <span className="line-through">Price Analysis</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="destructive">✗</Badge>
+                  <span className="line-through">Delay Prediction</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="destructive">✗</Badge>
+                  <span className="line-through">Airport On-Time</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-green-600">Active</Badge>
-              <span>Airport Search</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-blue-600">New</Badge>
-              <span>Flight Discovery</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-blue-600">New</Badge>
-              <span>Flight Intelligence</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-blue-600">New</Badge>
-              <span>Airport Data</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-blue-600">New</Badge>
-              <span>Hotel Discovery</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-blue-600">New</Badge>
-              <span>Activities</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-green-600">Active</Badge>
-              <span>Transfers</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="bg-blue-600">New</Badge>
-              <span>Flight Services</span>
+
+            <div>
+              <div className="text-sm font-medium mb-2">Under Investigation (2)</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">?</Badge>
+                  <span>Flight Inspiration</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">?</Badge>
+                  <span>Cheapest Dates</span>
+                </div>
+              </div>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t text-xs text-muted-foreground">
-            <strong>SDK Version:</strong> 11.0.0 | <strong>Environment:</strong> Test | <strong>Total APIs:</strong> 25+
+            <strong>SDK Version:</strong> 11.0.0 | <strong>Environment:</strong> Test | <strong>Working:</strong> 14/19 APIs (73.7%)
           </div>
         </CardContent>
       </Card>
