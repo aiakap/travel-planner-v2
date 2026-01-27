@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Calendar, MapPin, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
+import { TripBuilderModal } from "@/components/trip-builder-modal";
 
 interface Trip {
   id: string;
@@ -37,7 +39,9 @@ function getTripImageUrl(trip: Trip): string {
 }
 
 export function DashboardHero({ upcomingTrips, userName }: DashboardHeroProps) {
+  const router = useRouter();
   const [currentTripIndex, setCurrentTripIndex] = useState(0);
+  const [tripModalOpen, setTripModalOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState<{
     days: number;
     hours: number;
