@@ -9,7 +9,7 @@ import { DatePopover } from "./ui/date-popover";
 import { format, differenceInDays } from "date-fns";
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion";
 import { getTimeZoneForLocation } from "@/lib/actions/timezone";
-import { useAutoSave } from "@/hooks/use-auto-save";
+import { useAutoSaveCallback } from "@/hooks/use-auto-save";
 
 interface InMemorySegment {
   tempId: string;
@@ -93,7 +93,7 @@ export function SegmentEditModal({
   const [editingDates, setEditingDates] = useState(false);
 
   // Auto-save hook with debouncing
-  const { save, saveState } = useAutoSave(async (updates: Partial<InMemorySegment>) => {
+  const { save, saveState } = useAutoSaveCallback(async (updates: Partial<InMemorySegment>) => {
     onUpdate(updates);
   }, { delay: 500 });
 

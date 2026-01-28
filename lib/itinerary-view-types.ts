@@ -137,12 +137,25 @@ export interface PackingList {
   gearReasons?: string
   toiletriesReasons?: string
   documentsReasons?: string
+  luggageStrategy?: LuggageStrategy
+  specialNotes?: string[]
 }
 
 export interface PackingItem {
   name: string
   quantity?: string
   reason?: string
+}
+
+export interface LuggageStrategy {
+  bags: LuggageBag[]
+  organization: string
+  tips: string[]
+}
+
+export interface LuggageBag {
+  type: string
+  reason: string
 }
 
 // Visa requirement types

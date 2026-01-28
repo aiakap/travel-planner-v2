@@ -91,6 +91,7 @@ model Trip {
   status        TripStatus         @default(DRAFT)
   conversations ChatConversation[]
   segments      Segment[]
+  intelligence  TripIntelligence?
   imagePrompt   ImagePrompt?       @relation(fields: [imagePromptId], references: [id])
   user          User               @relation(fields: [userId], references: [id])
 }
@@ -138,13 +139,24 @@ model ReservationCategory {
   types     ReservationType[]
 }
 
+model ReservationDisplayGroup {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  displayName String
+  description String?
+  createdAt   DateTime          @default(now())
+  types       ReservationType[]
+}
+
 model ReservationType {
-  id           String              @id @default(cuid())
-  name         String
-  categoryId   String
-  createdAt    DateTime            @default(now())
-  reservations Reservation[]
-  category     ReservationCategory @relation(fields: [categoryId], references: [id])
+  id             String                    @id @default(cuid())
+  name           String
+  categoryId     String
+  displayGroupId String?
+  createdAt      DateTime                  @default(now())
+  reservations   Reservation[]
+  category       ReservationCategory       @relation(fields: [categoryId], references: [id])
+  displayGroup   ReservationDisplayGroup?  @relation(fields: [displayGroupId], references: [id])
 
   @@unique([categoryId, name])
 }
@@ -573,4 +585,196 @@ model ExtractionFeedback {
   @@index([wasOverridden, reviewed])
   @@index([aiTopType, userSelectedType])
   @@index([createdAt])
+}
+
+// ============================================
+// TRIP INTELLIGENCE MODELS
+// ============================================
+
+model TripIntelligence {
+  id                       String                   @id @default(cuid())
+  tripId                   String                   @unique
+  trip                     Trip                     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  // Feature flags
+  hasCurrencyAdvice        Boolean                  @default(false)
+  hasEmergencyInfo         Boolean                  @default(false)
+  hasCulturalCalendar      Boolean                  @default(false)
+  hasActivitySuggestions   Boolean                  @default(false)
+  hasDiningRecommendations Boolean                  @default(false)
+  
+  // Generated timestamps
+  currencyGeneratedAt      DateTime?
+  emergencyGeneratedAt     DateTime?
+  culturalGeneratedAt      DateTime?
+  activityGeneratedAt      DateTime?
+  diningGeneratedAt        DateTime?
+  
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  
+  // Relations
+  currencyAdvice           CurrencyAdvice[]
+  emergencyInfo            EmergencyInfo[]
+  culturalEvents           CulturalEvent[]
+  activitySuggestions      ActivitySuggestion[]
+  diningRecommendations    DiningRecommendation[]
+  
+  @@index([tripId])
+}
+
+model CurrencyAdvice {
+  id                 String           @id @default(cuid())
+  intelligenceId     String
+  intelligence       TripIntelligence @relation(fields: [intelligenceId], references: [id], onDelete: Cascade)
+  
+  destination        String
+  currency           String
+  exchangeRate       Float
+  baseCurrency       String
+  
+  // Advice items
+  tippingCustom      String
+  atmLocations       String
+  cardAcceptance     String
+  cashRecommendation String
+  
+  // Reasoning
+  reasoning          String
+  relevanceScore     Float
+  profileReferences  Json
+  
+  createdAt          DateTime         @default(now())
+  
+  @@index([intelligenceId])
+}
+
+model EmergencyInfo {
+  id                String           @id @default(cuid())
+  intelligenceId    String
+  intelligence      TripIntelligence @relation(fields: [intelligenceId], references: [id], onDelete: Cascade)
+  
+  destination       String
+  country           String
+  
+  // Emergency contacts
+  embassyName       String
+  embassyAddress    String
+  embassyPhone      String
+  embassyEmail      String?
+  
+  emergencyNumbers  Json
+  nearestHospitals  Json
+  pharmacyInfo      String
+  
+  // Safety info
+  safetyLevel       String
+  commonScams       String[]
+  culturalSafety    String
+  
+  reasoning         String
+  relevanceScore    Float
+  profileReferences Json
+  
+  createdAt         DateTime         @default(now())
+  
+  @@index([intelligenceId])
+}
+
+model CulturalEvent {
+  id                String           @id @default(cuid())
+  intelligenceId    String
+  intelligence      TripIntelligence @relation(fields: [intelligenceId], references: [id], onDelete: Cascade)
+  
+  destination       String
+  eventName         String
+  eventType         String
+  date              DateTime
+  
+  description       String
+  impact            String
+  recommendation    String
+  
+  reasoning         String
+  relevanceScore    Float
+  profileReferences Json
+  
+  createdAt         DateTime         @default(now())
+  
+  @@index([intelligenceId])
+  @@index([date])
+}
+
+model ActivitySuggestion {
+  id                String           @id @default(cuid())
+  intelligenceId    String
+  intelligence      TripIntelligence @relation(fields: [intelligenceId], references: [id], onDelete: Cascade)
+  
+  segmentId         String?
+  dayNumber         Int
+  timeSlot          String
+  
+  // Gap detection
+  gapStartTime      DateTime
+  gapEndTime        DateTime
+  gapDuration       Float
+  
+  // Suggestion
+  activityName      String
+  activityType      String
+  location          String
+  estimatedDuration Float
+  estimatedCost     String
+  
+  // Viator integration
+  viatorProductId   String?
+  viatorUrl         String?
+  viatorRating      Float?
+  
+  description       String
+  whyRelevant       String
+  reasoning         String
+  relevanceScore    Float
+  profileReferences Json
+  
+  createdAt         DateTime         @default(now())
+  
+  @@index([intelligenceId])
+  @@index([dayNumber])
+}
+
+model DiningRecommendation {
+  id                String           @id @default(cuid())
+  intelligenceId    String
+  intelligence      TripIntelligence @relation(fields: [intelligenceId], references: [id], onDelete: Cascade)
+  
+  segmentId         String?
+  dayNumber         Int
+  mealType          String
+  
+  // Restaurant details
+  restaurantName    String
+  cuisineType       String
+  priceRange        String
+  location          String
+  distance          String
+  
+  // Yelp integration
+  yelpId            String?
+  yelpUrl           String?
+  yelpRating        Float?
+  yelpReviewCount   Int?
+  
+  description       String
+  specialties       String[]
+  dietaryMatch      String[]
+  
+  reasoning         String
+  relevanceScore    Float
+  profileReferences Json
+  
+  createdAt         DateTime         @default(now())
+  
+  @@index([intelligenceId])
+  @@index([dayNumber])
 }

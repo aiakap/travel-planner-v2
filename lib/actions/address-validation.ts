@@ -283,11 +283,11 @@ export async function getPlaceAutocompleteSuggestions(
   }
 
   try {
-    // Use a combination of types to get comprehensive results
-    // This will return cities, establishments (airports, hotels, landmarks), and addresses
+    // Use (regions) type to get only geographic places (cities, states, countries, neighborhoods)
+    // This excludes specific street addresses
     const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
       input
-    )}&key=${apiKey}`;
+    )}&types=(regions)&key=${apiKey}`;
     
     const response = await fetch(sessionToken ? `${url}&sessiontoken=${sessionToken}` : url);
     const data = await response.json();

@@ -17,7 +17,7 @@ const openai = new OpenAI({
 });
 
 interface StreamEvent {
-  type: 'stage' | 'item' | 'trip_created' | 'complete' | 'error';
+  type: 'stage' | 'item' | 'trip_updated' | 'complete' | 'error';
   stage?: string;
   message?: string;
   data?: any;
@@ -40,7 +40,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { profileData, destination, budgetLevel, activityLevel, conversationId } = body;
+    const { profileData, destination, budgetLevel, activityLevel, conversationId, tripId } = body;
+
+    // Log request start
+    console.log('🎲 [GET_LUCKY:START] Request received', {
+      destination,
+      budgetLevel,
+      activityLevel,
+      conversationId,
+      tripId,
+      hasProfileData: !!profileData,
+      timestamp: new Date().toISOString(),
+    });
 
     // Create SSE stream
     const stream = new ReadableStream({
@@ -52,6 +63,8 @@ export async function POST(request: NextRequest) {
             stage: 'planning',
             message: 'Planning your chapters...',
           });
+
+          console.log('🎲 [GET_LUCKY:STAGE] Planning started');
 
           // Extract lucky prompt parameters
           const luckyData = generateGetLuckyPrompt(destination, budgetLevel);
@@ -88,33 +101,89 @@ export async function POST(request: NextRequest) {
             homeCity: profileData?.city,
           };
 
+          console.log('🎲 [GET_LUCKY:PROMPT_PARAMS] Trip parameters', {
+            destination: destinationName,
+            startDate,
+            endDate,
+            durationDays,
+            activityDensity,
+            budgetLevel: promptParams.budgetLevel,
+            activityLevel: promptParams.activityLevel,
+          });
+
           const systemPrompt = buildGetLuckySystemPrompt(promptParams);
           const userMessage = buildGetLuckyUserMessage(promptParams);
 
-          console.log('🎲 Get Lucky: Calling OpenAI for trip generation...');
-
-          // Call OpenAI with structured output
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4o-2024-08-06",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userMessage },
-            ],
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "trip_generation",
-                strict: true,
-                schema: zodToJsonSchema(expResponseSchema, { target: 'openAi' }) as any,
-              },
-            },
-            temperature: 0.9, // Higher creativity for varied trips
+          console.log('🎲 [GET_LUCKY:PROMPTS] Prompts built', {
+            systemPromptLength: systemPrompt.length,
+            userMessageLength: userMessage.length,
           });
 
-          const aiResponse = JSON.parse(completion.choices[0].message.content || '{}');
-          console.log('✅ OpenAI response received');
+          // Convert and validate schema
+          const convertedSchema = zodToJsonSchema(expResponseSchema, { target: 'openAi' });
+          
+          console.log('🎲 [GET_LUCKY:SCHEMA] Schema converted', {
+            schemaSize: JSON.stringify(convertedSchema).length,
+            schemaType: convertedSchema.type,
+            hasProperties: !!convertedSchema.properties,
+            propertyCount: convertedSchema.properties ? Object.keys(convertedSchema.properties).length : 0,
+          });
 
-          // Stage 2: Create trip
+          console.log('🎲 [GET_LUCKY:OPENAI_REQUEST] Calling OpenAI', {
+            model: 'gpt-4o-2024-08-06',
+            temperature: 0.9,
+            responseFormat: 'json_schema',
+          });
+
+          // Call OpenAI with structured output
+          let completion;
+          try {
+            completion = await openai.chat.completions.create({
+              model: "gpt-4o-2024-08-06",
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userMessage },
+              ],
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: "trip_generation",
+                  strict: true,
+                  schema: convertedSchema as any,
+                },
+              },
+              temperature: 0.9, // Higher creativity for varied trips
+            });
+
+            console.log('🎲 [GET_LUCKY:OPENAI_RESPONSE] Response received', {
+              finishReason: completion.choices[0].finish_reason,
+              tokensUsed: completion.usage?.total_tokens,
+              promptTokens: completion.usage?.prompt_tokens,
+              completionTokens: completion.usage?.completion_tokens,
+              responseLength: completion.choices[0].message.content?.length,
+            });
+          } catch (error: any) {
+            console.error('❌ [GET_LUCKY:OPENAI_ERROR] OpenAI API error', {
+              error: error.message,
+              type: error.type,
+              code: error.code,
+              param: error.param,
+              statusCode: error.status,
+              stack: error.stack,
+            });
+            throw error;
+          }
+
+          const aiResponse = JSON.parse(completion.choices[0].message.content || '{}');
+          console.log('🎲 [GET_LUCKY:PARSE] Response parsed', {
+            hasText: !!aiResponse.text,
+            cardCount: aiResponse.cards?.length || 0,
+            placeCount: aiResponse.places?.length || 0,
+            transportCount: aiResponse.transport?.length || 0,
+            hotelCount: aiResponse.hotels?.length || 0,
+          });
+
+          // Stage 2: Update existing trip with AI-generated details
           sendSSE(controller, {
             type: 'stage',
             stage: 'route',
@@ -125,16 +194,27 @@ export async function POST(request: NextRequest) {
           const tripTitle = tripCard?.title || `${destinationName} Adventure`;
           const tripDescription = tripCard?.description || aiResponse.text?.substring(0, 200);
 
-          const tripId = await createDraftTrip({
+          // Update the existing trip (instead of creating new one)
+          console.log('🎲 [GET_LUCKY:DB_UPDATE] Updating trip', {
+            tripId,
             title: tripTitle,
-            description: tripDescription,
             startDate,
             endDate,
           });
 
-          console.log(`✅ Trip created: ${tripId}`);
+          await prisma.trip.update({
+            where: { id: tripId },
+            data: {
+              title: tripTitle,
+              description: tripDescription,
+              startDate: new Date(startDate),
+              endDate: new Date(endDate),
+            }
+          });
 
-          // Link conversation to trip and update title
+          console.log('✅ [GET_LUCKY:DB_UPDATE] Trip updated successfully', { tripId });
+
+          // Update conversation title
           if (conversationId) {
             // Helper function to format chat timestamp
             const formatChatTimestamp = (date: Date): string => {
@@ -157,16 +237,15 @@ export async function POST(request: NextRequest) {
             await prisma.chatConversation.update({
               where: { id: conversationId },
               data: { 
-                tripId,
                 title: `${tripTitle} - ${formatChatTimestamp(new Date())}`,
               },
             });
-            console.log(`✅ Conversation ${conversationId} linked to trip and renamed`);
+            console.log(`✅ Conversation ${conversationId} renamed to ${tripTitle}`);
           }
 
-          // Send trip_created event so client can switch to the trip
+          // Send trip_updated event so client can refresh the trip
           sendSSE(controller, {
-            type: 'trip_created',
+            type: 'trip_updated',
             data: { 
               tripId, 
               tripName: tripTitle,
@@ -216,8 +295,15 @@ export async function POST(request: NextRequest) {
             currentDate = segmentEndDate;
           }
 
+          console.log('🎲 [GET_LUCKY:DB_SEGMENTS] Creating segments', {
+            count: segmentsToCreate.length,
+            tripId,
+          });
+
           await syncSegments(tripId, segmentsToCreate);
-          console.log(`✅ Segments created: ${segmentsToCreate.length}`);
+          console.log('✅ [GET_LUCKY:DB_SEGMENTS] Segments created successfully', {
+            count: segmentsToCreate.length,
+          });
 
           // Fetch created segments with IDs
           const createdTrip = await prisma.trip.findUnique({
@@ -350,10 +436,22 @@ export async function POST(request: NextRequest) {
             data: { tripId },
           });
 
-          console.log(`✅ Get Lucky complete: ${tripId}`);
+          console.log('✅ [GET_LUCKY:COMPLETE] Trip generation complete', {
+            tripId,
+            totalSegments: segmentsToCreate.length,
+            totalHotels: hotelPlaces.length,
+            totalRestaurants: restaurantPlaces.length,
+            totalActivities: activityPlaces.length,
+          });
           controller.close();
-        } catch (error) {
-          console.error('❌ Get Lucky generation failed:', error);
+        } catch (error: any) {
+          console.error('❌ [GET_LUCKY:ERROR] Generation failed', {
+            error: error.message,
+            type: error.type || error.name,
+            code: error.code,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+          });
           sendSSE(controller, {
             type: 'error',
             message: error instanceof Error ? error.message : 'Generation failed',

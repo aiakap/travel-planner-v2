@@ -6,7 +6,7 @@ import { Button } from "@/app/exp/ui/button";
 import { Badge } from "@/app/exp/ui/badge";
 import { Input } from "@/app/exp/ui/input";
 import { SaveIndicator } from "@/app/exp/ui/save-indicator";
-import { useAutoSave } from "@/hooks/use-auto-save";
+import { useAutoSaveCallback } from "@/hooks/use-auto-save";
 import { updateReservationSimple } from "@/lib/actions/update-reservation-simple";
 
 interface ReservationCardProps {
@@ -58,7 +58,7 @@ export function ReservationCard({
   const [isEditingDates, setIsEditingDates] = useState(false);
 
   // Auto-save hook
-  const { save, saveState } = useAutoSave(async (updates: any) => {
+  const { save, saveState } = useAutoSaveCallback(async (updates: any) => {
     await updateReservationSimple(reservationId, updates);
     onSaved?.();
   }, { delay: 500 });

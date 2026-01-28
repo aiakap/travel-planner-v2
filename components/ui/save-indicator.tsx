@@ -1,10 +1,10 @@
 "use client";
 
 import { CheckCircle, Loader2, AlertCircle } from "lucide-react";
-import { SaveState } from "@/hooks/use-auto-save";
+import { SaveStatus } from "@/hooks/use-auto-save";
 
 interface SaveIndicatorProps {
-  state: SaveState;
+  state: SaveStatus;
   position?: "inline" | "floating-top" | "floating-bottom";
   className?: string;
 }
@@ -27,8 +27,8 @@ export function SaveIndicator({
 
   const positionClasses = {
     'inline': 'inline-flex items-center gap-1.5',
-    'floating-top': 'fixed top-4 right-4 z-50',
-    'floating-bottom': 'fixed bottom-4 right-4 z-50'
+    'floating-top': 'fixed top-4 right-4 z-[105]',
+    'floating-bottom': 'fixed bottom-3 right-3 z-[105]'
   };
 
   const baseClasses = positionClasses[position];
@@ -37,23 +37,23 @@ export function SaveIndicator({
     saving: {
       icon: Loader2,
       text: "Saving...",
-      iconClasses: "h-4 w-4 text-blue-600 animate-spin",
-      textClasses: "text-sm text-blue-600 font-medium",
+      iconClasses: "h-3.5 w-3.5 text-blue-600 animate-spin",
+      textClasses: "text-[10px] text-blue-700 font-bold",
       containerClasses: "bg-blue-50 border border-blue-200",
     },
     saved: {
       icon: CheckCircle,
       text: "Saved",
-      iconClasses: "h-4 w-4 text-green-600",
-      textClasses: "text-sm text-green-600 font-medium",
-      containerClasses: "bg-green-50 border border-green-200",
+      iconClasses: "h-3.5 w-3.5 text-emerald-600",
+      textClasses: "text-[10px] text-emerald-700 font-bold",
+      containerClasses: "bg-emerald-50 border border-emerald-200",
     },
     error: {
       icon: AlertCircle,
-      text: "Error saving",
-      iconClasses: "h-4 w-4 text-red-600",
-      textClasses: "text-sm text-red-600 font-medium",
-      containerClasses: "bg-red-50 border border-red-200",
+      text: "Error",
+      iconClasses: "h-3.5 w-3.5 text-rose-600",
+      textClasses: "text-[10px] text-rose-700 font-bold",
+      containerClasses: "bg-rose-50 border border-rose-200",
     },
   };
 
@@ -64,7 +64,7 @@ export function SaveIndicator({
 
   return (
     <div
-      className={`${baseClasses} ${config.containerClasses} rounded-lg px-3 py-1.5 shadow-sm transition-all duration-200 animate-in fade-in slide-in-from-top-1 ${className}`}
+      className={`${baseClasses} ${config.containerClasses} rounded-lg px-2 py-1 shadow-sm transition-all duration-200 animate-in fade-in slide-in-from-top-1 ${className}`}
     >
       <Icon className={config.iconClasses} />
       <span className={config.textClasses}>{config.text}</span>

@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, description, startDate, endDate, imageUrl } = body;
+    const { title, description, startDate, endDate, imageUrl, status } = body;
 
     if (!title || !description || !startDate || !endDate) {
       return new Response("Missing required fields", { status: 400 });
@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
         endDate: new Date(endDate),
         imageUrl: imageUrl || null,
         imageIsCustom: !!imageUrl,
+        status: status || 'ACTIVE',
         userId: session.user.id,
       },
       include: {

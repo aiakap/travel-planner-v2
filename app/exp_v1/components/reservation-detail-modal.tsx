@@ -5,7 +5,7 @@ import { Button } from "@/app/exp/ui/button"
 import { Input } from "@/app/exp/ui/input"
 import { Badge } from "@/app/exp/ui/badge"
 import { SaveIndicator } from "@/app/exp/ui/save-indicator"
-import { useAutoSave } from "@/hooks/use-auto-save"
+import { useAutoSaveCallback } from "@/hooks/use-auto-save"
 import { ClickToEditField } from "@/app/exp/ui/click-to-edit-field"
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api"
 import { getTimeZoneForLocation, formatDateInTimeZone } from "@/lib/actions/timezone"
@@ -81,7 +81,7 @@ export function ReservationDetailModal({
   })
 
   // Auto-save hook for edit mode
-  const { save, saveState } = useAutoSave(async (updates: Partial<DBReservation>) => {
+  const { save, saveState } = useAutoSaveCallback(async (updates: Partial<DBReservation>) => {
     if (editedReservation && onSave) {
       const updatedReservation = { ...editedReservation, ...updates };
       onSave(updatedReservation);

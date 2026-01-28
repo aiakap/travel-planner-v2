@@ -9,7 +9,7 @@ import { DatePopover } from "./ui/date-popover";
 import { format, differenceInDays } from "date-fns";
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion";
 import { getTimeZoneForLocation } from "@/lib/actions/timezone";
-import { useAutoSave } from "@/hooks/use-auto-save";
+import { useAutoSaveCallback } from "@/hooks/use-auto-save";
 import { Segment, SegmentType } from "@/app/generated/prisma";
 import { updatePersistedSegment } from "@/lib/actions/update-persisted-segment";
 
@@ -71,7 +71,7 @@ export function PersistedSegmentEditModal({
   const [editingDates, setEditingDates] = useState(false);
 
   // Auto-save hook with debouncing
-  const { save, saveState } = useAutoSave(async (updates: any) => {
+  const { save, saveState } = useAutoSaveCallback(async (updates: any) => {
     try {
       await updatePersistedSegment(segment.id, updates);
       onUpdate();

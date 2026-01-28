@@ -56,6 +56,7 @@ import {
 import { Toast } from "./ui/toast";
 import { useRouter } from "next/navigation";
 import MissingImagesSection from "./missing-images-section";
+import { EditSegmentModal } from "./edit-segment-modal";
 
 type ReservationWithRelations = Reservation & {
   reservationType: ReservationType & { category: ReservationCategory };
@@ -177,6 +178,10 @@ export default function ManageClient({
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "warning" | "info";
+  } | null>(null);
+  const [editingSegment, setEditingSegment] = useState<{
+    segment: SegmentWithRelations;
+    trip: TripWithRelations;
   } | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
@@ -535,17 +540,14 @@ export default function ManageClient({
                                 className="flex items-center gap-1"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <Link
-                                  href={`/trips/${trip.id}/segments/${segment.id}/edit`}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="Edit Segment"
+                                  onClick={() => setEditingSegment({ segment, trip })}
                                 >
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    title="Edit Segment"
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
-                                </Link>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
                                 <Link
                                   href={`/trips/${trip.id}/segments/${segment.id}/reservations/new`}
                                 >
@@ -983,6 +985,60 @@ export default function ManageClient({
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Edit Segment Modal */}
+      {editingSegment && (
+        <EditSegmentModal
+          segment={{
+            id: editingSegment.segment.id,
+            name: editingSegment.segment.name,
+            startTitle: editingSegment.segment.startTitle,
+            startLat: editingSegment.segment.startLat,
+            startLng: editingSegment.segment.startLng,
+            endTitle: editingSegment.segment.endTitle,
+            endLat: editingSegment.segment.endLat,
+            endLng: editingSegment.segment.endLng,
+            startTime: editingSegment.segment.startTime,
+            endTime: editingSegment.segment.endTime,
+            notes: editingSegment.segment.notes,
+            imageUrl: editingSegment.segment.imageUrl,
+            startTimeZoneId: editingSegment.segment.startTimeZoneId,
+            startTimeZoneName: editingSegment.segment.startTimeZoneName,
+            endTimeZoneId: editingSegment.segment.endTimeZoneId,
+            endTimeZoneName: editingSegment.segment.endTimeZoneName,
+            segmentType: editingSegment.segment.segmentType,
+            reservations: editingSegment.segment.reservations.map(r => ({
+              id: r.id,
+              name: r.name,
+              startTime: r.startTime ? r.startTime.toISOString() : null,
+              reservationType: r.reservationType,
+            })),
+          }}
+          trip={{
+            id: editingSegment.trip.id,
+            title: editingSegment.trip.title,
+            startDate: editingSegment.trip.startDate,
+            endDate: editingSegment.trip.endDate,
+            segments: editingSegment.trip.segments.map(s => ({
+              id: s.id,
+              name: s.name,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              segmentType: s.segmentType,
+            })),
+          }}
+          isOpen={true}
+          onClose={() => setEditingSegment(null)}
+          onUpdate={() => {
+            setEditingSegment(null);
+            router.refresh();
+          }}
+          onDelete={() => {
+            setEditingSegment(null);
+            router.refresh();
+          }}
         />
       )}
     </div>

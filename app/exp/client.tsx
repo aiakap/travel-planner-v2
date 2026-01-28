@@ -191,6 +191,10 @@ export function ExpClient({
     detectedType: string;
     confidence: number;
   } | null>(null)
+  
+  // Debug mode state
+  const [debugMode, setDebugMode] = useState(false)
+  const [debugLogs, setDebugLogs] = useState<any[]>([])
 
   // Refs
   const isDragging = useRef(false)
@@ -199,6 +203,25 @@ export function ExpClient({
   
   // Router for page refresh
   const router = useRouter()
+
+  // Debug mode keyboard shortcut (Cmd+Shift+D)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        setDebugMode(prev => {
+          const newMode = !prev;
+          console.log(`🔍 [DEBUG] Debug mode ${newMode ? 'enabled' : 'disabled'}`);
+          if (!newMode) {
+            setDebugLogs([]);
+          }
+          return newMode;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Helper function to format dates
   const formatDate = (date: Date) => {
@@ -885,28 +908,55 @@ export function ExpClient({
     setHasStartedPlanning(true);
     
     try {
-      // 1. Create conversation first with "Surprise Journey" name
       const timestamp = formatChatTimestamp(new Date());
+      
+      // 1. Create trip first with placeholder name
+      const placeholderTripResponse = await fetch('/api/trips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Surprise Journey',
+          description: 'Generating your personalized trip...',
+          startDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          endDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          status: 'DRAFT'
+        })
+      });
+      
+      if (!placeholderTripResponse.ok) {
+        throw new Error('Failed to create placeholder trip');
+      }
+      
+      const trip = await placeholderTripResponse.json();
+      const tripId = trip.id;
+      
+      console.log(`✅ Created placeholder trip: ${tripId}`);
+      
+      // 2. Add to trips list and switch to it (right pane shows immediately)
+      setTrips(prev => [trip, ...prev]);
+      setSelectedTripId(tripId);
+      
+      // 3. Create conversation linked to the trip
       const conversation = await createConversationWithOptions({
         title: `Surprise Journey - ${timestamp}`,
         userId,
         chatType: 'TRIP',
-        tripId: null,
+        tripId: tripId,
       });
       
       console.log(`✅ Created Surprise Journey conversation: ${conversation.id}`);
       
-      // 2. Add to conversations and switch to it
+      // 4. Add to conversations and switch to it
       const fullConversation = { 
         ...conversation, 
         messages: [], 
         chatType: 'TRIP' as const,
-        tripId: null
+        tripId: tripId
       };
       setConversations(prev => [fullConversation, ...prev]);
       setCurrentConversationId(conversation.id);
       
-      // 3. Create streaming loader message
+      // 5. Create streaming loader message
       const loaderId = `get-lucky-${Date.now()}`;
       const loaderMessage: ChatMessage = {
         id: loaderId,
@@ -921,7 +971,7 @@ export function ExpClient({
       
       setMessages([loaderMessage]);
       
-      // 4. Get profile preferences
+      // 6. Get profile preferences
       const destination = profileData 
         ? getHobbyBasedDestination(profileData.hobbies) 
         : null;
@@ -932,7 +982,7 @@ export function ExpClient({
         (p: any) => p.preferenceType?.name === 'activity_level'
       )?.option?.label || 'Moderate';
       
-      // 5. Start SSE stream (pass conversationId)
+      // 7. Start SSE stream (pass conversationId and tripId)
       const response = await fetch('/api/get-lucky/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -942,6 +992,7 @@ export function ExpClient({
           budgetLevel,
           activityLevel,
           conversationId: conversation.id,
+          tripId: tripId,
         }),
       });
       
@@ -956,7 +1007,7 @@ export function ExpClient({
       
       const decoder = new TextDecoder();
       let buffer = '';
-      let generatedTripId: string | null = null;
+      let generatedTripId: string | null = tripId; // Trip already exists
       let tripName: string | null = null;
       
       // Process SSE stream
@@ -972,42 +1023,48 @@ export function ExpClient({
           if (line.startsWith('data: ')) {
             const data = JSON.parse(line.slice(6));
             
-            // Handle trip_created event
-            if (data.type === 'trip_created') {
-              generatedTripId = data.data.tripId;
+            // Debug logging
+            if (debugMode) {
+              const logEntry = {
+                timestamp: new Date().toISOString(),
+                type: data.type,
+                stage: data.stage,
+                message: data.message,
+                data: data.data,
+              };
+              setDebugLogs(prev => [...prev, logEntry]);
+              console.log('🔍 [DEBUG:SSE]', logEntry);
+            }
+            
+            // Handle trip_updated event
+            if (data.type === 'trip_updated') {
               tripName = data.data.tripName;
               
-              console.log(`✅ Trip created: ${generatedTripId} - ${tripName}`);
+              console.log(`✅ Trip updated: ${generatedTripId} - ${tripName}`);
               
-              // Update conversation with tripId and new title
+              // Update conversation title with AI-generated trip name
               setConversations(prev => prev.map(c => 
                 c.id === conversation.id 
-                  ? { ...c, tripId: generatedTripId, title: `${tripName} - ${timestamp}` }
+                  ? { ...c, title: `${tripName} - ${timestamp}` }
                   : c
               ));
               
-              // Switch to the new trip
-              setSelectedTripId(generatedTripId);
-              
-              // Fetch the full trip from API to get all details
-              // Note: At this point, trip exists but may not have segments/reservations yet
-              // We'll refetch as generation progresses
+              // Refetch trip to get updated details (name, description, dates)
               try {
                 const tripResponse = await fetch(`/api/trips/${generatedTripId}`);
                 if (tripResponse.ok) {
-                  const newTrip = await tripResponse.json();
+                  const updatedTrip = await tripResponse.json();
                   
                   // Update trips list - this will trigger re-render of right pane
                   setTrips(prev => {
-                    // Remove any existing trip with this ID (shouldn't happen, but be safe)
                     const filtered = prev.filter(t => t.id !== generatedTripId);
-                    return [newTrip, ...filtered];
+                    return [updatedTrip, ...filtered];
                   });
                   
-                  console.log(`✅ Trip loaded and displayed in right pane`);
+                  console.log(`✅ Trip updated in right pane with new name`);
                 }
               } catch (error) {
-                console.error('❌ Failed to fetch trip details:', error);
+                console.error('❌ Failed to fetch updated trip details:', error);
               }
               
               continue; // Don't process as regular stage
@@ -2686,6 +2743,58 @@ export function ExpClient({
         onClose={() => setIsMultiCityModalOpen(false)}
         onSubmit={handleMultiCitySubmit}
       />
+
+      {/* Debug Panel */}
+      {debugMode && (
+        <div className="fixed bottom-4 right-4 w-96 max-h-96 bg-gray-900 text-green-400 rounded-lg shadow-2xl overflow-hidden z-50 border border-green-500">
+          <div className="bg-gray-800 px-4 py-2 flex items-center justify-between border-b border-green-500">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-mono font-bold">DEBUG MODE</span>
+            </div>
+            <button
+              onClick={() => setDebugMode(false)}
+              className="text-gray-400 hover:text-white text-xs"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="p-3 overflow-y-auto max-h-80 text-xs font-mono">
+            {debugLogs.length === 0 ? (
+              <div className="text-gray-500">No events yet. Waiting for SSE data...</div>
+            ) : (
+              <div className="space-y-2">
+                {debugLogs.map((log, i) => (
+                  <div key={i} className="border-l-2 border-green-500 pl-2">
+                    <div className="text-gray-400 text-[10px]">
+                      {new Date(log.timestamp).toLocaleTimeString()}
+                    </div>
+                    <div className="text-green-400 font-bold">
+                      {log.type} {log.stage && `[${log.stage}]`}
+                    </div>
+                    {log.message && (
+                      <div className="text-gray-300">{log.message}</div>
+                    )}
+                    {log.data && (
+                      <details className="mt-1">
+                        <summary className="text-blue-400 cursor-pointer hover:text-blue-300">
+                          data
+                        </summary>
+                        <pre className="text-[10px] text-gray-400 mt-1 overflow-x-auto">
+                          {JSON.stringify(log.data, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="bg-gray-800 px-4 py-2 border-t border-green-500 text-[10px] text-gray-500">
+            Press Cmd+Shift+D to toggle • {debugLogs.length} events
+          </div>
+        </div>
+      )}
     </div>
   )
 }

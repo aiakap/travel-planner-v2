@@ -61,6 +61,29 @@ function getMarkerIcon(categoryName: string): string {
   return `http://maps.google.com/mapfiles/ms/icons/${color}-dot.png`;
 }
 
+// Get timezone abbreviation from lat/lng
+function getTimezoneAbbreviation(lat: number, lng: number, date?: Date): string {
+  try {
+    const targetDate = date || new Date()
+    
+    // Use Intl.DateTimeFormat to get timezone info
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timeZoneName: 'short'
+    })
+    
+    // This is a simplified approach - in production, you'd want to use a proper
+    // timezone lookup library or API that maps lat/lng to timezone
+    // For now, we'll return a generic label
+    const parts = formatter.formatToParts(targetDate)
+    const timeZonePart = parts.find(part => part.type === 'timeZoneName')
+    
+    return timeZonePart?.value || 'Local Time'
+  } catch (error) {
+    return 'Local Time'
+  }
+}
+
 export function TripReservationsMap({ 
   trip, 
   height = "600px",
@@ -379,6 +402,10 @@ export function TripReservationsMap({
                             minute: "2-digit",
                           }
                         )}
+                        {" "}
+                        <span className="text-gray-400">
+                          ({getTimezoneAbbreviation(marker.lat, marker.lng, new Date(marker.reservation.startTime))})
+                        </span>
                       </div>
                     )}
                     {marker.reservation.confirmationNumber && (

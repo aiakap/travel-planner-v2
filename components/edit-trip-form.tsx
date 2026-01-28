@@ -5,7 +5,7 @@ import { UploadButton } from "@/lib/upload-thing";
 import Image from "next/image";
 import { updateTrip } from "@/lib/actions/update-trip";
 import { Trip } from "@/app/generated/prisma";
-import { useAutoSave } from "@/hooks/use-auto-save";
+import { useAutoSaveCallback } from "@/hooks/use-auto-save";
 import { SaveIndicator } from "./ui/save-indicator";
 import { ClickToEditField } from "./ui/click-to-edit-field";
 
@@ -22,7 +22,7 @@ export default function EditTripForm({ trip }: { trip: Trip }) {
   const [editingImage, setEditingImage] = useState(false);
 
   // Auto-save hook
-  const { save, saveState } = useAutoSave(async (updates: any) => {
+  const { save, saveState } = useAutoSaveCallback(async (updates: any) => {
     const formData = new FormData();
     if (updates.title !== undefined) formData.set("title", updates.title);
     if (updates.description !== undefined) formData.set("description", updates.description);

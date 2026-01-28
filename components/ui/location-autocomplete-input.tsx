@@ -8,6 +8,7 @@ import { PlaceAutocompleteSuggestion, PlaceAutocompleteResult } from "@/lib/type
 interface LocationAutocompleteInputProps {
   value: string;
   onChange: (value: string, details?: PlaceAutocompleteResult) => void;
+  onFocus?: () => void;
   placeholder?: string;
   className?: string;
   label?: string;
@@ -16,6 +17,7 @@ interface LocationAutocompleteInputProps {
 export function LocationAutocompleteInput({
   value,
   onChange,
+  onFocus,
   placeholder = "Search for a location...",
   className = "",
   label,
@@ -188,6 +190,9 @@ export function LocationAutocompleteInput({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={() => {
+            if (onFocus) {
+              onFocus();
+            }
             if (suggestions.length > 0) {
               setIsOpen(true);
             }

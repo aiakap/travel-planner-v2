@@ -29,7 +29,6 @@ import {
 import {
   validatePrivateDriverExtraction
 } from "@/lib/schemas/extraction/travel/private-driver-extraction-schema";
-import { validateOpenAISchema } from "@/lib/schemas/validate-openai-schema";
 import { 
   validateOpenAISchema 
 } from "@/lib/schemas/validate-openai-schema";

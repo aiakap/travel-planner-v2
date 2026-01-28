@@ -26,6 +26,15 @@ export async function updateReservation(formData: FormData) {
   const location = formData.get("location")?.toString();
   const url = formData.get("url")?.toString();
   const imageUrl = formData.get("imageUrl")?.toString();
+  const returnTo = formData.get("returnTo")?.toString();
+  const contactPhone = formData.get("contactPhone")?.toString();
+  const contactEmail = formData.get("contactEmail")?.toString();
+  const cancellationPolicy = formData.get("cancellationPolicy")?.toString();
+  const vendor = formData.get("vendor")?.toString();
+  const latitude = formData.get("latitude")?.toString();
+  const longitude = formData.get("longitude")?.toString();
+  const timeZoneId = formData.get("timeZoneId")?.toString();
+  const timeZoneName = formData.get("timeZoneName")?.toString();
 
   // Flight-specific fields
   const departureLocation = formData.get("departureLocation")?.toString();
@@ -84,6 +93,14 @@ export async function updateReservation(formData: FormData) {
     currency: currency || null,
     location: location || null,
     url: url || null,
+    contactPhone: contactPhone || null,
+    contactEmail: contactEmail || null,
+    cancellationPolicy: cancellationPolicy || null,
+    vendor: vendor || null,
+    latitude: latitude ? parseFloat(latitude) : null,
+    longitude: longitude ? parseFloat(longitude) : null,
+    timeZoneId: timeZoneId || null,
+    timeZoneName: timeZoneName || null,
     // Flight-specific fields
     departureLocation: departureLocation || null,
     departureTimezone: departureTimezone || null,
@@ -116,5 +133,11 @@ export async function updateReservation(formData: FormData) {
   }
 
   revalidatePath(`/trips/${existingReservation.segment.trip.id}`);
-  redirect(`/trips/${existingReservation.segment.trip.id}`);
+  
+  // Redirect to returnTo if provided, otherwise default to trip page
+  if (returnTo) {
+    redirect(returnTo);
+  } else {
+    redirect(`/trips/${existingReservation.segment.trip.id}`);
+  }
 }

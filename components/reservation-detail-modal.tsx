@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { SaveIndicator } from "@/components/ui/save-indicator"
-import { useAutoSave } from "@/hooks/use-auto-save"
+import { useAutoSaveCallback } from "@/hooks/use-auto-save"
 import { ClickToEditField } from "@/components/ui/click-to-edit-field"
 import {
   X,
@@ -86,7 +86,7 @@ export function ReservationDetailModal({
   const [editedReservation, setEditedReservation] = useState<Reservation | null>(null)
 
   // Auto-save hook for edit mode
-  const { save, saveState } = useAutoSave(async (updates: Partial<Reservation>) => {
+  const { save, saveState } = useAutoSaveCallback(async (updates: Partial<Reservation>) => {
     if (editedReservation && onSave) {
       const updatedReservation = { ...editedReservation, ...updates };
       onSave(updatedReservation);

@@ -80,6 +80,123 @@ async function main() {
   }
   console.log("✓ Reservation statuses seeded");
 
+  // Seed Reservation Display Groups
+  const displayGroups = [
+    {
+      name: "POINT_TO_POINT_TRANSPORT",
+      displayName: "Point-to-Point Transport",
+      description: "Transportation with distinct departure and arrival locations (flights, trains, buses, ferries)",
+    },
+    {
+      name: "SHORT_DISTANCE_TRANSPORT",
+      displayName: "Short Distance Transport",
+      description: "Point-to-point transportation within a city/region (ride shares, taxis, private drivers)",
+    },
+    {
+      name: "RENTAL_SERVICE",
+      displayName: "Rental Service",
+      description: "Services rented over a period (car rentals, equipment rentals, parking)",
+    },
+    {
+      name: "MULTI_DAY_STAY",
+      displayName: "Multi-Day Stay",
+      description: "Accommodations spanning multiple nights (hotels, Airbnb, resorts)",
+    },
+    {
+      name: "TIMED_RESERVATION",
+      displayName: "Timed Reservation",
+      description: "Activities/dining with specific time slots (restaurants, tours, concerts, museums)",
+    },
+    {
+      name: "FLEXIBLE_ACTIVITY",
+      displayName: "Flexible Activity",
+      description: "Activities without strict time requirements (hikes, excursions, day passes)",
+    },
+    {
+      name: "DEFAULT",
+      displayName: "Default",
+      description: "Fallback for any type not fitting other groups",
+    },
+  ];
+
+  const displayGroupMap = {};
+  for (const group of displayGroups) {
+    const created = await prisma.reservationDisplayGroup.upsert({
+      where: { name: group.name },
+      update: { displayName: group.displayName, description: group.description },
+      create: group,
+    });
+    displayGroupMap[group.name] = created.id;
+  }
+  console.log("✓ Reservation display groups seeded");
+
+  // Assign types to display groups
+  const typeGroupAssignments = [
+    // POINT_TO_POINT_TRANSPORT
+    { category: "Travel", type: "Flight", group: "POINT_TO_POINT_TRANSPORT" },
+    { category: "Travel", type: "Train", group: "POINT_TO_POINT_TRANSPORT" },
+    { category: "Travel", type: "Bus", group: "POINT_TO_POINT_TRANSPORT" },
+    { category: "Travel", type: "Ferry", group: "POINT_TO_POINT_TRANSPORT" },
+    { category: "Travel", type: "Cruise", group: "POINT_TO_POINT_TRANSPORT" },
+    
+    // SHORT_DISTANCE_TRANSPORT
+    { category: "Travel", type: "Ride Share", group: "SHORT_DISTANCE_TRANSPORT" },
+    { category: "Travel", type: "Taxi", group: "SHORT_DISTANCE_TRANSPORT" },
+    { category: "Travel", type: "Private Driver", group: "SHORT_DISTANCE_TRANSPORT" },
+    
+    // RENTAL_SERVICE
+    { category: "Travel", type: "Car Rental", group: "RENTAL_SERVICE" },
+    { category: "Travel", type: "Parking", group: "RENTAL_SERVICE" },
+    { category: "Activity", type: "Equipment Rental", group: "RENTAL_SERVICE" },
+    
+    // MULTI_DAY_STAY
+    { category: "Stay", type: "Hotel", group: "MULTI_DAY_STAY" },
+    { category: "Stay", type: "Airbnb", group: "MULTI_DAY_STAY" },
+    { category: "Stay", type: "Hostel", group: "MULTI_DAY_STAY" },
+    { category: "Stay", type: "Resort", group: "MULTI_DAY_STAY" },
+    { category: "Stay", type: "Vacation Rental", group: "MULTI_DAY_STAY" },
+    { category: "Stay", type: "Ski Resort", group: "MULTI_DAY_STAY" },
+    
+    // TIMED_RESERVATION
+    { category: "Dining", type: "Restaurant", group: "TIMED_RESERVATION" },
+    { category: "Dining", type: "Cafe", group: "TIMED_RESERVATION" },
+    { category: "Dining", type: "Bar", group: "TIMED_RESERVATION" },
+    { category: "Dining", type: "Food Tour", group: "TIMED_RESERVATION" },
+    { category: "Activity", type: "Tour", group: "TIMED_RESERVATION" },
+    { category: "Activity", type: "Museum", group: "TIMED_RESERVATION" },
+    { category: "Activity", type: "Concert", group: "TIMED_RESERVATION" },
+    { category: "Activity", type: "Theater", group: "TIMED_RESERVATION" },
+    { category: "Activity", type: "Event Tickets", group: "TIMED_RESERVATION" },
+    { category: "Activity", type: "Spa & Wellness", group: "TIMED_RESERVATION" },
+    { category: "Activity", type: "Golf", group: "TIMED_RESERVATION" },
+    
+    // FLEXIBLE_ACTIVITY
+    { category: "Activity", type: "Hike", group: "FLEXIBLE_ACTIVITY" },
+    { category: "Activity", type: "Excursion", group: "FLEXIBLE_ACTIVITY" },
+    { category: "Activity", type: "Adventure", group: "FLEXIBLE_ACTIVITY" },
+    { category: "Activity", type: "Sport", group: "FLEXIBLE_ACTIVITY" },
+    { category: "Activity", type: "Ski Pass", group: "FLEXIBLE_ACTIVITY" },
+  ];
+
+  for (const assignment of typeGroupAssignments) {
+    const category = await prisma.reservationCategory.findUnique({
+      where: { name: assignment.category },
+    });
+    
+    if (category) {
+      await prisma.reservationType.updateMany({
+        where: {
+          categoryId: category.id,
+          name: assignment.type,
+        },
+        data: {
+          displayGroupId: displayGroupMap[assignment.group],
+        },
+      });
+    }
+  }
+  console.log("✓ Reservation types assigned to display groups");
+
   // Seed Image Prompt Styles (define styles first)
   const imagePromptStyles = [
     {
