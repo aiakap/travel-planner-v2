@@ -27,25 +27,24 @@ import { DocumentsView } from "./components/documents-view"
 import { SectionHeading } from "./components/section-heading"
 
 interface View1ClientProps {
-  itineraries: ViewItinerary[]
+  itinerary: ViewItinerary
   profileValues: any[]
 }
 
-export function View1Client({ itineraries, profileValues }: View1ClientProps) {
+export function View1Client({ itinerary, profileValues }: View1ClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   
   // Read active tab from URL or default to 'journey'
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'journey')
   const [scrolled, setScrolled] = useState(false)
-  const [selectedTripId, setSelectedTripId] = useState(itineraries[0]?.id || "")
   
   // Update URL when tab changes
   const handleTabChange = (newTab: string) => {
     setActiveTab(newTab)
     const params = new URLSearchParams(searchParams)
     params.set('tab', newTab)
-    router.replace(`/view1?${params.toString()}`, { scroll: false })
+    router.replace(`/view1/${itinerary.id}?${params.toString()}`, { scroll: false })
   }
 
   useEffect(() => {
@@ -54,30 +53,20 @@ export function View1Client({ itineraries, profileValues }: View1ClientProps) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const selectedItinerary = itineraries.find(i => i.id === selectedTripId)
-
-  if (!selectedItinerary) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-slate-500">No trips found</p>
-      </div>
-    )
-  }
-
   const renderContent = () => {
     switch (activeTab) {
-      case 'journey': return <JourneyView itinerary={selectedItinerary} />
-      case 'weather': return <WeatherView itinerary={selectedItinerary} />
-      case 'todo': return <TodoView itinerary={selectedItinerary} profileValues={profileValues} />
-      case 'map': return <MapView itinerary={selectedItinerary} />
-      case 'packing': return <PackingView itinerary={selectedItinerary} profileValues={profileValues} />
-      case 'currency': return <CurrencyView itinerary={selectedItinerary} />
-      case 'emergency': return <EmergencyView itinerary={selectedItinerary} />
-      case 'cultural': return <CulturalView itinerary={selectedItinerary} />
-      case 'activities': return <ActivitiesView itinerary={selectedItinerary} />
-      case 'dining': return <DiningView itinerary={selectedItinerary} />
-      case 'documents': return <DocumentsView itinerary={selectedItinerary} />
-      default: return <JourneyView itinerary={selectedItinerary} />
+      case 'journey': return <JourneyView itinerary={itinerary} />
+      case 'weather': return <WeatherView itinerary={itinerary} />
+      case 'todo': return <TodoView itinerary={itinerary} profileValues={profileValues} />
+      case 'map': return <MapView itinerary={itinerary} />
+      case 'packing': return <PackingView itinerary={itinerary} profileValues={profileValues} />
+      case 'currency': return <CurrencyView itinerary={itinerary} />
+      case 'emergency': return <EmergencyView itinerary={itinerary} />
+      case 'cultural': return <CulturalView itinerary={itinerary} />
+      case 'activities': return <ActivitiesView itinerary={itinerary} />
+      case 'dining': return <DiningView itinerary={itinerary} />
+      case 'documents': return <DocumentsView itinerary={itinerary} />
+      default: return <JourneyView itinerary={itinerary} />
     }
   }
 
@@ -107,51 +96,30 @@ export function View1Client({ itineraries, profileValues }: View1ClientProps) {
       <div className="relative h-[400px] flex items-end pb-8 overflow-hidden group">
         <div className="absolute inset-0 z-0">
           <img 
-            src={selectedItinerary.coverImage}
-            alt={selectedItinerary.title}
+            src={itinerary.coverImage}
+            alt={itinerary.title}
             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-black/30"></div>
           <div className="absolute inset-0 bg-blue-900/20 mix-blend-overlay"></div>
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 w-full flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 w-full">
           <div className="max-w-3xl animate-fade-in-up">
              <div className="flex items-center gap-2 mb-2">
               <span className="text-white/60 text-sm font-medium">
-                {new Date(selectedItinerary.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(selectedItinerary.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {new Date(itinerary.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(itinerary.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </span>
             </div>
             <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-2 drop-shadow-lg">
-              {selectedItinerary.title}
+              {itinerary.title}
             </h1>
-            {selectedItinerary.description && (
+            {itinerary.description && (
               <p className="text-white/80 text-lg max-w-xl">
-                {selectedItinerary.description}
+                {itinerary.description}
               </p>
             )}
           </div>
-          
-          {/* Trip Selector - Top Right */}
-          {itineraries.length > 1 && (
-            <div className="animate-fade-in">
-              <Select value={selectedTripId} onValueChange={setSelectedTripId}>
-                <SelectTrigger className="w-[280px] bg-white/10 border-white/20 text-white backdrop-blur-md hover:bg-white/20">
-                  <SelectValue placeholder="Select a trip" />
-                </SelectTrigger>
-                <SelectContent>
-                  {itineraries.map((itinerary) => (
-                    <SelectItem key={itinerary.id} value={itinerary.id}>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-slate-500" />
-                        <span>{itinerary.title}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
       </div>
 

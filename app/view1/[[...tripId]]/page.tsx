@@ -88,7 +88,7 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
       status: { not: 'DRAFT' },
     },
     include: {
-      imagePromptStyle: true,
+      ImagePromptStyle: true,
       segments: {
         orderBy: { order: "asc" },
         include: {
@@ -189,8 +189,8 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
     segmentColors: calculateSegmentColors(segments),
     pendingCount,
     imagePromptStyleId: trip.imagePromptStyleId,
-    imagePromptStyleName: trip.imagePromptStyle?.name || null,
-    imagePromptStyleSlug: trip.imagePromptStyle?.slug || null,
+    imagePromptStyleName: trip.ImagePromptStyle?.name || null,
+    imagePromptStyleSlug: trip.ImagePromptStyle?.slug || null,
   }
 
   return (
