@@ -237,101 +237,95 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
               <div className="h-8 w-px bg-slate-200 mx-2"></div>
               
               {/* AI Chips */}
-              <button
-                onClick={() => handleTabChange('packing')}
-                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === 'packing'
-                    ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-md scale-105'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
-                <span className="relative">Packing</span>
-              </button>
+              <div className="flex bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+                <button
+                  onClick={() => handleTabChange('packing')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === 'packing'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Packing
+                </button>
 
-              <button
-                onClick={() => handleTabChange('currency')}
-                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === 'currency'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md scale-105'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
-                <span className="relative">Currency</span>
-              </button>
+                <button
+                  onClick={() => handleTabChange('currency')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === 'currency'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Currency
+                </button>
 
-              <button
-                onClick={() => handleTabChange('emergency')}
-                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === 'emergency'
-                    ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-md scale-105'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
-                <span className="relative">Emergency</span>
-              </button>
+                <button
+                  onClick={() => handleTabChange('emergency')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === 'emergency'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Emergency
+                </button>
 
-              <button
-                onClick={() => handleTabChange('cultural')}
-                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === 'cultural'
-                    ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md scale-105'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
-                <span className="relative">Cultural</span>
-              </button>
+                <button
+                  onClick={() => handleTabChange('cultural')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === 'cultural'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Cultural
+                </button>
 
-              <button
-                onClick={() => handleTabChange('activities')}
-                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === 'activities'
-                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-md scale-105'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
-                <span className="relative">Activities</span>
-              </button>
+                <button
+                  onClick={() => handleTabChange('activities')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === 'activities'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Activities
+                </button>
 
-              <button
-                onClick={() => handleTabChange('dining')}
-                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === 'dining'
-                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md scale-105'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
-                <span className="relative">Dining</span>
-              </button>
+                <button
+                  onClick={() => handleTabChange('dining')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === 'dining'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Dining
+                </button>
 
-              <button
-                onClick={() => handleTabChange('documents')}
-                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === 'documents'
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md scale-105'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
-                <span className="relative">Documents</span>
-              </button>
+                <button
+                  onClick={() => handleTabChange('documents')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === 'documents'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Documents
+                </button>
 
-              <button
-                onClick={() => handleTabChange('language')}
-                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === 'language'
-                    ? 'bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-md scale-105'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
-                <span className="relative">Language</span>
-              </button>
+                <button
+                  onClick={() => handleTabChange('language')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === 'language'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Language
+                </button>
+              </div>
             </div>
 
             {/* Right: Action Toolbar */}
