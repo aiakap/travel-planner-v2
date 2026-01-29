@@ -10,6 +10,8 @@ interface IntelligenceCache {
   dining?: any
   language?: any
   packing?: any
+  documents?: any
+  weather?: any
 }
 
 interface IntelligenceContextType {

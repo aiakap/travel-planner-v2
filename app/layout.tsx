@@ -5,6 +5,7 @@ import NavigationMain from "@/components/navigation-main";
 import { auth } from "@/auth";
 import { getMinimalUserContext } from "@/lib/actions/user-context";
 import { headers } from "next/headers";
+import { Toaster } from "sonner";
 
 const playfair = Playfair_Display({
   variable: "--font-display",
@@ -49,6 +50,7 @@ export default async function RootLayout({
       >
         {!isAdminRoute && <NavigationMain session={session} userContext={userContext} />}
         {children}
+        <Toaster richColors position="bottom-right" />
       </body>
     </html>
   );

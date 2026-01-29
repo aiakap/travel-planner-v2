@@ -46,6 +46,94 @@ interface LanguageGuide {
 }
 
 /**
+ * GET /api/trip-intelligence/language?tripId=xxx
+ * 
+ * Retrieve existing language guides for a trip
+ */
+export async function GET(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tripId = searchParams.get('tripId')
+
+    if (!tripId) {
+      return NextResponse.json({ error: 'Missing tripId' }, { status: 400 })
+    }
+
+    // Verify trip ownership
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId, userId: session.user.id }
+    })
+
+    if (!trip) {
+      return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    }
+
+    // Get intelligence record with language guides
+    const intelligence = await prisma.tripIntelligence.findUnique({
+      where: { tripId },
+      include: {
+        languageGuides: {
+          include: {
+            scenarios: {
+              include: {
+                phrases: true,
+                verbs: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!intelligence || !intelligence.hasLanguageGuides || intelligence.languageGuides.length === 0) {
+      return NextResponse.json({ guides: null })
+    }
+
+    // Transform to match the expected format
+    const guides = intelligence.languageGuides.map(guide => ({
+      id: guide.id,
+      targetLanguage: guide.targetLanguage,
+      targetLanguageCode: guide.targetLanguageCode,
+      userProficiency: guide.userProficiency,
+      destinations: guide.destinations,
+      scenarios: guide.scenarios.map(scenario => ({
+        id: scenario.id,
+        scenario: scenario.scenario,
+        relevanceScore: scenario.relevanceScore,
+        reasoning: scenario.reasoning,
+        phrases: scenario.phrases.map(phrase => ({
+          phrase: phrase.phrase,
+          translation: phrase.translation,
+          romanization: phrase.romanization,
+          reasoning: phrase.reasoning,
+        })),
+        verbs: scenario.verbs.map(verb => ({
+          verb: verb.verb,
+          conjugation: verb.conjugation,
+          usage: verb.usage,
+        })),
+      })),
+    }))
+
+    return NextResponse.json({
+      guides,
+      generatedAt: intelligence.languageGeneratedAt
+    })
+  } catch (error) {
+    console.error('Error fetching language guides:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch language guides' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
  * POST /api/trip-intelligence/language
  * 
  * Generate personalized language guide for a trip
@@ -304,6 +392,104 @@ Be practical and specific. Tailor every phrase to the user's profile and profici
       }
 
       guides.push(guide)
+    }
+
+    // Save guides to database
+    try {
+      // Create or update TripIntelligence record
+      let intelligence = await prisma.tripIntelligence.findUnique({
+        where: { tripId }
+      })
+
+      if (!intelligence) {
+        intelligence = await prisma.tripIntelligence.create({
+          data: {
+            tripId,
+            hasLanguageGuides: true,
+            languageGeneratedAt: new Date()
+          }
+        })
+      } else {
+        // Delete old language guides and related data
+        const existingGuides = await prisma.languageGuide.findMany({
+          where: { intelligenceId: intelligence.id },
+          select: { id: true }
+        })
+        
+        for (const guide of existingGuides) {
+          // Delete scenarios and their phrases/verbs (cascade should handle this)
+          await prisma.languageScenario.deleteMany({
+            where: { guideId: guide.id }
+          })
+        }
+        
+        await prisma.languageGuide.deleteMany({
+          where: { intelligenceId: intelligence.id }
+        })
+
+        intelligence = await prisma.tripIntelligence.update({
+          where: { id: intelligence.id },
+          data: {
+            hasLanguageGuides: true,
+            languageGeneratedAt: new Date()
+          }
+        })
+      }
+
+      // Save each guide with its scenarios, phrases, and verbs
+      for (const guide of guides) {
+        const savedGuide = await prisma.languageGuide.create({
+          data: {
+            intelligenceId: intelligence.id,
+            targetLanguage: guide.targetLanguage,
+            targetLanguageCode: guide.targetLanguageCode,
+            userProficiency: guide.userProficiency,
+            destinations: guide.destinations,
+          }
+        })
+
+        // Save scenarios for this guide
+        for (const scenario of guide.scenarios) {
+          const savedScenario = await prisma.languageScenario.create({
+            data: {
+              guideId: savedGuide.id,
+              scenario: scenario.scenario,
+              relevanceScore: scenario.relevanceScore,
+              reasoning: scenario.reasoning,
+            }
+          })
+
+          // Save phrases for this scenario
+          if (scenario.phrases && scenario.phrases.length > 0) {
+            await prisma.languagePhrase.createMany({
+              data: scenario.phrases.map(phrase => ({
+                scenarioId: savedScenario.id,
+                phrase: phrase.phrase,
+                translation: phrase.translation,
+                romanization: phrase.romanization || null,
+                reasoning: phrase.reasoning || null,
+              }))
+            })
+          }
+
+          // Save verbs for this scenario
+          if (scenario.verbs && scenario.verbs.length > 0) {
+            await prisma.languageVerb.createMany({
+              data: scenario.verbs.map(verb => ({
+                scenarioId: savedScenario.id,
+                verb: verb.verb,
+                conjugation: verb.conjugation,
+                usage: verb.usage,
+              }))
+            })
+          }
+        }
+      }
+
+      console.log(`Saved ${guides.length} language guides to database`)
+    } catch (dbError) {
+      console.error('Error saving language guides to database:', dbError)
+      // Continue and return results even if DB save fails
     }
 
     return NextResponse.json({ guides })

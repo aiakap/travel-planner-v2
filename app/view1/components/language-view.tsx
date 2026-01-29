@@ -61,7 +61,7 @@ const COMMON_LANGUAGES = [
 ]
 
 export function LanguageView({ itinerary }: LanguageViewProps) {
-  const { data, loading, invalidateCache, initialCheckComplete } = useCachedIntelligence<{ guides: LanguageGuide[] }>(
+  const { data, loading, invalidateCache, updateCache, initialCheckComplete } = useCachedIntelligence<{ guides: LanguageGuide[] }>(
     'language',
     itinerary.id,
     '/api/trip-intelligence/language'
@@ -155,8 +155,9 @@ export function LanguageView({ itinerary }: LanguageViewProps) {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setGuides(data.guides || [])
+        const responseData = await response.json()
+        setGuides(responseData.guides || [])
+        updateCache({ guides: responseData.guides || [] }) // Update the cache
         setViewState('loaded')
       } else {
         const errorData = await response.json()

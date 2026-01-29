@@ -207,4 +207,100 @@ export const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0',
     marginVertical: 8,
   },
+  
+  // Quick Reference Table
+  table: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    minHeight: 24,
+    alignItems: 'center',
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 2,
+    borderBottomColor: '#3b82f6',
+    backgroundColor: '#f1f5f9',
+    minHeight: 28,
+    alignItems: 'center',
+  },
+  tableCell: {
+    padding: 4,
+    fontSize: 7,
+    color: '#475569',
+  },
+  tableHeaderCell: {
+    padding: 4,
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  tableCellType: {
+    width: '6%',
+    textAlign: 'center',
+  },
+  tableCellName: {
+    width: '16%',
+  },
+  tableCellVendor: {
+    width: '12%',
+  },
+  tableCellConf: {
+    width: '12%',
+  },
+  tableCellDateTime: {
+    width: '18%',
+  },
+  tableCellAddress: {
+    width: '26%',
+  },
+  tableCellPrice: {
+    width: '10%',
+    textAlign: 'right',
+  },
+  link: {
+    color: '#2563eb',
+    textDecoration: 'none',
+  },
+  
+  // Language Guide styles
+  languageCategory: {
+    marginBottom: 8,
+  },
+  languageCategoryTitle: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+    backgroundColor: '#fef3c7',
+    padding: 4,
+    borderRadius: 2,
+  },
+  phraseRow: {
+    flexDirection: 'row',
+    marginBottom: 2,
+    paddingLeft: 8,
+  },
+  phraseLocal: {
+    fontSize: 8,
+    color: '#1e293b',
+    width: '45%',
+    fontWeight: 'bold',
+  },
+  phraseEnglish: {
+    fontSize: 8,
+    color: '#64748b',
+    width: '45%',
+    fontStyle: 'italic',
+  },
+  phrasePronunciation: {
+    fontSize: 7,
+    color: '#94a3b8',
+    paddingLeft: 8,
+    marginBottom: 2,
+  },
 })

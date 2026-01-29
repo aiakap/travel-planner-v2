@@ -60,7 +60,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
   // PDF download handler
   const handleDownloadPDF = async () => {
     setIsGeneratingPDF(true)
-    const toastId = toast.loading("Generating PDF...")
+    const toastId = toast.loading("Generating PDF... This may take a moment.")
     
     try {
       const response = await fetch('/api/pdf/generate', {
@@ -69,16 +69,18 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
         body: JSON.stringify({ tripId: itinerary.id }),
       })
 
+      const data = await response.json()
+      
       if (!response.ok) {
-        throw new Error('Failed to generate PDF')
+        throw new Error(data.error || 'Failed to generate PDF')
       }
 
-      const { pdfUrl } = await response.json()
       toast.success("PDF generated successfully!", { id: toastId })
-      window.open(pdfUrl, '_blank')
+      window.open(data.pdfUrl, '_blank')
     } catch (error) {
       console.error('PDF generation error:', error)
-      toast.error("Failed to generate PDF", { id: toastId })
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate PDF"
+      toast.error(errorMessage, { id: toastId })
     } finally {
       setIsGeneratingPDF(false)
     }
@@ -234,23 +236,24 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
                     />
                   </div>
                   
-                  {/* Icon Navigation Buttons */}
-                  <div className="flex items-center gap-1">
+                  {/* Weather & Map Buttons */}
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => handleTabChange('weather')}
-                          className={`p-2 rounded-lg transition-colors ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
                             activeTab === 'weather'
                               ? 'text-blue-600 bg-blue-50'
-                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                              : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'
                           }`}
                         >
-                          <Cloud size={18} />
+                          <Cloud size={16} />
+                          <span className="hidden sm:inline">Weather</span>
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Weather</p>
+                        <p>Weather Forecast</p>
                       </TooltipContent>
                     </Tooltip>
 
@@ -258,20 +261,24 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => handleTabChange('map')}
-                          className={`p-2 rounded-lg transition-colors ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
                             activeTab === 'map'
                               ? 'text-blue-600 bg-blue-50'
-                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                              : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'
                           }`}
                         >
-                          <Map size={18} />
+                          <Map size={16} />
+                          <span className="hidden sm:inline">Map</span>
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Map</p>
+                        <p>Trip Map</p>
                       </TooltipContent>
                     </Tooltip>
+                  </div>
 
+                  {/* Intelligence Icon Buttons */}
+                  <div className="flex items-center gap-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -427,13 +434,15 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
               <div className="flex bg-white rounded-lg border border-slate-200 p-0.5">
                 <ActionIcon 
                   icon={Download} 
-                  label="Download PDF" 
+                  label={isGeneratingPDF ? "Generating PDF..." : "Download PDF"}
                   onClick={handleDownloadPDF}
+                  loading={isGeneratingPDF}
                 />
                 <ActionIcon 
                   icon={CalendarPlus} 
-                  label="Sync Calendar" 
+                  label={isExportingCalendar ? "Exporting..." : "Sync Calendar"}
                   onClick={handleExportCalendar}
+                  loading={isExportingCalendar}
                 />
               </div>
             </div>

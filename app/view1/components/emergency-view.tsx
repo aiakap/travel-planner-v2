@@ -8,6 +8,8 @@ import { IntelligenceCard, IntelligenceCardItem } from "./intelligence-card"
 import { RelevanceTooltip, type ProfileReference } from "./relevance-tooltip"
 import { Card } from "./card"
 import { Badge } from "./badge"
+import { useCachedIntelligence } from "../hooks/use-cached-intelligence"
+import { IntelligenceLoading } from "./intelligence-loading"
 
 interface EmergencyViewProps {
   itinerary: ViewItinerary
@@ -45,32 +47,24 @@ interface EmergencyInfo {
 type ViewState = 'questions' | 'loading' | 'loaded'
 
 export function EmergencyView({ itinerary }: EmergencyViewProps) {
+  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ info: EmergencyInfo[] }>(
+    'emergency',
+    itinerary.id,
+    '/api/trip-intelligence/emergency'
+  )
+
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [info, setInfo] = useState<EmergencyInfo[]>([])
 
+  // Sync with cached data
   useEffect(() => {
-    checkExistingData()
-  }, [itinerary.id])
-
-  const checkExistingData = async () => {
-    try {
-      // Check for existing info in database
-      const infoResponse = await fetch(`/api/trip-intelligence/emergency?tripId=${itinerary.id}`)
-      const infoData = await infoResponse.json()
-
-      if (infoData.info && infoData.info.length > 0) {
-        setInfo(infoData.info)
-        setViewState('loaded')
-        return
-      }
-
-      // No DB data = show questions (don't auto-generate)
-      setViewState('questions')
-    } catch (error) {
-      console.error('Error checking existing data:', error)
+    if (data?.info && data.info.length > 0) {
+      setInfo(data.info)
+      setViewState('loaded')
+    } else if (initialCheckComplete) {
       setViewState('questions')
     }
-  }
+  }, [data, initialCheckComplete])
 
   const questions: Question[] = [
     {
@@ -128,8 +122,9 @@ export function EmergencyView({ itinerary }: EmergencyViewProps) {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setInfo(data.info)
+        const responseData = await response.json()
+        setInfo(responseData.info)
+        updateCache({ info: responseData.info }) // Update the cache
         setViewState('loaded')
       } else {
         setViewState('questions')
@@ -143,7 +138,13 @@ export function EmergencyView({ itinerary }: EmergencyViewProps) {
   }
 
   const handleRegenerate = () => {
+    invalidateCache() // Clear cache when regenerating
     setViewState('questions')
+  }
+
+  // Show loading while checking cache
+  if (!initialCheckComplete) {
+    return <IntelligenceLoading feature="emergency" mode="checking" />
   }
 
   const getSafetyColor = (level: string) => {

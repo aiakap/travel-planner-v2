@@ -6,6 +6,8 @@ import { Backpack, Shirt, Footprints, ShieldCheck, Heart, FileText, RefreshCw, S
 import { Card } from "./card"
 import { Badge } from "./badge"
 import { IntelligenceQuestionForm, type Question } from "./intelligence-question-form"
+import { useCachedIntelligence } from "../hooks/use-cached-intelligence"
+import { IntelligenceLoading } from "./intelligence-loading"
 
 interface PackingViewProps {
   itinerary: ViewItinerary
@@ -14,71 +16,71 @@ interface PackingViewProps {
 
 type ViewState = 'questions' | 'loading' | 'loaded'
 
+// Helper to transform raw data to packing list format
+function transformToPackingList(rawData: any): PackingList | null {
+  if (!rawData?.items || rawData.items.length === 0) {
+    return null
+  }
+  
+  const categorizedList: any = {
+    clothing: [],
+    footwear: [],
+    gear: [],
+    toiletries: [],
+    documents: [],
+    specialNotes: [],
+    luggageStrategy: null
+  }
+  
+  // Group items by category
+  rawData.items.forEach((item: any) => {
+    const categoryMap: Record<string, string> = {
+      'Clothing': 'clothing',
+      'Footwear': 'footwear',
+      'Activity Gear': 'gear',
+      'Electronics': 'gear',
+      'Toiletries': 'toiletries',
+      'Documents': 'documents',
+      'Health & Safety': 'gear',
+      'Miscellaneous': 'gear'
+    }
+    
+    const mappedCategory = categoryMap[item.category] || 'gear'
+    categorizedList[mappedCategory].push({
+      name: item.itemName,
+      quantity: item.quantity,
+      reason: item.reason,
+      priority: item.priority
+    })
+  })
+  
+  return categorizedList
+}
+
 export function PackingView({ itinerary, profileValues }: PackingViewProps) {
+  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ items: any[] }>(
+    'packing',
+    itinerary.id,
+    '/api/trip-intelligence/packing'
+  )
+
   const [packingList, setPackingList] = useState<PackingList | null>(null)
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [debugInfo, setDebugInfo] = useState<any>(null)
 
+  // Sync with cached data
   useEffect(() => {
-    // Check if packing list already exists
-    const fetchExistingList = async () => {
-      try {
-        const response = await fetch(`/api/trip-intelligence/packing?tripId=${itinerary.id}`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.packingList && Object.keys(data.packingList).length > 0) {
-            // Transform database response to match UI expectations
-            const categorizedList: any = {
-              clothing: [],
-              footwear: [],
-              gear: [],
-              toiletries: [],
-              documents: [],
-              specialNotes: [],
-              luggageStrategy: null
-            }
-            
-            // Group items by category
-            Object.entries(data.packingList).forEach(([category, items]: [string, any]) => {
-              const categoryMap: Record<string, string> = {
-                'Clothing': 'clothing',
-                'Footwear': 'footwear',
-                'Activity Gear': 'gear',
-                'Electronics': 'gear',
-                'Toiletries': 'toiletries',
-                'Documents': 'documents',
-                'Health & Safety': 'gear',
-                'Miscellaneous': 'gear'
-              }
-              
-              const mappedCategory = categoryMap[category] || 'gear'
-              items.forEach((item: any) => {
-                categorizedList[mappedCategory].push({
-                  name: item.itemName,
-                  quantity: item.quantity,
-                  reason: item.reason,
-                  priority: item.priority
-                })
-              })
-            })
-            
-            setPackingList(categorizedList)
-            setViewState('loaded')
-          } else {
-            setViewState('questions')
-          }
-        } else {
-          setViewState('questions')
-        }
-      } catch (error) {
-        console.error('Error fetching packing list:', error)
-        setViewState('questions')
+    if (data?.items && data.items.length > 0) {
+      const transformed = transformToPackingList(data)
+      if (transformed) {
+        setPackingList(transformed)
+        setViewState('loaded')
       }
+    } else if (initialCheckComplete) {
+      setViewState('questions')
     }
-    
-    fetchExistingList()
-  }, [itinerary.id])
+  }, [data, initialCheckComplete])
 
   const questions: Question[] = [
     {
@@ -221,6 +223,9 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
           luggageStrategy: categorizedList.luggageStrategy
         })
         
+        // Update cache with the raw items for future use
+        updateCache({ items: data.packingList || [] })
+        
         setPackingList(categorizedList)
         setViewState('loaded')
         console.log('🔵 [PACKING DEBUG] Step 9: ✅ Successfully loaded packing list')
@@ -257,7 +262,13 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
   }
 
   const handleRegenerate = () => {
+    invalidateCache() // Clear cache when regenerating
     setViewState('questions')
+  }
+
+  // Show loading while checking cache
+  if (!initialCheckComplete) {
+    return <IntelligenceLoading feature="packing" mode="checking" />
   }
   
   // Questions state

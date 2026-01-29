@@ -1,10 +1,89 @@
 import { NextResponse } from "next/server"
 import { openai } from "@ai-sdk/openai"
 import { generateText } from "ai"
+import { auth } from "@/auth"
+import { prisma } from "@/lib/prisma"
 
+/**
+ * GET /api/visa/check?tripId=xxx
+ * Retrieve existing visa requirements for a trip
+ */
+export async function GET(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tripId = searchParams.get('tripId')
+
+    if (!tripId) {
+      return NextResponse.json({ error: 'Missing tripId' }, { status: 400 })
+    }
+
+    // Verify trip ownership
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId, userId: session.user.id }
+    })
+
+    if (!trip) {
+      return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    }
+
+    // Get intelligence record
+    const intelligence = await prisma.tripIntelligence.findUnique({
+      where: { tripId },
+      include: {
+        visaRequirements: true
+      }
+    })
+
+    if (!intelligence || !intelligence.hasVisaRequirements) {
+      return NextResponse.json({ results: null })
+    }
+
+    // Transform to match the expected format
+    const results = intelligence.visaRequirements.map(visa => ({
+      destination: visa.destination,
+      country: visa.country,
+      visaRequired: visa.visaRequired,
+      visaType: visa.visaType,
+      duration: visa.duration,
+      advanceRegistration: visa.advanceRegistration,
+      requirements: visa.requirements,
+      processingTime: visa.processingTime,
+      cost: visa.cost,
+      sources: visa.sources,
+      importantNotes: visa.importantNotes,
+      lastChecked: visa.createdAt
+    }))
+
+    return NextResponse.json({
+      results,
+      generatedAt: intelligence.visaGeneratedAt
+    })
+  } catch (error) {
+    console.error('Error fetching visa requirements:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch visa requirements' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * POST /api/visa/check
+ * Check and save visa requirements for a trip
+ */
 export async function POST(request: Request) {
   try {
-    const { destinations, citizenship, residence } = await request.json()
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { tripId, destinations, citizenship, residence } = await request.json()
     
     // Validation
     if (!destinations || !Array.isArray(destinations) || destinations.length === 0) {
@@ -19,6 +98,16 @@ export async function POST(request: Request) {
         { error: "Citizenship is required" },
         { status: 400 }
       )
+    }
+
+    // If tripId provided, verify ownership
+    if (tripId) {
+      const trip = await prisma.trip.findUnique({
+        where: { id: tripId, userId: session.user.id }
+      })
+      if (!trip) {
+        return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+      }
     }
     
     const residenceCountry = residence || citizenship
@@ -121,7 +210,7 @@ Be thorough and accurate. Include lesser-known requirements that travelers often
         throw new Error("No JSON in response")
       }
     } catch (parseError) {
-      console.error("Failed to parse Gemini response:", parseError)
+      console.error("Failed to parse OpenAI response:", parseError)
       console.log("Raw response:", result.text)
       
       // Return fallback structure
@@ -158,6 +247,68 @@ Be thorough and accurate. Include lesser-known requirements that travelers often
     }))
     
     console.log(`Processed ${results.length} visa results`)
+
+    // Save to database if tripId provided
+    if (tripId) {
+      try {
+        // Create or update TripIntelligence record
+        let intelligence = await prisma.tripIntelligence.findUnique({
+          where: { tripId }
+        })
+
+        if (!intelligence) {
+          intelligence = await prisma.tripIntelligence.create({
+            data: {
+              tripId,
+              hasVisaRequirements: true,
+              visaGeneratedAt: new Date()
+            }
+          })
+        } else {
+          // Delete old visa requirements
+          await prisma.tripVisaRequirement.deleteMany({
+            where: { intelligenceId: intelligence.id }
+          })
+
+          intelligence = await prisma.tripIntelligence.update({
+            where: { id: intelligence.id },
+            data: {
+              hasVisaRequirements: true,
+              visaGeneratedAt: new Date()
+            }
+          })
+        }
+
+        // Save visa requirements to database
+        await Promise.all(
+          results.map((visa: any) =>
+            prisma.tripVisaRequirement.create({
+              data: {
+                intelligenceId: intelligence!.id,
+                destination: visa.destination,
+                country: visa.country || visa.destination,
+                visaRequired: visa.visaRequired || false,
+                visaType: visa.visaType || null,
+                duration: visa.duration || null,
+                advanceRegistration: visa.advanceRegistration || null,
+                requirements: visa.requirements || [],
+                processingTime: visa.processingTime || null,
+                cost: visa.cost || null,
+                sources: visa.sources || [],
+                importantNotes: visa.importantNotes || null,
+                citizenship,
+                residence: residenceCountry,
+              }
+            })
+          )
+        )
+
+        console.log(`Saved ${results.length} visa requirements to database`)
+      } catch (dbError) {
+        console.error("Error saving visa requirements to database:", dbError)
+        // Continue and return results even if DB save fails
+      }
+    }
     
     return NextResponse.json({
       results,

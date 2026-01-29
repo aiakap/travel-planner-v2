@@ -4,7 +4,7 @@ import { Sparkles } from "lucide-react"
 import { Card } from "./card"
 
 interface IntelligenceLoadingProps {
-  feature: 'currency' | 'emergency' | 'cultural' | 'activities' | 'dining' | 'language' | 'packing'
+  feature: 'currency' | 'emergency' | 'cultural' | 'activities' | 'dining' | 'language' | 'packing' | 'documents' | 'weather'
   mode?: 'checking' | 'generating'
 }
 
@@ -36,6 +36,14 @@ const LOADING_MESSAGES = {
   packing: {
     checking: "Rummaging through your virtual closet...",
     generating: "Making sure you don't forget your toothbrush (or anything else)..."
+  },
+  documents: {
+    checking: "Flipping through passport stamps...",
+    generating: "Researching visa requirements and travel documents..."
+  },
+  weather: {
+    checking: "Checking the clouds...",
+    generating: "Fetching weather forecasts for your destinations..."
   }
 }
 
@@ -46,7 +54,9 @@ const ICONS = {
   activities: '🎪',
   dining: '🍽️',
   language: '💬',
-  packing: '🧳'
+  packing: '🧳',
+  documents: '📄',
+  weather: '🌤️'
 }
 
 export function IntelligenceLoading({ feature, mode = 'checking' }: IntelligenceLoadingProps) {

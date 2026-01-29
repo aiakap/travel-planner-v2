@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react"
 import type { ViewItinerary, WeatherData } from "@/lib/itinerary-view-types"
-import { Cloud, AlertCircle } from "lucide-react"
+import { Cloud, AlertCircle, RefreshCw } from "lucide-react"
 import { Card } from "./card"
 import { Button } from "@/components/ui/button"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
+import { useIntelligenceCache } from "../contexts/intelligence-context"
+import { saveWeatherCache } from "@/lib/actions/batch-intelligence-actions"
+import { IntelligenceLoading } from "./intelligence-loading"
 
 interface WeatherViewProps {
   itinerary: ViewItinerary
@@ -19,9 +22,17 @@ function metersPerSecondToMph(ms: number): number {
   return Math.round(ms * 2.237)
 }
 
+// Generate a location key for caching
+function getLocationKey(lat: number, lng: number): string {
+  return `${lat.toFixed(4)}:${lng.toFixed(4)}`
+}
+
 export function WeatherView({ itinerary }: WeatherViewProps) {
+  const { cache, setCache, hasCache, isPreloaded } = useIntelligenceCache()
+  
   const [weatherData, setWeatherData] = useState<WeatherData[]>([])
   const [loading, setLoading] = useState(true)
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false)
   const [tempUnit, setTempUnit] = useState<'F' | 'C'>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('weather-temp-unit') as 'F' | 'C') || 'F';
@@ -43,96 +54,147 @@ export function WeatherView({ itinerary }: WeatherViewProps) {
     return `${Math.round(min)}-${Math.round(max)}°C`
   }
 
-  useEffect(() => {
-    async function fetchWeather() {
-      setLoading(true)
+  // Get weather locations from itinerary
+  const getWeatherLocations = () => {
+    return itinerary.segments.flatMap(seg => {
+      if (!seg.startLat || !seg.startLng || !seg.endLat || !seg.endLng) {
+        return [];
+      }
       
-      // Get weather locations - for travel segments fetch both start and end
-      const weatherLocations = itinerary.segments.flatMap(seg => {
-        // Skip segments with invalid coordinates
-        if (!seg.startLat || !seg.startLng || !seg.endLat || !seg.endLng) {
-          return [];
-        }
-        
-        const isTravelSegment = seg.startTitle !== seg.endTitle
-        
-        if (isTravelSegment) {
-          // For travel segments, get weather for both departure and arrival
-          return [
-            { 
-              name: seg.startTitle, 
-              lat: seg.startLat, 
-              lng: seg.startLng, 
-              dates: { start: seg.startDate, end: seg.startDate },
-              segmentId: seg.id,
-              position: 'departure' as const
-            },
-            { 
-              name: seg.endTitle, 
-              lat: seg.endLat, 
-              lng: seg.endLng, 
-              dates: { start: seg.endDate, end: seg.endDate },
-              segmentId: seg.id,
-              position: 'arrival' as const
-            }
-          ]
-        } else {
-          // For stay segments, just get the location weather for the full duration
-          return [{
-            name: seg.endTitle,
-            lat: seg.endLat,
-            lng: seg.endLng,
-            dates: { start: seg.startDate, end: seg.endDate },
+      const isTravelSegment = seg.startTitle !== seg.endTitle
+      
+      if (isTravelSegment) {
+        return [
+          { 
+            name: seg.startTitle, 
+            lat: seg.startLat, 
+            lng: seg.startLng, 
+            dates: { start: seg.startDate, end: seg.startDate },
             segmentId: seg.id,
-            position: 'stay' as const
-          }]
+            position: 'departure' as const
+          },
+          { 
+            name: seg.endTitle, 
+            lat: seg.endLat, 
+            lng: seg.endLng, 
+            dates: { start: seg.endDate, end: seg.endDate },
+            segmentId: seg.id,
+            position: 'arrival' as const
+          }
+        ]
+      } else {
+        return [{
+          name: seg.endTitle,
+          lat: seg.endLat,
+          lng: seg.endLng,
+          dates: { start: seg.startDate, end: seg.endDate },
+          segmentId: seg.id,
+          position: 'stay' as const
+        }]
+      }
+    })
+  }
+
+  useEffect(() => {
+    async function initializeWeather() {
+      // Check if we have cached weather data
+      if (hasCache('weather')) {
+        const cachedWeather = cache.weather
+        if (cachedWeather?.locations && cachedWeather.locations.length > 0) {
+          // Transform cached data back to WeatherData format
+          const transformedData = cachedWeather.locations.map((loc: any) => ({
+            ...loc.weatherData,
+            segmentId: loc.locationKey,
+          }))
+          setWeatherData(transformedData)
+          setLoading(false)
+          setInitialCheckComplete(true)
+          return
         }
-      })
-      
-      // Fetch weather for each location
-      const weatherPromises = weatherLocations.map(async (loc) => {
-        try {
-          const response = await fetch('/api/weather/forecast', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              lat: loc.lat, 
-              lng: loc.lng,
-              dates: loc.dates 
-            })
-          });
-          
-          const data = await response.json();
-          return { ...data, segmentId: loc.segmentId, position: loc.position };
-        } catch (err) {
-          console.error(`Error fetching weather for ${loc.name}:`, err);
-          return null;
-        }
-      })
-      
-      const results = await Promise.all(weatherPromises)
-      setWeatherData(results.filter(Boolean))
-      setLoading(false)
+      }
+
+      // Show brief checking state if we weren't preloaded
+      if (!isPreloaded) {
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+
+      setInitialCheckComplete(true)
+      // No cache or expired - fetch fresh data
+      await fetchWeather()
     }
     
-    fetchWeather().catch((error) => {
-      console.error('Weather fetch failed:', error);
-      setLoading(false);
-      setWeatherData([]);
-    });
-  }, [itinerary])
+    initializeWeather()
+  }, [itinerary.id])
+
+  async function fetchWeather() {
+    setLoading(true)
+    
+    const weatherLocations = getWeatherLocations()
+    
+    // Fetch weather for each location
+    const weatherPromises = weatherLocations.map(async (loc) => {
+      const locationKey = getLocationKey(loc.lat, loc.lng)
+      
+      try {
+        const response = await fetch('/api/weather/forecast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            lat: loc.lat, 
+            lng: loc.lng,
+            dates: loc.dates 
+          })
+        });
+        
+        const data = await response.json();
+        const weatherResult = { ...data, segmentId: loc.segmentId, position: loc.position };
+        
+        // Save to cache with 1-hour TTL
+        await saveWeatherCache(itinerary.id, locationKey, weatherResult)
+        
+        return weatherResult;
+      } catch (err) {
+        console.error(`Error fetching weather for ${loc.name}:`, err);
+        return null;
+      }
+    })
+    
+    const results = await Promise.all(weatherPromises)
+    const validResults = results.filter(Boolean)
+    
+    setWeatherData(validResults)
+    
+    // Update the context cache
+    if (validResults.length > 0) {
+      const cacheData = {
+        locations: weatherLocations.map((loc, idx) => ({
+          locationKey: getLocationKey(loc.lat, loc.lng),
+          weatherData: validResults[idx],
+        })).filter((_, idx) => validResults[idx])
+      }
+      setCache('weather', cacheData)
+    }
+    
+    setLoading(false)
+  }
+
+  const handleRefresh = () => {
+    setCache('weather', undefined)
+    fetchWeather()
+  }
 
   const handleTempUnitChange = (unit: 'F' | 'C') => {
     setTempUnit(unit)
     localStorage.setItem('weather-temp-unit', unit)
   }
 
+  // Show checking state while initializing
+  if (!initialCheckComplete) {
+    return <IntelligenceLoading feature="weather" mode="checking" />
+  }
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    )
+    return <IntelligenceLoading feature="weather" mode="generating" />
   }
 
   if (weatherData.length === 0) {
@@ -140,6 +202,15 @@ export function WeatherView({ itinerary }: WeatherViewProps) {
       <Card className="p-8 text-center">
         <Cloud className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
         <p className="text-muted-foreground">Weather data unavailable</p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="mt-4"
+          onClick={handleRefresh}
+        >
+          <RefreshCw size={14} className="mr-2" />
+          Retry
+        </Button>
       </Card>
     )
   }
@@ -178,8 +249,17 @@ export function WeatherView({ itinerary }: WeatherViewProps) {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Temperature Unit Toggle */}
-      <div className="flex items-center justify-end">
+      {/* Header with Temperature Unit Toggle and Refresh */}
+      <div className="flex items-center justify-between">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          className="text-xs"
+        >
+          <RefreshCw size={14} className="mr-2" />
+          Refresh
+        </Button>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Temperature:</span>
           <div className="inline-flex rounded-md border border-border bg-background p-1">
@@ -399,7 +479,7 @@ export function WeatherView({ itinerary }: WeatherViewProps) {
         <div>
           <h4 className="text-sm font-bold text-blue-900">Forecast Availability</h4>
           <p className="text-xs text-blue-700 mt-1">
-            Real-time weather data is currently available for the next 5 days. Long-range forecasts are based on historical averages.
+            Weather data is cached for 1 hour. Click "Refresh" to get the latest forecast. Real-time data is available for the next 5 days.
           </p>
         </div>
       </div>

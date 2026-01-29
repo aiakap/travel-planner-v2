@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { ViewItinerary, VisaRequirement } from "@/lib/itinerary-view-types"
-import { FileText, AlertTriangle, Loader2, Check, ChevronsUpDown, ShieldCheck, Home, AlertCircle } from "lucide-react"
+import { FileText, AlertTriangle, Loader2, Check, ChevronsUpDown, ShieldCheck, Home, AlertCircle, RefreshCw } from "lucide-react"
 import { Card } from "./card"
 import { Badge } from "./badge"
 import { Label } from "@/components/ui/label"
@@ -10,12 +10,20 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { COUNTRIES } from "@/lib/countries"
 import { cn } from "@/lib/utils"
+import { useCachedIntelligence } from "../hooks/use-cached-intelligence"
+import { IntelligenceLoading } from "./intelligence-loading"
 
 interface DocumentsViewProps {
   itinerary: ViewItinerary
 }
 
 export function DocumentsView({ itinerary }: DocumentsViewProps) {
+  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ results: VisaRequirement[] }>(
+    'documents',
+    itinerary.id,
+    '/api/visa/check'
+  )
+
   const [citizenship, setCitizenship] = useState("United States")
   const [residence, setResidence] = useState("")
   const [citizenshipOpen, setCitizenshipOpen] = useState(false)
@@ -23,6 +31,13 @@ export function DocumentsView({ itinerary }: DocumentsViewProps) {
   const [visaInfo, setVisaInfo] = useState<VisaRequirement[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  
+  // Sync with cached data
+  useEffect(() => {
+    if (data?.results && data.results.length > 0) {
+      setVisaInfo(data.results)
+    }
+  }, [data])
   
   const handleCheckRequirements = async () => {
     if (!citizenship.trim()) {
@@ -43,6 +58,7 @@ export function DocumentsView({ itinerary }: DocumentsViewProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          tripId: itinerary.id, // Include tripId for caching
           destinations,
           citizenship: citizenship.trim(),
           residence: residence.trim() || citizenship.trim(),
@@ -53,14 +69,27 @@ export function DocumentsView({ itinerary }: DocumentsViewProps) {
         throw new Error('Failed to check visa requirements')
       }
       
-      const data = await response.json()
-      setVisaInfo(data.results || [])
+      const responseData = await response.json()
+      setVisaInfo(responseData.results || [])
+      
+      // Update the cache
+      updateCache({ results: responseData.results || [] })
     } catch (err) {
       console.error('Visa check error:', err)
       setError('Failed to check visa requirements. Please try again.')
     } finally {
       setLoading(false)
     }
+  }
+  
+  const handleRecheck = () => {
+    invalidateCache()
+    setVisaInfo([])
+  }
+
+  // Show loading while checking cache
+  if (!initialCheckComplete) {
+    return <IntelligenceLoading feature="documents" mode="checking" />
   }
   
   return (
@@ -221,13 +250,10 @@ export function DocumentsView({ itinerary }: DocumentsViewProps) {
               Showing requirements for <strong>{citizenship}</strong> citizens
             </p>
             <button
-              onClick={() => {
-                setVisaInfo([])
-                setCitizenship("United States")
-                setResidence("")
-              }}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+              onClick={handleRecheck}
+              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors flex items-center gap-2"
             >
+              <RefreshCw size={14} />
               Check Different Country
             </button>
           </div>

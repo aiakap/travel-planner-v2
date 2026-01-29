@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useIntelligenceCache } from '../contexts/intelligence-context'
 
 export function useCachedIntelligence<T>(
-  feature: 'currency' | 'emergency' | 'cultural' | 'activities' | 'dining' | 'language' | 'packing',
+  feature: 'currency' | 'emergency' | 'cultural' | 'activities' | 'dining' | 'language' | 'packing' | 'documents' | 'weather',
   tripId: string,
   apiEndpoint: string
 ) {

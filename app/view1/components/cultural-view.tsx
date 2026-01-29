@@ -8,6 +8,8 @@ import { IntelligenceCard } from "./intelligence-card"
 import { RelevanceTooltip, type ProfileReference } from "./relevance-tooltip"
 import { Card } from "./card"
 import { Badge } from "./badge"
+import { useCachedIntelligence } from "../hooks/use-cached-intelligence"
+import { IntelligenceLoading } from "./intelligence-loading"
 
 interface CulturalViewProps {
   itinerary: ViewItinerary
@@ -30,32 +32,24 @@ interface CulturalEvent {
 type ViewState = 'questions' | 'loading' | 'loaded'
 
 export function CulturalView({ itinerary }: CulturalViewProps) {
+  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ events: CulturalEvent[] }>(
+    'cultural',
+    itinerary.id,
+    '/api/trip-intelligence/cultural'
+  )
+
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [events, setEvents] = useState<CulturalEvent[]>([])
 
+  // Sync with cached data
   useEffect(() => {
-    checkExistingData()
-  }, [itinerary.id])
-
-  const checkExistingData = async () => {
-    try {
-      // Check for existing events in database
-      const eventsResponse = await fetch(`/api/trip-intelligence/cultural?tripId=${itinerary.id}`)
-      const eventsData = await eventsResponse.json()
-
-      if (eventsData.events && eventsData.events.length > 0) {
-        setEvents(eventsData.events)
-        setViewState('loaded')
-        return
-      }
-
-      // No DB data = show questions (don't auto-generate)
-      setViewState('questions')
-    } catch (error) {
-      console.error('Error checking existing data:', error)
+    if (data?.events && data.events.length > 0) {
+      setEvents(data.events)
+      setViewState('loaded')
+    } else if (initialCheckComplete) {
       setViewState('questions')
     }
-  }
+  }, [data, initialCheckComplete])
 
   const questions: Question[] = [
     {
@@ -94,8 +88,9 @@ export function CulturalView({ itinerary }: CulturalViewProps) {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setEvents(data.events)
+        const responseData = await response.json()
+        setEvents(responseData.events)
+        updateCache({ events: responseData.events }) // Update the cache
         setViewState('loaded')
       } else {
         setViewState('questions')
@@ -109,7 +104,13 @@ export function CulturalView({ itinerary }: CulturalViewProps) {
   }
 
   const handleRegenerate = () => {
+    invalidateCache() // Clear cache when regenerating
     setViewState('questions')
+  }
+
+  // Show loading while checking cache
+  if (!initialCheckComplete) {
+    return <IntelligenceLoading feature="cultural" mode="checking" />
   }
 
   const getEventTypeColor = (type: string) => {

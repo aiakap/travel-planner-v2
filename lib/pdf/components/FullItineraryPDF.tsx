@@ -8,6 +8,7 @@ import React from 'react'
 import { Document, Page, View, Text } from '@react-pdf/renderer'
 import { styles } from './styles'
 import { PDFHeader } from './PDFHeader'
+import { PDFQuickReference } from './PDFQuickReference'
 import { PDFSegment } from './PDFSegment'
 import { PDFIntelligence } from './PDFIntelligence'
 import type { ViewItinerary } from '@/lib/itinerary-view-types'
@@ -48,6 +49,9 @@ export function FullItineraryPDF({
           coverImage={itinerary.coverImage}
           dayCount={itinerary.dayCount}
         />
+        
+        {/* Quick Reference Table */}
+        <PDFQuickReference itinerary={itinerary} />
         
         {/* Journey Section */}
         {template.sections.journey && (

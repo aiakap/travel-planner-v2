@@ -7,6 +7,8 @@ import { IntelligenceQuestionForm, type Question } from "./intelligence-question
 import { IntelligenceCard, IntelligenceCardItem } from "./intelligence-card"
 import { RelevanceTooltip, type ProfileReference } from "./relevance-tooltip"
 import { Card } from "./card"
+import { useCachedIntelligence } from "../hooks/use-cached-intelligence"
+import { IntelligenceLoading } from "./intelligence-loading"
 
 interface CurrencyViewProps {
   itinerary: ViewItinerary
@@ -30,32 +32,24 @@ interface CurrencyAdvice {
 type ViewState = 'questions' | 'loading' | 'loaded'
 
 export function CurrencyView({ itinerary }: CurrencyViewProps) {
+  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ advice: CurrencyAdvice[] }>(
+    'currency',
+    itinerary.id,
+    '/api/trip-intelligence/currency'
+  )
+
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [advice, setAdvice] = useState<CurrencyAdvice[]>([])
 
+  // Sync with cached data
   useEffect(() => {
-    checkExistingData()
-  }, [itinerary.id])
-
-  const checkExistingData = async () => {
-    try {
-      // Check for existing advice in database
-      const adviceResponse = await fetch(`/api/trip-intelligence/currency?tripId=${itinerary.id}`)
-      const adviceData = await adviceResponse.json()
-
-      if (adviceData.advice && adviceData.advice.length > 0) {
-        setAdvice(adviceData.advice)
-        setViewState('loaded')
-        return
-      }
-
-      // No DB data = show questions (don't auto-generate)
-      setViewState('questions')
-    } catch (error) {
-      console.error('Error checking existing data:', error)
+    if (data?.advice && data.advice.length > 0) {
+      setAdvice(data.advice)
+      setViewState('loaded')
+    } else if (initialCheckComplete) {
       setViewState('questions')
     }
-  }
+  }, [data, initialCheckComplete])
 
   const questions: Question[] = [
     {
@@ -109,8 +103,9 @@ export function CurrencyView({ itinerary }: CurrencyViewProps) {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setAdvice(data.advice)
+        const responseData = await response.json()
+        setAdvice(responseData.advice)
+        updateCache({ advice: responseData.advice }) // Update the cache
         setViewState('loaded')
       } else {
         setViewState('questions')
@@ -124,7 +119,13 @@ export function CurrencyView({ itinerary }: CurrencyViewProps) {
   }
 
   const handleRegenerate = () => {
+    invalidateCache() // Clear cache when regenerating
     setViewState('questions')
+  }
+  
+  // Show loading while checking cache
+  if (!initialCheckComplete) {
+    return <IntelligenceLoading feature="currency" mode="checking" />
   }
 
   if (viewState === 'questions') {

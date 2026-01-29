@@ -99,6 +99,7 @@ model Trip {
   user                User               @relation(fields: [userId], references: [id])
   intelligence        TripIntelligence?
   TripPDF             TripPDF[]
+  weatherCache        TripWeatherCache[]
 }
 
 model Segment {
@@ -569,12 +570,16 @@ model TripIntelligence {
   hasActivitySuggestions   Boolean                @default(false)
   hasDiningRecommendations Boolean                @default(false)
   hasPackingList           Boolean                @default(false)
+  hasLanguageGuides        Boolean                @default(false)
+  hasVisaRequirements      Boolean                @default(false)
   currencyGeneratedAt      DateTime?
   emergencyGeneratedAt     DateTime?
   culturalGeneratedAt      DateTime?
   activityGeneratedAt      DateTime?
   diningGeneratedAt        DateTime?
   packingGeneratedAt       DateTime?
+  languageGeneratedAt      DateTime?
+  visaGeneratedAt          DateTime?
   createdAt                DateTime               @default(now())
   updatedAt                DateTime               @updatedAt
   activitySuggestions      ActivitySuggestion[]
@@ -583,6 +588,8 @@ model TripIntelligence {
   diningRecommendations    DiningRecommendation[]
   emergencyInfo            EmergencyInfo[]
   packingList              PackingList[]
+  languageGuides           LanguageGuide[]
+  visaRequirements         TripVisaRequirement[]
   trip                     Trip                   @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
   @@index([tripId])
@@ -728,6 +735,96 @@ model PackingList {
   @@index([intelligenceId])
   @@index([category])
   @@index([priority])
+}
+
+model TripWeatherCache {
+  id          String   @id @default(cuid())
+  tripId      String
+  locationKey String   // e.g., "lat:lng" or segment identifier
+  weatherData Json     // Store the full weather response
+  fetchedAt   DateTime @default(now())
+  expiresAt   DateTime // fetchedAt + 1 hour
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, locationKey])
+  @@index([tripId])
+  @@index([expiresAt])
+}
+
+model LanguageGuide {
+  id                 String             @id @default(cuid())
+  intelligenceId     String
+  targetLanguage     String
+  targetLanguageCode String
+  userProficiency    String             // 'beginner' | 'intermediate' | 'advanced'
+  destinations       String?
+  createdAt          DateTime           @default(now())
+  intelligence       TripIntelligence   @relation(fields: [intelligenceId], references: [id], onDelete: Cascade)
+  scenarios          LanguageScenario[]
+
+  @@index([intelligenceId])
+}
+
+model LanguageScenario {
+  id             String           @id @default(cuid())
+  guideId        String
+  scenario       String
+  relevanceScore Float
+  reasoning      String
+  createdAt      DateTime         @default(now())
+  guide          LanguageGuide    @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  phrases        LanguagePhrase[]
+  verbs          LanguageVerb[]
+
+  @@index([guideId])
+}
+
+model LanguagePhrase {
+  id           String           @id @default(cuid())
+  scenarioId   String
+  phrase       String
+  translation  String
+  romanization String?
+  reasoning    String?
+  createdAt    DateTime         @default(now())
+  scenario     LanguageScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+}
+
+model LanguageVerb {
+  id          String           @id @default(cuid())
+  scenarioId  String
+  verb        String
+  conjugation String
+  usage       String
+  createdAt   DateTime         @default(now())
+  scenario    LanguageScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+}
+
+model TripVisaRequirement {
+  id                String           @id @default(cuid())
+  intelligenceId    String
+  destination       String
+  country           String
+  visaRequired      Boolean
+  visaType          String?
+  duration          String?
+  advanceRegistration String?
+  requirements      String[]
+  processingTime    String?
+  cost              String?
+  sources           Json
+  importantNotes    String?
+  citizenship       String
+  residence         String?
+  createdAt         DateTime         @default(now())
+  intelligence      TripIntelligence @relation(fields: [intelligenceId], references: [id], onDelete: Cascade)
+
+  @@index([intelligenceId])
+  @@index([citizenship])
 }
 
 model AirportTimezone {

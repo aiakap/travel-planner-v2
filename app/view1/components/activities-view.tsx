@@ -8,6 +8,8 @@ import { IntelligenceCard } from "./intelligence-card"
 import { RelevanceTooltip, type ProfileReference } from "./relevance-tooltip"
 import { Card } from "./card"
 import { Badge } from "./badge"
+import { useCachedIntelligence } from "../hooks/use-cached-intelligence"
+import { IntelligenceLoading } from "./intelligence-loading"
 
 interface ActivitiesViewProps {
   itinerary: ViewItinerary
@@ -37,34 +39,26 @@ interface ActivitySuggestion {
 type ViewState = 'questions' | 'loading' | 'loaded'
 
 export function ActivitiesView({ itinerary }: ActivitiesViewProps) {
+  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ suggestions: ActivitySuggestion[], gapsDetected?: number }>(
+    'activities',
+    itinerary.id,
+    '/api/trip-intelligence/activities'
+  )
+
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [suggestions, setSuggestions] = useState<ActivitySuggestion[]>([])
   const [gapsDetected, setGapsDetected] = useState(0)
 
+  // Sync with cached data
   useEffect(() => {
-    checkExistingData()
-  }, [itinerary.id])
-
-  const checkExistingData = async () => {
-    try {
-      // Check for existing suggestions in database
-      const suggestionsResponse = await fetch(`/api/trip-intelligence/activities?tripId=${itinerary.id}`)
-      const suggestionsData = await suggestionsResponse.json()
-
-      if (suggestionsData.suggestions && suggestionsData.suggestions.length > 0) {
-        setSuggestions(suggestionsData.suggestions)
-        setGapsDetected(suggestionsData.gapsDetected || 0)
-        setViewState('loaded')
-        return
-      }
-
-      // No DB data = show questions (don't auto-generate)
-      setViewState('questions')
-    } catch (error) {
-      console.error('Error checking existing data:', error)
+    if (data?.suggestions && data.suggestions.length > 0) {
+      setSuggestions(data.suggestions)
+      setGapsDetected(data.gapsDetected || 0)
+      setViewState('loaded')
+    } else if (initialCheckComplete) {
       setViewState('questions')
     }
-  }
+  }, [data, initialCheckComplete])
 
   const questions: Question[] = [
     {
@@ -105,9 +99,10 @@ export function ActivitiesView({ itinerary }: ActivitiesViewProps) {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setSuggestions(data.suggestions)
-        setGapsDetected(data.gapsDetected || 0)
+        const responseData = await response.json()
+        setSuggestions(responseData.suggestions)
+        setGapsDetected(responseData.gapsDetected || 0)
+        updateCache({ suggestions: responseData.suggestions, gapsDetected: responseData.gapsDetected || 0 }) // Update the cache
         setViewState('loaded')
       } else {
         setViewState('questions')
@@ -121,7 +116,13 @@ export function ActivitiesView({ itinerary }: ActivitiesViewProps) {
   }
 
   const handleRegenerate = () => {
+    invalidateCache() // Clear cache when regenerating
     setViewState('questions')
+  }
+
+  // Show loading while checking cache
+  if (!initialCheckComplete) {
+    return <IntelligenceLoading feature="activities" mode="checking" />
   }
 
   const getTimeSlotColor = (slot: string) => {
