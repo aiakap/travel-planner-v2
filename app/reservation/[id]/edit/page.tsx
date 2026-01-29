@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { ReservationEditClient } from "./client"
 
 interface PageProps {
-  params: { id: string }
-  searchParams: { returnTo?: string; source?: string }
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ returnTo?: string; source?: string }>
 }
 
 export default async function ReservationEditPage({ params, searchParams }: PageProps) {
@@ -15,10 +15,13 @@ export default async function ReservationEditPage({ params, searchParams }: Page
     redirect("/api/auth/signin")
   }
 
+  const { id } = await params
+  const searchParamsResolved = await searchParams
+
   // Fetch reservation with all related data
   const reservation = await prisma.reservation.findFirst({
     where: {
-      id: params.id,
+      id: id,
       segment: { trip: { userId: session.user.id } }
     },
     include: {
@@ -81,7 +84,7 @@ export default async function ReservationEditPage({ params, searchParams }: Page
   })
 
   // Check if this is from natural language creation
-  const isFromNaturalLanguage = searchParams.source === 'natural-language'
+  const isFromNaturalLanguage = searchParamsResolved.source === 'natural-language'
   const originalInput = reservation.metadata && typeof reservation.metadata === 'object'
     ? (reservation.metadata as any).naturalLanguageInput
     : null
@@ -93,7 +96,7 @@ export default async function ReservationEditPage({ params, searchParams }: Page
       segment={reservation.segment}
       categories={categories}
       statuses={statuses}
-      returnTo={searchParams.returnTo || `/view1?tab=journey`}
+      returnTo={searchParamsResolved.returnTo || `/view1?tab=journey`}
       isFromNaturalLanguage={isFromNaturalLanguage}
       originalInput={originalInput}
     />

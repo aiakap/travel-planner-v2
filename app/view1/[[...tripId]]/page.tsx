@@ -195,7 +195,12 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
 
   return (
     <IntelligenceProvider>
-      <View1Client itinerary={itinerary} profileValues={profileValues} />
+      <View1Client 
+        itinerary={itinerary} 
+        profileValues={profileValues}
+        currentStyleId={trip.ImagePromptStyle?.id || null}
+        currentStyleName={trip.ImagePromptStyle?.name || null}
+      />
     </IntelligenceProvider>
   )
 }

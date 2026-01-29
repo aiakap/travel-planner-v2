@@ -37,6 +37,6 @@ export async function regenerateTemplateImage(tripId: string) {
 
   return {
     success: true,
-    styleName: trip.imagePromptStyle?.name || "Unknown",
+    styleName: trip.ImagePromptStyle?.name || "Unknown",
   };
 }

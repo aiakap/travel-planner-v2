@@ -7,7 +7,7 @@ import {
   MapPin, 
   Calendar as CalendarIcon, FileText, Sparkles,
   Share2, Download, CalendarPlus, Cloud, CheckSquare, Map,
-  DollarSign, Shield, Calendar, UtensilsCrossed, Plus, Settings
+  DollarSign, Shield, Calendar, UtensilsCrossed, Plus, Settings, ArrowLeft
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { NavButton } from "./components/nav-button"
@@ -26,14 +26,17 @@ import { DiningView } from "./components/dining-view"
 import { DocumentsView } from "./components/documents-view"
 import { SectionHeading } from "./components/section-heading"
 import { QuickAddModal } from "@/components/quick-add-modal"
+import { StyleSelector } from "./components/style-selector"
 import { toast } from "sonner"
 
 interface View1ClientProps {
   itinerary: ViewItinerary
   profileValues: any[]
+  currentStyleId?: string | null
+  currentStyleName?: string | null
 }
 
-export function View1Client({ itinerary, profileValues }: View1ClientProps) {
+export function View1Client({ itinerary, profileValues, currentStyleId, currentStyleName }: View1ClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -42,7 +45,6 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
   const [scrolled, setScrolled] = useState(false)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
   const [isExportingCalendar, setIsExportingCalendar] = useState(false)
-  const [showQuickAddModal, setShowQuickAddModal] = useState(false)
   
   // Update URL when tab changes
   const handleTabChange = (newTab: string) => {
@@ -193,6 +195,15 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
             
             {/* Left: Main Navigation Tabs */}
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push('/manage1')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Back to Trips"
+              >
+                <ArrowLeft size={14} />
+                <span className="hidden sm:inline">Back</span>
+              </button>
+              <div className="h-6 w-px bg-slate-200 mx-1"></div>
               <NavButton 
                 active={activeTab === 'journey'} 
                 onClick={() => handleTabChange('journey')} 
@@ -308,7 +319,15 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
 
             {/* Right: Action Toolbar */}
             <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-              <ToolbarButton icon={Plus} label="Quick Add" onClick={() => setShowQuickAddModal(true)} />
+              {/* Style Selector */}
+              <StyleSelector
+                tripId={itinerary.id}
+                currentStyleId={currentStyleId}
+                currentStyleName={currentStyleName}
+              />
+              <div className="h-6 w-px bg-slate-200"></div>
+              
+              <ToolbarButton icon={Plus} label="Quick Add" onClick={() => router.push(`/quick-add/${itinerary.id}`)} />
               <ToolbarButton icon={Share2} label="Share" primary />
               <div className="flex bg-white rounded-lg border border-slate-200 p-0.5">
                 <ActionIcon 
@@ -350,13 +369,6 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
 
         {renderContent()}
       </main>
-
-      {/* Quick Add Modal */}
-      <QuickAddModal 
-        isOpen={showQuickAddModal}
-        onClose={() => setShowQuickAddModal(false)}
-        tripId={itinerary.id}
-      />
     </div>
   )
 }

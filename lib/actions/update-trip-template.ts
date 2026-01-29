@@ -17,7 +17,7 @@ export async function updateTripTemplate(tripId: string, styleId: string) {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId, userId: session.user.id },
     include: {
-      imagePromptStyle: true,
+      ImagePromptStyle: true,
     },
   });
 

@@ -204,6 +204,10 @@ export async function generateSeedTrip(
   });
 
   return result;
+  } catch (error) {
+    log('Error generating seed trip:', error);
+    throw error;
+  }
 }
 
 // ============================================================================

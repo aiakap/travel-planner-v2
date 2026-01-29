@@ -366,32 +366,3 @@ async function processSingleReservation(
 
   return results;
 }
-
-/**
- * Process flight reservations (multiple items) - original function
- */
-async function processFlightReservations(
-  jobId: string,
-  tripId: string,
-  extractedData: FlightExtraction,
-  segmentAssignments?: Record<number, {
-    action: 'create' | 'match';
-    segmentId?: string;
-    segmentName: string;
-  }>
-): Promise<JobResult[]> {
-  const flights = extractedData.flights || [];
-  
-  // Initialize job progress FIRST
-  try {
-    initializeJob(jobId, tripId, flights.length);
-    console.log('[Background] Job initialized successfully:', jobId)
-  } catch (error) {
-    console.error('[Background] Failed to initialize job:', error)
-    throw error
-  }
-
-  const results: JobResult[] = [];
-
-  for (let i = 0; i < flights.length; i++) {
-    const flight = flights[i];

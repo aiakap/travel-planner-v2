@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Globe2, ListChecks, MessageSquare, Plus } from "lucide-react";
+import { Globe2, ListChecks, MessageSquare, Plus, Map, Compass } from "lucide-react";
 import { TripBuilderModal } from "@/components/trip-builder-modal";
 
 export function QuickLinksGrid() {
@@ -11,19 +11,37 @@ export function QuickLinksGrid() {
   const [tripModalOpen, setTripModalOpen] = useState(false);
   const links = [
     {
+      href: "/manage1",
+      icon: Map,
+      title: "Manage Trips",
+      description: "View and organize all your journeys",
+      gradient: "from-blue-500 to-indigo-600",
+      bgGradient: "from-blue-50 to-indigo-50",
+      action: null,
+    },
+    {
+      href: "/view1",
+      icon: Compass,
+      title: "Journey View",
+      description: "Interactive trip planning and intelligence",
+      gradient: "from-violet-500 to-purple-600",
+      bgGradient: "from-violet-50 to-purple-50",
+      action: null,
+    },
+    {
       href: "/globe",
       icon: Globe2,
-      title: "Visualize Your Journey",
-      description: "See your travels on an interactive 3D globe",
-      gradient: "from-blue-500 to-purple-600",
-      bgGradient: "from-blue-50 to-purple-50",
+      title: "3D Globe",
+      description: "Visualize your travels on an interactive globe",
+      gradient: "from-cyan-500 to-blue-600",
+      bgGradient: "from-cyan-50 to-blue-50",
       action: null,
     },
     {
       href: "/manage",
       icon: ListChecks,
-      title: "Full Trip Manager",
-      description: "View and edit all trips, segments, and reservations",
+      title: "Classic Manager",
+      description: "Advanced trip, segment, and reservation editing",
       gradient: "from-emerald-500 to-teal-600",
       bgGradient: "from-emerald-50 to-teal-50",
       action: null,
@@ -32,7 +50,7 @@ export function QuickLinksGrid() {
       href: "/chat",
       icon: MessageSquare,
       title: "AI Travel Assistant",
-      description: "Get personalized travel recommendations and planning help",
+      description: "Get personalized recommendations and planning help",
       gradient: "from-amber-500 to-orange-600",
       bgGradient: "from-amber-50 to-orange-50",
       action: null,
@@ -61,7 +79,7 @@ export function QuickLinksGrid() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {links.map((link, index) => {
               const Icon = link.icon;
               const content = (

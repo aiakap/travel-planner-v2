@@ -20,10 +20,64 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    // Packing list is generated on-demand, no DB persistence yet
-    // Always start with questions state
-    setViewState('questions')
-  }, [])
+    // Check if packing list already exists
+    const fetchExistingList = async () => {
+      try {
+        const response = await fetch(`/api/trip-intelligence/packing?tripId=${itinerary.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.packingList && Object.keys(data.packingList).length > 0) {
+            // Transform database response to match UI expectations
+            const categorizedList: any = {
+              clothing: [],
+              footwear: [],
+              gear: [],
+              toiletries: [],
+              documents: [],
+              specialNotes: [],
+              luggageStrategy: null
+            }
+            
+            // Group items by category
+            Object.entries(data.packingList).forEach(([category, items]: [string, any]) => {
+              const categoryMap: Record<string, string> = {
+                'Clothing': 'clothing',
+                'Footwear': 'footwear',
+                'Activity Gear': 'gear',
+                'Electronics': 'gear',
+                'Toiletries': 'toiletries',
+                'Documents': 'documents',
+                'Health & Safety': 'gear',
+                'Miscellaneous': 'gear'
+              }
+              
+              const mappedCategory = categoryMap[category] || 'gear'
+              items.forEach((item: any) => {
+                categorizedList[mappedCategory].push({
+                  name: item.itemName,
+                  quantity: item.quantity,
+                  reason: item.reason,
+                  priority: item.priority
+                })
+              })
+            })
+            
+            setPackingList(categorizedList)
+            setViewState('loaded')
+          } else {
+            setViewState('questions')
+          }
+        } else {
+          setViewState('questions')
+        }
+      } catch (error) {
+        console.error('Error fetching packing list:', error)
+        setViewState('questions')
+      }
+    }
+    
+    fetchExistingList()
+  }, [itinerary.id])
 
   const questions: Question[] = [
     {
@@ -64,37 +118,55 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
     setViewState('loading')
     
     try {
-      // Fetch weather data first
-      const weatherPromises = itinerary.segments.map(seg =>
-        fetch('/api/weather/forecast', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            lat: seg.endLat, 
-            lng: seg.endLng,
-            dates: { start: seg.startDate, end: seg.endDate }
-          })
-        }).then(r => r.json()).catch(() => null)
-      )
-      
-      const weatherData = await Promise.all(weatherPromises)
-      
-      // Generate packing list with preferences
-      const response = await fetch('/api/packing/suggest', {
+      // Generate packing list using intelligence API
+      const response = await fetch('/api/trip-intelligence/packing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trip: itinerary,
-          profile: profileValues,
-          weather: weatherData.filter(Boolean),
-          packingStyle: answers.packingStyle || preferences?.packingStyle,
-          hasGear: answers.hasGear || preferences?.hasGear
+          tripId: itinerary.id,
+          packingStyle: answers.packingStyle,
+          hasGear: answers.hasGear
         })
       })
       
       if (response.ok) {
-        const list = await response.json()
-        setPackingList(list)
+        const data = await response.json()
+        // Transform database response to match UI expectations
+        const categorizedList: any = {
+          clothing: [],
+          footwear: [],
+          gear: [],
+          toiletries: [],
+          documents: [],
+          specialNotes: [],
+          luggageStrategy: data.luggageStrategy
+        }
+        
+        // Group items by category
+        if (data.packingList) {
+          data.packingList.forEach((item: any) => {
+            const categoryMap: Record<string, string> = {
+              'Clothing': 'clothing',
+              'Footwear': 'footwear',
+              'Activity Gear': 'gear',
+              'Electronics': 'gear',
+              'Toiletries': 'toiletries',
+              'Documents': 'documents',
+              'Health & Safety': 'gear',
+              'Miscellaneous': 'gear'
+            }
+            
+            const mappedCategory = categoryMap[item.category] || 'gear'
+            categorizedList[mappedCategory].push({
+              name: item.itemName,
+              quantity: item.quantity,
+              reason: item.reason,
+              priority: item.priority
+            })
+          })
+        }
+        
+        setPackingList(categorizedList)
         setViewState('loaded')
       } else {
         setViewState('questions')

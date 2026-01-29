@@ -158,7 +158,7 @@ EXPECTED OUTPUT:
 - Mobile tickets increasingly common
 - Some require ID matching name on order
 - Large bags often prohibited
-- Re-entry policies vary`;
+- Re-entry policies vary
 
 ### Common Email Patterns
 
