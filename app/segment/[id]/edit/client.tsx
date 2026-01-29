@@ -11,7 +11,6 @@ import { deleteSegment } from "@/lib/actions/delete-segment"
 import { getTimeZoneForLocation } from "@/lib/actions/timezone"
 import { updateTripDates } from "@/lib/actions/update-trip-dates"
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion"
-import { TimelineResolutionModal } from "@/components/timeline-resolution-modal"
 import { dateToUTC, utcToDate } from "@/lib/utils/date-timezone"
 import type { Segment, Trip, SegmentType, Reservation, ReservationType, ReservationCategory } from "@prisma/client"
 
@@ -88,7 +87,6 @@ export function SegmentEditClient({
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLoadingTimezone, setIsLoadingTimezone] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
-  const [showTimelineModal, setShowTimelineModal] = useState(false)
 
   // Get current segment type
   const currentSegmentType = segmentTypes.find(st => st.id === segmentTypeId)
@@ -117,65 +115,6 @@ export function SegmentEditClient({
     if (start < trip.startDate || end > trip.endDate) return true
     
     return false
-  }
-
-  // Prepare timeline data
-  const getTimelineSegments = () => {
-    return trip.segments
-      .sort((a, b) => a.order - b.order)
-      .map((seg) => ({
-        id: seg.id,
-        name: seg.name,
-        startDate: seg.startTime!,
-        endDate: seg.endTime!,
-        color: '', // Will be assigned by timeline component
-        order: seg.order,
-      }))
-  }
-
-  // Handle timeline apply (save all segments)
-  const handleTimelineApply = async (
-    updatedSegments: Array<{
-      id: string
-      name: string
-      startDate: Date
-      endDate: Date
-      color: string
-      order: number
-    }>,
-    newTripStart: Date,
-    newTripEnd: Date
-  ) => {
-    try {
-      // Update all segments in parallel
-      await Promise.all(
-        updatedSegments.map(seg =>
-          updatePersistedSegment(seg.id, {
-            startTime: seg.startDate.toISOString(),
-            endTime: seg.endDate.toISOString(),
-          })
-        )
-      )
-
-      // Update trip dates if they changed
-      const tripDatesChanged = 
-        newTripStart.getTime() !== trip.startDate.getTime() ||
-        newTripEnd.getTime() !== trip.endDate.getTime()
-
-      if (tripDatesChanged) {
-        await updateTripDates(trip.id, {
-          startDate: newTripStart,
-          endDate: newTripEnd,
-        })
-      }
-
-      // Refresh and navigate back
-      router.push(returnTo)
-      router.refresh()
-    } catch (error) {
-      console.error("Failed to apply timeline changes:", error)
-      throw error
-    }
   }
 
   // Handle location changes
@@ -254,12 +193,6 @@ export function SegmentEditClient({
 
   // Handle save
   const handleSave = async () => {
-    // Check for conflicts before saving
-    if (hasDateConflicts()) {
-      setShowTimelineModal(true)
-      return
-    }
-
     setIsSaving(true)
 
     try {
@@ -533,7 +466,7 @@ export function SegmentEditClient({
               )}
             </div>
 
-            {/* Conflict Warning with Smart Resolve */}
+            {/* Conflict Warning */}
             {hasDateConflicts() && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 animate-slide-down">
                 <div className="flex items-center justify-between">
@@ -545,10 +478,10 @@ export function SegmentEditClient({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowTimelineModal(true)}
+                    onClick={() => router.push(`/journey/${trip.id}/edit?returnTo=${encodeURIComponent(returnTo)}`)}
                     className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors whitespace-nowrap"
                   >
-                    Smart Resolve
+                    Open Journey Manager
                   </button>
                 </div>
               </div>
@@ -637,16 +570,6 @@ export function SegmentEditClient({
         </div>
       </div>
 
-      {/* Timeline Resolution Modal */}
-      <TimelineResolutionModal
-        isOpen={showTimelineModal}
-        onClose={() => setShowTimelineModal(false)}
-        segments={getTimelineSegments()}
-        tripStartDate={trip.startDate}
-        tripEndDate={trip.endDate}
-        currentSegmentId={segment.id}
-        onApply={handleTimelineApply}
-      />
     </div>
   )
 }
