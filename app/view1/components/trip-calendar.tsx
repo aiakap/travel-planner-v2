@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -35,8 +35,11 @@ const ActionIcon = ({ icon: Icon, onClick }: { icon: any, onClick?: () => void }
 export function TripCalendar({ itinerary }: TripCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
-  // Flatten all reservations for optimistic delete
-  const allReservations = itinerary.segments.flatMap(s => s.reservations)
+  // Flatten all reservations for optimistic delete (memoized to prevent re-renders)
+  const allReservations = useMemo(
+    () => itinerary.segments.flatMap(s => s.reservations),
+    [itinerary.segments]
+  )
   
   // Use optimistic delete hook
   const { items: optimisticReservations, handleDelete } = useOptimisticDelete(

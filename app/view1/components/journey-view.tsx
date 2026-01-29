@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
 import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
@@ -22,8 +22,11 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  // Flatten all reservations for optimistic delete
-  const allReservations = itinerary.segments.flatMap(s => s.reservations)
+  // Flatten all reservations for optimistic delete (memoized to prevent re-renders)
+  const allReservations = useMemo(
+    () => itinerary.segments.flatMap(s => s.reservations),
+    [itinerary.segments]
+  )
   
   // Use optimistic delete hook
   const { items: optimisticReservations, handleDelete } = useOptimisticDelete(
