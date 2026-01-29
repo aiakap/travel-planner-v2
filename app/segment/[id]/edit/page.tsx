@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { SegmentEditClient } from "./client"
 
 interface PageProps {
-  params: { id: string }
-  searchParams: { returnTo?: string }
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ returnTo?: string }>
 }
 
 export default async function SegmentEditPage({ params, searchParams }: PageProps) {
@@ -15,10 +15,14 @@ export default async function SegmentEditPage({ params, searchParams }: PageProp
     redirect("/api/auth/signin")
   }
 
+  // Await params and searchParams in Next.js 15
+  const { id } = await params
+  const { returnTo } = await searchParams
+
   // Fetch segment with all related data
   const segment = await prisma.segment.findFirst({
     where: {
-      id: params.id,
+      id,
       trip: { userId: session.user.id }
     },
     include: {
@@ -60,7 +64,7 @@ export default async function SegmentEditPage({ params, searchParams }: PageProp
       segment={segment}
       trip={segment.trip}
       segmentTypes={segmentTypes}
-      returnTo={searchParams.returnTo || `/view1?tab=journey`}
+      returnTo={returnTo || `/view1?tab=journey`}
     />
   )
 }

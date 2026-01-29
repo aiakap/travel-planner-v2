@@ -7,7 +7,7 @@ import {
   MapPin, 
   Calendar as CalendarIcon, FileText, Sparkles,
   Share2, Download, CalendarPlus, Cloud, CheckSquare, Map,
-  DollarSign, Shield, Calendar, UtensilsCrossed
+  DollarSign, Shield, Calendar, UtensilsCrossed, Plus
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { NavButton } from "./components/nav-button"
@@ -25,6 +25,8 @@ import { ActivitiesView } from "./components/activities-view"
 import { DiningView } from "./components/dining-view"
 import { DocumentsView } from "./components/documents-view"
 import { SectionHeading } from "./components/section-heading"
+import { QuickAddModal } from "@/components/quick-add-modal"
+import { toast } from "sonner"
 
 interface View1ClientProps {
   itinerary: ViewItinerary
@@ -38,6 +40,9 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
   // Read active tab from URL or default to 'journey'
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'journey')
   const [scrolled, setScrolled] = useState(false)
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const [isExportingCalendar, setIsExportingCalendar] = useState(false)
+  const [showQuickAddModal, setShowQuickAddModal] = useState(false)
   
   // Update URL when tab changes
   const handleTabChange = (newTab: string) => {
@@ -45,6 +50,64 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
     const params = new URLSearchParams(searchParams)
     params.set('tab', newTab)
     router.replace(`/view1/${itinerary.id}?${params.toString()}`, { scroll: false })
+  }
+
+  // PDF download handler
+  const handleDownloadPDF = async () => {
+    setIsGeneratingPDF(true)
+    const toastId = toast.loading("Generating PDF...")
+    
+    try {
+      const response = await fetch('/api/pdf/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tripId: itinerary.id }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF')
+      }
+
+      const { pdfUrl } = await response.json()
+      toast.success("PDF generated successfully!", { id: toastId })
+      window.open(pdfUrl, '_blank')
+    } catch (error) {
+      console.error('PDF generation error:', error)
+      toast.error("Failed to generate PDF", { id: toastId })
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  // Calendar export handler
+  const handleExportCalendar = async () => {
+    setIsExportingCalendar(true)
+    const toastId = toast.loading("Exporting to calendar...")
+    
+    try {
+      const response = await fetch(`/api/calendar/export?tripId=${itinerary.id}`)
+
+      if (!response.ok) {
+        throw new Error('Failed to export calendar')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${itinerary.title.replace(/[^a-z0-9]/gi, '_')}.ics`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      toast.success("Calendar file downloaded!", { id: toastId })
+    } catch (error) {
+      console.error('Calendar export error:', error)
+      toast.error("Failed to export calendar", { id: toastId })
+    } finally {
+      setIsExportingCalendar(false)
+    }
   }
 
   useEffect(() => {
@@ -245,10 +308,19 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
 
             {/* Right: Action Toolbar */}
             <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+              <ToolbarButton icon={Plus} label="Quick Add" onClick={() => setShowQuickAddModal(true)} />
               <ToolbarButton icon={Share2} label="Share" primary />
               <div className="flex bg-white rounded-lg border border-slate-200 p-0.5">
-                <ActionIcon icon={Download} label="Download PDF" />
-                <ActionIcon icon={CalendarPlus} label="Sync Calendar" />
+                <ActionIcon 
+                  icon={Download} 
+                  label="Download PDF" 
+                  onClick={handleDownloadPDF}
+                />
+                <ActionIcon 
+                  icon={CalendarPlus} 
+                  label="Sync Calendar" 
+                  onClick={handleExportCalendar}
+                />
               </div>
             </div>
           </div>
@@ -269,6 +341,13 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
 
         {renderContent()}
       </main>
+
+      {/* Quick Add Modal */}
+      <QuickAddModal 
+        isOpen={showQuickAddModal}
+        onClose={() => setShowQuickAddModal(false)}
+        tripId={itinerary.id}
+      />
     </div>
   )
 }
