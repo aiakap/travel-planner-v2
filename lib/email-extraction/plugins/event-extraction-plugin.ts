@@ -9,29 +9,156 @@ import { eventExtractionSchema } from '@/lib/schemas/event-extraction-schema';
 
 export const EVENT_EXTRACTION_PROMPT = `## Event/Attraction Tickets Extraction
 
-Extract event, attraction, or activity ticket information from the confirmation email.
+Extract event, attraction, or activity ticket information from the confirmation email with high accuracy.
 
 ### Required Information
 
-- **Confirmation Number**: Confirmation number, order number, or ticket reference
-- **Guest Name**: Name of the person who purchased the tickets
-- **Event Name**: Name of the event, attraction, show, or activity
-- **Venue Name**: Name of the venue, theater, museum, or location
-- **Address**: Full address of the venue (if provided)
-- **Event Date**: Date of the event (ISO format: YYYY-MM-DD)
-- **Event Time**: Start time of the event (e.g., "7:30 PM", "19:30"), or empty string if not specified
-- **Doors Open Time**: Doors open or entry time if different from event start time, or empty string
-- **Tickets**: Array of ticket types with:
-  - **Ticket Type**: Type of ticket (e.g., "General Admission", "VIP", "Adult", "Child", "Student", "Senior")
-  - **Quantity**: Number of tickets of this type
-  - **Price**: Price per ticket as a number
-  - **Seat Info**: Seat information (e.g., "Section 102, Row A, Seats 5-6", "Floor GA", "Orchestra"), or empty string
-- **Total Cost**: Total cost for all tickets as a number (default: 0 if not found)
+**Booking Details:**
+- **Confirmation Number**: Confirmation number, order number, or ticket reference (e.g., "TM-123456789", "EVT-2026-ABC")
+- **Guest Name**: Name of the person who purchased the tickets (e.g., "SMITH/JOHN", "Jane Doe")
+- **Event Name**: Name of the event, attraction, show, or activity (e.g., "Taylor Swift Concert", "Museum of Modern Art", "Hamilton")
+- **Venue Name**: Name of the venue, theater, museum, or location (e.g., "Madison Square Garden", "MoMA", "Richard Rodgers Theatre")
+- **Address**: Full address of the venue or empty string if not provided
+- **Event Type**: Type of event (e.g., "Concert", "Museum", "Theater", "Sports", "Tour") or empty string
+- **Platform**: Ticketing platform used (e.g., "Ticketmaster", "Eventbrite", "Viator") or empty string
+- **Booking Date**: Date when tickets were purchased in ISO format YYYY-MM-DD or empty string
+- **Special Instructions**: Entry requirements or notes (e.g., "Bring ID", "Mobile entry only") or empty string
+
+**Event Details:**
+- **Event Date**: Date of the event in ISO format YYYY-MM-DD (e.g., "2026-01-30") - REQUIRED
+- **Event Time**: Start time of the event (e.g., "7:30 PM", "19:30") or empty string
+- **Doors Open Time**: Doors open or entry time (e.g., "6:30 PM") or empty string
+
+**Ticket Details:**
+- **Tickets**: Array of ticket types, each with:
+  - Ticket Type (e.g., "General Admission", "VIP", "Adult")
+  - Quantity (number of tickets)
+  - Price (price per ticket)
+  - Seat Info (e.g., "Section 102, Row A, Seats 5-6") or empty string
+- **Total Cost**: Total cost for all tickets as a number (e.g., 250.00) or 0 if not found
 - **Currency**: Currency code (e.g., "USD", "EUR", "GBP") or empty string
-- **Booking Date**: Date when tickets were purchased (ISO format), or empty string if not found
-- **Platform**: Ticketing platform used (e.g., "Ticketmaster", "Eventbrite", "StubHub", "AXS", "SeeTickets", "Direct"), or empty string
-- **Event Type**: Type of event (e.g., "Concert", "Museum", "Theater", "Sports", "Tour", "Theme Park", "Attraction", "Comedy Show", "Opera", "Ballet"), or empty string
-- **Special Instructions**: Special instructions, entry requirements, or notes (e.g., "Bring ID", "Print tickets required", "Mobile entry only", "No bags allowed"), or empty string
+
+### Date Format Conversion Guide
+
+Event platforms use various date formats. You MUST convert them to ISO format YYYY-MM-DD:
+
+**Common Formats:**
+- "Saturday, January 30, 2026" → "2026-01-30" (day of week, full month name, day, year)
+- "Jan 30, 2026" → "2026-01-30" (abbreviated month)
+- "January 30, 2026" → "2026-01-30" (full month name)
+- "30-Jan-2026" → "2026-01-30" (day-month-year)
+- "01/30/2026" → "2026-01-30" (MM/DD/YYYY)
+- "30/01/2026" → "2026-01-30" (DD/MM/YYYY - European format)
+- "2026-01-30" → "2026-01-30" (already correct)
+
+**Month Name to Number:**
+Jan=01, Feb=02, Mar=03, Apr=04, May=05, Jun=06, Jul=07, Aug=08, Sep=09, Oct=10, Nov=11, Dec=12
+
+### Real Example - Ticketmaster Concert
+
+INPUT TEXT:
+Ticketmaster Order Confirmation
+
+Order #: TM-123456789
+Name: ANDERSON/THOMAS
+Event: Taylor Swift - The Eras Tour
+Venue: Madison Square Garden
+Address: 4 Pennsylvania Plaza, New York, NY 10001
+
+Event Date: Saturday, January 30, 2026
+Show Time: 7:30 PM
+Doors Open: 6:00 PM
+
+Tickets:
+- 2 x Floor Seats @ $125.00 each
+  Section: Floor 2, Row: 15, Seats: 12-13
+
+Total: $250.00 USD (including fees)
+Order Date: January 15, 2026
+
+Entry: Mobile tickets only - No printed tickets accepted
+
+EXPECTED OUTPUT:
+{
+  "confirmationNumber": "TM-123456789",
+  "guestName": "ANDERSON/THOMAS",
+  "eventName": "Taylor Swift - The Eras Tour",
+  "venueName": "Madison Square Garden",
+  "address": "4 Pennsylvania Plaza, New York, NY 10001",
+  "eventDate": "2026-01-30",
+  "eventTime": "7:30 PM",
+  "doorsOpenTime": "6:00 PM",
+  "tickets": [
+    {
+      "ticketType": "Floor Seats",
+      "quantity": 2,
+      "price": 125.00,
+      "seatInfo": "Section: Floor 2, Row: 15, Seats: 12-13"
+    }
+  ],
+  "totalCost": 250.00,
+  "currency": "USD",
+  "bookingDate": "2026-01-15",
+  "platform": "Ticketmaster",
+  "eventType": "Concert",
+  "specialInstructions": "Mobile tickets only - No printed tickets accepted"
+}
+
+### Critical Rules
+
+1. **NEVER leave event date empty** - This is a REQUIRED field
+2. **Convert all dates to YYYY-MM-DD format** - Use the conversion guide above
+3. **Keep times in original format** - Can be 12-hour (7:30 PM) or 24-hour (19:30)
+4. **Extract each ticket type separately** - Different types/prices get separate entries
+5. **Quantity is a number** - Extract from "2 x", "2 tickets", "Qty: 2"
+6. **Price is per ticket** - Not total for quantity
+7. **Seat info varies by venue** - Sections, rows, seats, or "General Admission"
+8. **Use empty strings for missing optional fields** - Not null or undefined
+9. **Total cost includes fees** - Service fees, processing fees, taxes
+10. **Guest names may use LAST/FIRST format** - Keep as-is from confirmation
+
+### Common Email Patterns
+
+**Ticketing Platforms:**
+- **Ticketmaster**: Concerts, sports, theater (major events)
+- **Eventbrite**: Wide variety, community events
+- **StubHub**: Resale marketplace
+- **AXS**: Concerts and sports
+- **SeeTickets**: UK-based ticketing
+- **Viator/GetYourGuide**: Tours and attractions
+- **Direct**: Museum, theater, attraction websites
+
+**Event Types:**
+- **Concerts**: Music performances, festivals
+- **Theater**: Plays, musicals, Broadway
+- **Sports**: Games, matches, races
+- **Museums**: Art, science, history
+- **Theme Parks**: Amusement, water parks
+- **Tours**: Guided, walking, bus tours
+- **Attractions**: Landmarks, observation decks
+- **Comedy**: Stand-up, improv shows
+
+**Look for phrases:**
+- "Order confirmed", "Your tickets", "Confirmation", "Admit"
+- "Event date", "Show time", "Doors open", "Gates open"
+- "Section", "Row", "Seat", "General Admission", "GA"
+- "Ticket type", "Pricing", "Total", "Fees"
+- "Entry requirements", "What to bring", "Prohibited items"
+
+**Ticket Types:**
+- **General Admission** (GA): No assigned seats, first-come
+- **Reserved Seating**: Specific seats assigned
+- **VIP**: Premium access, perks included
+- **Age Categories**: Adult, Child, Student, Senior
+- **Standing**: Standing room only
+- **Package**: Includes extras (meet & greet, merchandise)
+
+**Common Patterns:**
+- Times include "Doors open" and "Show starts"
+- Mobile tickets increasingly common
+- Some require ID matching name on order
+- Large bags often prohibited
+- Re-entry policies vary`;
 
 ### Common Email Patterns
 

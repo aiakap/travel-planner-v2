@@ -39,11 +39,11 @@ interface NavItem {
 const loggedInNavItems: (NavItem & { action?: string })[] = [
   {
     label: "My Trips",
-    href: "/manage",
+    href: "/manage1",
     children: [
       {
         label: "All Trips",
-        href: "/manage",
+        href: "/manage1",
         description: "View and manage your trips",
         icon: <Calendar className="h-5 w-5" />,
       },

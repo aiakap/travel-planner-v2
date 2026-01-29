@@ -29,7 +29,7 @@ export const genericReservationSchema = z.object({
   address: z.string().describe("Full address if provided, or empty string"),
   
   // Date and time information
-  startDate: z.string().describe("Start date in ISO format (YYYY-MM-DD)"),
+  startDate: z.string().min(1).describe("REQUIRED: Start date in ISO format YYYY-MM-DD. Convert from formats like 'Wednesday, January 30, 2026' to '2026-01-30'. NEVER empty."),
   startTime: z.string().describe("Start time (e.g., '10:00 AM', '14:30'), or empty string if not specified"),
   endDate: z.string().describe("End date in ISO format (YYYY-MM-DD), or same as start date if single-day"),
   endTime: z.string().describe("End time (e.g., '12:00 PM', '16:00'), or empty string if not specified"),

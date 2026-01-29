@@ -5,7 +5,7 @@ import { ReservationEditClient } from "./client"
 
 interface PageProps {
   params: { id: string }
-  searchParams: { returnTo?: string }
+  searchParams: { returnTo?: string; source?: string }
 }
 
 export default async function ReservationEditPage({ params, searchParams }: PageProps) {
@@ -80,6 +80,12 @@ export default async function ReservationEditPage({ params, searchParams }: Page
     orderBy: { name: "asc" }
   })
 
+  // Check if this is from natural language creation
+  const isFromNaturalLanguage = searchParams.source === 'natural-language'
+  const originalInput = reservation.metadata && typeof reservation.metadata === 'object'
+    ? (reservation.metadata as any).naturalLanguageInput
+    : null
+
   return (
     <ReservationEditClient
       reservation={reservation}
@@ -88,6 +94,8 @@ export default async function ReservationEditPage({ params, searchParams }: Page
       categories={categories}
       statuses={statuses}
       returnTo={searchParams.returnTo || `/view1?tab=journey`}
+      isFromNaturalLanguage={isFromNaturalLanguage}
+      originalInput={originalInput}
     />
   )
 }

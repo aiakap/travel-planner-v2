@@ -40,7 +40,7 @@ export const privateDriverExtractionSchema = z.object({
   // Pickup details
   pickupLocation: z.string().describe("Pickup location name (e.g., 'New Chitose Airport (CTS)', 'Hotel Lobby') or empty string if not provided"),
   pickupAddress: z.string().describe("Full pickup address or empty string if not provided"),
-  pickupDate: z.string().describe("Pickup date in ISO format (YYYY-MM-DD) or empty string if not provided"),
+  pickupDate: z.string().min(1).describe("REQUIRED: Pickup date in ISO format YYYY-MM-DD. Convert from formats like 'Thursday, January 30, 2026' to '2026-01-30'. NEVER empty."),
   pickupTime: z.string().describe("Pickup time (e.g., '14:00', '2:00 PM') or empty string if not specified"),
   pickupInstructions: z.string().describe("Specific pickup instructions or meeting point details (e.g., 'arrival hall after baggage claim') or empty string"),
   

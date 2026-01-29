@@ -43,12 +43,12 @@ export const cruiseExtractionSchema = z.object({
   
   embarkationPort: z.string().describe("Port where cruise begins (e.g., 'Port Canaveral', 'Miami')"),
   embarkationLocation: z.string().describe("City/country of embarkation port (e.g., 'Orlando, FL, US', 'Miami, FL, US')"),
-  embarkationDate: z.string().describe("Embarkation date (ISO format: YYYY-MM-DD)"),
-  embarkationTime: z.string().describe("Embarkation/boarding time (e.g., '1:00 PM'), or empty string"),
+  embarkationDate: z.string().min(1).describe("REQUIRED: Embarkation date in ISO format YYYY-MM-DD. Convert from formats like 'Saturday, February 15, 2026' to '2026-02-15'. NEVER empty."),
+  embarkationTime: z.string().describe("Embarkation/boarding time (e.g., '1:00 PM', '13:00'), or empty string"),
   
   disembarkationPort: z.string().describe("Port where cruise ends (often same as embarkation)"),
   disembarkationLocation: z.string().describe("City/country of disembarkation port"),
-  disembarkationDate: z.string().describe("Disembarkation date (ISO format: YYYY-MM-DD)"),
+  disembarkationDate: z.string().min(1).describe("REQUIRED: Disembarkation date in ISO format YYYY-MM-DD. Convert from formats like 'Saturday, February 22, 2026' to '2026-02-22'. NEVER empty."),
   disembarkationTime: z.string().describe("Disembarkation time (e.g., '8:00 AM'), or empty string"),
   
   portsOfCall: z.array(portOfCallSchema).describe("Array of ports visited during the cruise, or empty array if not provided"),

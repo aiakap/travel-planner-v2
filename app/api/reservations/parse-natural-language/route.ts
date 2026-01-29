@@ -21,6 +21,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check for OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("[Parse Natural Language] OPENAI_API_KEY not configured");
+      return NextResponse.json(
+        { error: "OpenAI API key not configured. Please add OPENAI_API_KEY to your environment variables." },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const { text, segmentId, tripId } = body;
 
@@ -167,18 +176,25 @@ Output: {
 Extract all relevant information and assess what clarifications are needed.`;
 
     // Use AI to extract structured data
-    const result = await generateObject({
-      model: openai("gpt-4o-mini"),
-      schema: naturalLanguageReservationSchema,
-      prompt: userPrompt,
-      system: systemPrompt,
-      schemaName: "NaturalLanguageReservation",
-      schemaDescription: "Extract reservation details from natural language with context awareness",
-      mode: "json",
-    });
-
     console.log('[Parse NL] Input:', text);
     console.log('[Parse NL] Context:', contextInfo.currentSegment);
+    
+    let result;
+    try {
+      result = await generateObject({
+        model: openai("gpt-4o-mini"),
+        schema: naturalLanguageReservationSchema,
+        prompt: userPrompt,
+        system: systemPrompt,
+        schemaName: "NaturalLanguageReservation",
+        schemaDescription: "Extract reservation details from natural language with context awareness",
+        mode: "json",
+      });
+    } catch (aiError) {
+      console.error('[Parse NL] AI generation error:', aiError);
+      throw new Error(`AI parsing failed: ${aiError instanceof Error ? aiError.message : 'Unknown error'}`);
+    }
+
     console.log('[Parse NL] Result:', JSON.stringify(result.object, null, 2));
 
     return NextResponse.json({

@@ -38,7 +38,7 @@ const CREATION_MESSAGES = [
   "☕ Watering down the complimentary coffee...",
 ]
 
-type ReservationType = "flight" | "hotel" | "car-rental"
+type ReservationType = "flight" | "hotel" | "car-rental" | "train" | "restaurant" | "event" | "cruise" | "private-driver" | "generic"
 
 interface FlightPreview {
   flightNumber: string
@@ -272,13 +272,14 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
         throw new Error(errorData.error || "Failed to start processing")
       }
 
-      const { jobId, flightCount } = await response.json()
+      const { jobId, count } = await response.json()
 
       // Store job info in sessionStorage for View1 to pick up
       sessionStorage.setItem('quickAddJob', JSON.stringify({
         jobId,
         tripId: trip.id,
-        flightCount,
+        count,
+        type: reservationType,
         timestamp: Date.now()
       }))
 
@@ -499,6 +500,12 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
                 <SelectItem value="flight">Flight</SelectItem>
                 <SelectItem value="hotel">Hotel</SelectItem>
                 <SelectItem value="car-rental">Car Rental</SelectItem>
+                <SelectItem value="train">Train</SelectItem>
+                <SelectItem value="restaurant">Restaurant</SelectItem>
+                <SelectItem value="event">Event/Tickets</SelectItem>
+                <SelectItem value="cruise">Cruise</SelectItem>
+                <SelectItem value="private-driver">Private Driver</SelectItem>
+                <SelectItem value="generic">Other/Generic</SelectItem>
               </SelectContent>
             </Select>
           </div>

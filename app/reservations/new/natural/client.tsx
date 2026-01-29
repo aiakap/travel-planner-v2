@@ -68,6 +68,7 @@ export function NaturalLanguageReservationClient({ context }: { context: Context
     startTransition(async () => {
       try {
         // Step 1: Parse natural language
+        console.log('[NL Client] Parsing:', { input, segmentId: context.segment.id, tripId: context.trip.id });
         const parseResponse = await fetch("/api/reservations/parse-natural-language", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -79,7 +80,9 @@ export function NaturalLanguageReservationClient({ context }: { context: Context
         });
 
         if (!parseResponse.ok) {
-          throw new Error("Failed to parse input");
+          const errorData = await parseResponse.json().catch(() => ({ error: "Unknown error" }));
+          console.error('[NL Client] Parse failed:', parseResponse.status, errorData);
+          throw new Error(errorData.error || `Failed to parse input (${parseResponse.status})`);
         }
 
         const parseData = await parseResponse.json();

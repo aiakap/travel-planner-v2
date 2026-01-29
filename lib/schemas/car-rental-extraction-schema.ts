@@ -17,25 +17,25 @@ import { z } from "zod";
  * All fields are required by the schema - the AI must provide a value for each field.
  */
 export const carRentalExtractionSchema = z.object({
-  confirmationNumber: z.string().describe("Reservation/confirmation number (e.g., 00125899341)"),
-  guestName: z.string().describe("Name of the person who made the reservation (e.g., Thomas Anderson)"),
+  confirmationNumber: z.string().describe("Reservation/confirmation number (e.g., 00125899341, RES-2026-ABC)"),
+  guestName: z.string().describe("Name of the person who made the reservation (e.g., ANDERSON/THOMAS, Jane Smith)"),
   company: z.string().describe("Car rental company name (e.g., Toyota Rent a Car, Hertz, Enterprise)"),
-  vehicleClass: z.string().describe("Vehicle class or category (e.g., W3 Class (SUV / 4WD), Compact, Full-size) or empty string"),
+  vehicleClass: z.string().describe("Vehicle class or category (e.g., W3 Class (SUV / 4WD), Economy, Compact) or empty string"),
   vehicleModel: z.string().describe("Specific vehicle model or similar options (e.g., Harrier, RAV4, or similar) or empty string"),
-  pickupLocation: z.string().describe("Pickup location name (e.g., New Chitose Airport Poplar Shop)"),
+  pickupLocation: z.string().describe("Pickup location name (e.g., New Chitose Airport Poplar Shop, Downtown Office)"),
   pickupAddress: z.string().describe("Full pickup address or empty string if not provided"),
-  pickupDate: z.string().describe("Pickup date in ISO format (YYYY-MM-DD)"),
-  pickupTime: z.string().describe("Pickup time (e.g., 14:00 or 2:00 PM) or empty string if not specified"),
-  pickupFlightNumber: z.string().describe("Arrival flight number if pickup is at airport (e.g., NH215) or empty string"),
-  returnLocation: z.string().describe("Return/drop-off location name"),
+  pickupDate: z.string().min(1).describe("REQUIRED: Pickup date in ISO format YYYY-MM-DD. Convert from formats like 'Thursday, January 30, 2026' to '2026-01-30'. NEVER empty."),
+  pickupTime: z.string().describe("Pickup time in 12-hour format with AM/PM (e.g., 2:00 PM, 14:00) or empty string if not specified"),
+  pickupFlightNumber: z.string().describe("Arrival flight number if pickup is at airport (e.g., NH215, UA875) or empty string"),
+  returnLocation: z.string().describe("Return/drop-off location name (e.g., New Chitose Airport Poplar Shop, Airport Terminal)"),
   returnAddress: z.string().describe("Full return address or empty string if not provided"),
-  returnDate: z.string().describe("Return date in ISO format (YYYY-MM-DD)"),
-  returnTime: z.string().describe("Return time (e.g., 11:00 or 11:00 AM) or empty string if not specified"),
+  returnDate: z.string().min(1).describe("REQUIRED: Return date in ISO format YYYY-MM-DD. Convert from formats like 'Thursday, February 6, 2026' to '2026-02-06'. NEVER empty."),
+  returnTime: z.string().describe("Return time in 12-hour format with AM/PM (e.g., 11:00 AM, 11:00) or empty string if not specified"),
   totalCost: z.number().describe("Total estimated cost as a number or 0 if not provided"),
   currency: z.string().describe("Currency code (e.g., USD, EUR, JPY) or empty string if not provided"),
   options: z.array(z.string()).describe("Array of options/accessories (e.g., GPS, Winter Tires, Ski Rack, Child Seat, ETC Card) or empty array"),
   oneWayCharge: z.number().describe("One-way rental charge as a number or 0 if not applicable/round-trip"),
-  bookingDate: z.string().describe("Date when the booking was made in ISO format or empty string if not provided"),
+  bookingDate: z.string().describe("Date when the booking was made in ISO format YYYY-MM-DD or empty string if not provided"),
 });
 
 /**

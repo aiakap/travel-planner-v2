@@ -64,6 +64,8 @@ interface ReservationEditClientProps {
   categories: CategoryWithTypes[]
   statuses: ReservationStatus[]
   returnTo: string
+  isFromNaturalLanguage?: boolean
+  originalInput?: string | null
 }
 
 interface LocationCache {
@@ -122,7 +124,9 @@ export function ReservationEditClient({
   segment,
   categories,
   statuses,
-  returnTo
+  returnTo,
+  isFromNaturalLanguage = false,
+  originalInput = null
 }: ReservationEditClientProps) {
   const router = useRouter()
   
@@ -527,6 +531,31 @@ export function ReservationEditClient({
 
       {/* Form Content */}
       <div className="max-w-3xl mx-auto px-4 py-6">
+        {/* Natural Language Banner */}
+        {isFromNaturalLanguage && originalInput && (
+          <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-6">
+            <div className="flex items-start gap-3">
+              <Lightbulb className="h-6 w-6 text-indigo-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-indigo-900 mb-2">
+                  Review your reservation details
+                </h3>
+                <p className="text-sm text-indigo-800 mb-3">
+                  I've created this reservation based on your request: <span className="font-semibold">"{originalInput}"</span>
+                </p>
+                <div className="text-xs text-indigo-700">
+                  <strong className="font-semibold">Next steps:</strong>
+                  <ol className="list-decimal list-inside mt-2 space-y-1">
+                    <li>Review the details below and make any necessary adjustments</li>
+                    <li>Fill in any missing information</li>
+                    <li>Click "Create Reservation" to save, or "Cancel" to discard</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Hero Image */}
           {reservation.imageUrl && (
@@ -1295,7 +1324,7 @@ export function ReservationEditClient({
                     Saving...
                   </>
                 ) : (
-                  "Save Changes"
+                  isFromNaturalLanguage ? "Create Reservation" : "Save Changes"
                 )}
               </button>
             </div>

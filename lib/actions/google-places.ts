@@ -201,3 +201,193 @@ export async function getLocationContextForTrip(tripId: string): Promise<string 
     return undefined;
   }
 }
+
+/**
+ * Search for places with context awareness and disambiguation
+ * Returns multiple results if ambiguous, single result if confident
+ */
+export async function searchPlaceWithContext(
+  placeName: string,
+  locationContext: string,
+  options?: {
+    maxResults?: number;
+    includePhotos?: boolean;
+  }
+): Promise<{
+  results: GooglePlaceData[];
+  confidence: "high" | "medium" | "low";
+  needsDisambiguation: boolean;
+}> {
+  const GOOGLE_PLACES_API_KEY = getApiKey();
+  if (!GOOGLE_PLACES_API_KEY) {
+    console.error("Google Places API key not configured");
+    return {
+      results: [],
+      confidence: "low",
+      needsDisambiguation: false,
+    };
+  }
+
+  const maxResults = options?.maxResults || 3;
+  const includePhotos = options?.includePhotos !== false;
+
+  try {
+    // First search with location context
+    const query = `${placeName} in ${locationContext}`;
+    
+    const searchUrl = new URL(`${PLACES_API_BASE}/textsearch/json`);
+    searchUrl.searchParams.append("query", query);
+    searchUrl.searchParams.append("language", "en");
+    searchUrl.searchParams.append("key", GOOGLE_PLACES_API_KEY);
+
+    const searchResponse = await fetch(searchUrl.toString());
+    const searchData: PlacesTextSearchResponse = await searchResponse.json();
+
+    // If no results with context, try without context
+    if (searchData.status !== "OK" || !searchData.results.length) {
+      console.log(`[Place Search] No results with context, trying without: "${placeName}"`);
+      
+      const fallbackUrl = new URL(`${PLACES_API_BASE}/textsearch/json`);
+      fallbackUrl.searchParams.append("query", placeName);
+      fallbackUrl.searchParams.append("language", "en");
+      fallbackUrl.searchParams.append("key", GOOGLE_PLACES_API_KEY);
+
+      const fallbackResponse = await fetch(fallbackUrl.toString());
+      const fallbackData: PlacesTextSearchResponse = await fallbackResponse.json();
+
+      if (fallbackData.status !== "OK" || !fallbackData.results.length) {
+        return {
+          results: [],
+          confidence: "low",
+          needsDisambiguation: false,
+        };
+      }
+
+      // Use fallback results but mark as low confidence
+      const topResults = fallbackData.results.slice(0, maxResults);
+      const detailedResults = await Promise.all(
+        topResults.map(place => getPlaceDetails(place.place_id, includePhotos))
+      );
+
+      return {
+        results: detailedResults.filter((r): r is GooglePlaceData => r !== null),
+        confidence: "low",
+        needsDisambiguation: topResults.length > 1,
+      };
+    }
+
+    const results = searchData.results;
+    
+    // Determine confidence based on results
+    let confidence: "high" | "medium" | "low" = "medium";
+    let needsDisambiguation = false;
+
+    if (results.length === 1) {
+      confidence = "high";
+    } else if (results.length <= 3) {
+      confidence = "medium";
+      needsDisambiguation = true;
+    } else {
+      confidence = "low";
+      needsDisambiguation = true;
+    }
+
+    // Get detailed information for top results
+    const topResults = results.slice(0, maxResults);
+    const detailedResults = await Promise.all(
+      topResults.map(place => getPlaceDetails(place.place_id, includePhotos))
+    );
+
+    return {
+      results: detailedResults.filter((r): r is GooglePlaceData => r !== null),
+      confidence,
+      needsDisambiguation,
+    };
+  } catch (error) {
+    console.error("Error searching for place with context:", error);
+    return {
+      results: [],
+      confidence: "low",
+      needsDisambiguation: false,
+    };
+  }
+}
+
+/**
+ * Get detailed place information by place_id
+ * Helper function for searchPlaceWithContext
+ */
+async function getPlaceDetails(
+  placeId: string,
+  includePhotos: boolean = true
+): Promise<GooglePlaceData | null> {
+  const GOOGLE_PLACES_API_KEY = getApiKey();
+  if (!GOOGLE_PLACES_API_KEY) {
+    return null;
+  }
+
+  try {
+    const detailsUrl = new URL(`${PLACES_API_BASE}/details/json`);
+    detailsUrl.searchParams.append("place_id", placeId);
+    detailsUrl.searchParams.append("fields", [
+      "place_id",
+      "name",
+      "formatted_address",
+      "formatted_phone_number",
+      "international_phone_number",
+      "website",
+      "rating",
+      "user_ratings_total",
+      "price_level",
+      "photos",
+      "opening_hours",
+      "geometry",
+      "types",
+    ].join(","));
+    detailsUrl.searchParams.append("language", "en");
+    detailsUrl.searchParams.append("key", GOOGLE_PLACES_API_KEY);
+
+    const detailsResponse = await fetch(detailsUrl.toString());
+    const detailsData: PlaceDetailsResponse = await detailsResponse.json();
+
+    if (detailsData.status !== "OK") {
+      console.error("Failed to get place details:", detailsData.status);
+      return null;
+    }
+
+    const details = detailsData.result;
+
+    // Format photos with URLs
+    const photos: GooglePlacePhoto[] | undefined = includePhotos && details.photos
+      ? await Promise.all(
+          details.photos.slice(0, 3).map(async (photo) => ({
+            photoReference: photo.photo_reference,
+            width: photo.width,
+            height: photo.height,
+            url: await getPhotoUrl(photo.photo_reference, 800),
+          }))
+        )
+      : undefined;
+
+    return {
+      placeId: details.place_id,
+      name: details.name,
+      formattedAddress: details.formatted_address,
+      phoneNumber: details.formatted_phone_number || details.international_phone_number,
+      website: details.website,
+      rating: details.rating,
+      userRatingsTotal: details.user_ratings_total,
+      priceLevel: details.price_level,
+      photos,
+      openingHours: details.opening_hours ? {
+        openNow: details.opening_hours.open_now,
+        weekdayText: details.opening_hours.weekday_text,
+      } : undefined,
+      geometry: details.geometry,
+      types: details.types,
+    };
+  } catch (error) {
+    console.error("Error getting place details:", error);
+    return null;
+  }
+}

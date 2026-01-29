@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
-import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
+import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2, Sparkles, Plus } from "lucide-react"
 import { Card } from "./card"
 import { Badge } from "./badge"
 import { ActionIcon } from "./action-icon"
@@ -205,6 +205,17 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
                     </div>
                     
                     <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          const returnUrl = `/view1/${optimisticItinerary.id}?tab=${currentTab}`
+                          router.push(`/reservations/new/natural?segmentId=${chapter.id}&tripId=${optimisticItinerary.id}&returnTo=${encodeURIComponent(returnUrl)}`)
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors border border-dashed border-indigo-300 hover:border-indigo-400"
+                        title="Add reservation with natural language"
+                      >
+                        <Sparkles size={12} />
+                        <span>Add</span>
+                      </button>
                       <ActionIcon icon={MessageCircle} label="Chat" />
                       <button
                         onClick={() => {
@@ -222,64 +233,92 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
 
               {/* Moments List */}
               <div className="space-y-3 pl-3 md:pl-4 border-l-2 border-slate-200 ml-2">
-                {chapterMoments.map((moment) => {
+                {chapterMoments.map((moment, momentIdx) => {
                   const momentId = `${moment.month}-${moment.date}`
                   return (
-                    <div 
-                      id={`date-${momentId}`} 
-                      key={moment.id} 
-                      className={`relative group transition-all duration-300 scroll-mt-[140px]`}
-                    >
-                      {/* Timeline Dot */}
-                      <div className={`absolute -left-[19px] md:-left-[23px] top-4 w-3 h-3 rounded-full border-2 border-white shadow-sm transition-colors duration-300
-                        ${selectedDate === momentId ? 'bg-blue-600 scale-125' : 'bg-slate-300 group-hover:bg-blue-400'}
-                      `}></div>
+                    <div key={moment.id}>
+                      <div 
+                        id={`date-${momentId}`} 
+                        className={`relative group transition-all duration-300 scroll-mt-[140px]`}
+                      >
+                        {/* Timeline Dot */}
+                        <div className={`absolute -left-[19px] md:-left-[23px] top-4 w-3 h-3 rounded-full border-2 border-white shadow-sm transition-colors duration-300
+                          ${selectedDate === momentId ? 'bg-blue-600 scale-125' : 'bg-slate-300 group-hover:bg-blue-400'}
+                        `}></div>
 
-                      <Card className={`p-3 flex items-center gap-4 ${selectedDate === momentId ? 'ring-1 ring-blue-500 shadow-md bg-blue-50/30' : ''}`}>
-                          {/* Time & Date Column */}
-                          <div className="flex flex-col items-center min-w-[45px] text-center">
-                            <span className="text-xs font-bold text-slate-900 leading-none">{moment.date}</span>
-                            <span className="text-[9px] uppercase font-bold text-slate-400 mb-1">{moment.month.slice(0,3)}</span>
-                            <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none">
-                              {moment.time}
-                            </span>
-                          </div>
-
-                          {/* Content */}
-                          <div className="flex-grow min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <h4 className="font-bold text-sm text-slate-900 truncate">{moment.title}</h4>
-                              <moment.icon className="text-slate-400 flex-shrink-0" size={14} />
+                        <Card className={`p-3 flex items-center gap-4 ${selectedDate === momentId ? 'ring-1 ring-blue-500 shadow-md bg-blue-50/30' : ''}`}>
+                            {/* Time & Date Column */}
+                            <div className="flex flex-col items-center min-w-[45px] text-center">
+                              <span className="text-xs font-bold text-slate-900 leading-none">{moment.date}</span>
+                              <span className="text-[9px] uppercase font-bold text-slate-400 mb-1">{moment.month.slice(0,3)}</span>
+                              <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none">
+                                {moment.time}
+                              </span>
                             </div>
-                            <p className="text-xs text-slate-500 truncate">Reservation confirmed</p>
-                          </div>
-                          
-                          {/* Action Icons */}
-                          <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
-                             <button
-                               onClick={() => handleDelete(moment.id)}
-                               className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 rounded-md transition-all"
-                               title="Delete"
-                             >
-                               <Trash2 size={14} className="text-red-600" />
-                             </button>
-                             <ActionIcon icon={MessageCircle} />
-                             <ActionIcon 
-                               icon={Edit2} 
-                               onClick={() => editReservation(optimisticItinerary.id, moment.id, moment.chapterId, 'timeline')}
-                             />
-                          </div>
-                      </Card>
+
+                            {/* Content */}
+                            <div className="flex-grow min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <h4 className="font-bold text-sm text-slate-900 truncate">{moment.title}</h4>
+                                <moment.icon className="text-slate-400 flex-shrink-0" size={14} />
+                              </div>
+                              <p className="text-xs text-slate-500 truncate">Reservation confirmed</p>
+                            </div>
+                            
+                            {/* Action Icons */}
+                            <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
+                               <button
+                                 onClick={() => handleDelete(moment.id)}
+                                 className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 rounded-md transition-all"
+                                 title="Delete"
+                               >
+                                 <Trash2 size={14} className="text-red-600" />
+                               </button>
+                               <ActionIcon icon={MessageCircle} />
+                               <ActionIcon 
+                                 icon={Edit2} 
+                                 onClick={() => editReservation(optimisticItinerary.id, moment.id, moment.chapterId, 'timeline')}
+                               />
+                            </div>
+                        </Card>
+                      </div>
+                      
+                      {/* Add Reservation Button - Between reservations */}
+                      {momentIdx < chapterMoments.length - 1 && (
+                        <div className="relative my-2">
+                          <div className="absolute -left-[19px] md:-left-[23px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-dashed border-indigo-300 bg-white"></div>
+                          <button
+                            onClick={() => {
+                              const returnUrl = `/view1/${optimisticItinerary.id}?tab=${currentTab}`
+                              router.push(`/reservations/new/natural?segmentId=${chapter.id}&tripId=${optimisticItinerary.id}&returnTo=${encodeURIComponent(returnUrl)}`)
+                            }}
+                            className="w-full py-2 px-3 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors border border-dashed border-indigo-200 hover:border-indigo-400 flex items-center justify-center gap-1.5 opacity-0 hover:opacity-100 group-hover:opacity-60"
+                          >
+                            <Plus size={12} />
+                            <span>Add reservation</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
                 
-                {chapterMoments.length === 0 && (
-                  <div className="text-xs text-slate-400 italic pl-2 py-2">
-                    No specific moments planned. <br/>
-                    <span className="text-[10px] opacity-70">Tap 'Edit' to add activities for these dates.</span>
-                  </div>
-                )}
+                {/* Add Reservation Button - After last reservation or if no reservations */}
+                <div className="relative mt-3">
+                  {chapterMoments.length > 0 && (
+                    <div className="absolute -left-[19px] md:-left-[23px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-dashed border-indigo-300 bg-white"></div>
+                  )}
+                  <button
+                    onClick={() => {
+                      const returnUrl = `/view1/${optimisticItinerary.id}?tab=${currentTab}`
+                      router.push(`/reservations/new/natural?segmentId=${chapter.id}&tripId=${optimisticItinerary.id}&returnTo=${encodeURIComponent(returnUrl)}`)
+                    }}
+                    className="w-full py-2.5 px-3 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors border border-dashed border-indigo-200 hover:border-indigo-400 flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles size={12} />
+                    <span>{chapterMoments.length === 0 ? 'Add your first reservation' : 'Add another reservation'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           )

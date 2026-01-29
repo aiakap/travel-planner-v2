@@ -12,7 +12,7 @@ import { privateDriverExtractionSchema } from '@/lib/schemas/extraction/travel/p
 
 export const PRIVATE_DRIVER_EXTRACTION_PROMPT = `## Private Driver / Transfer Extraction
 
-Extract private driver or airport transfer booking information from the confirmation email.
+Extract private driver or airport transfer booking information from the confirmation email with high accuracy.
 
 ### CRITICAL INSTRUCTIONS FOR MISSING DATA
 
@@ -25,28 +25,132 @@ Extract private driver or airport transfer booking information from the confirma
 
 ### Required Information
 
-- **Confirmation Number**: Booking reference, order number, or reservation code
-- **Guest Name**: Name of the passenger(s) who made the booking
-- **Driver Name**: Name of the assigned driver (e.g., "Marumoto, Mr")
-- **Driver Phone**: Contact phone number for the driver
-- **Vehicle Type**: Type or model of vehicle (e.g., "Alphard", "Mercedes S-Class", "SUV")
-- **Plate Number**: Vehicle license plate number (if provided, otherwise empty string)
-- **Company**: Transfer company or service provider name
-- **Pickup Location**: Where the passenger will be picked up (e.g., "New Chitose Airport (CTS)")
-- **Pickup Address**: Full address if provided, otherwise empty string
-- **Pickup Date**: Date of pickup in ISO format (YYYY-MM-DD)
-- **Pickup Time**: Time of pickup (e.g., "14:00" or "2:00 PM"), or empty string if not specified
-- **Pickup Instructions**: Specific meeting point details (e.g., "arrival hall after baggage claim")
-- **Dropoff Location**: Final destination (e.g., "SANSUI NISEKO", hotel name)
-- **Dropoff Address**: Full dropoff address if provided, otherwise empty string
-- **Transfer Duration**: Estimated drive time (e.g., "2-2.5 hours"), or empty string
-- **Waiting Instructions**: How driver will identify passenger (e.g., "showing a name board", "holding sign")
-- **Passenger Count**: Number of passengers (default: 1 if not specified)
-- **Luggage Details**: Description of luggage (e.g., "2 ski bags", "3 suitcases"), or empty string
+**Booking Details:**
+- **Confirmation Number**: Booking reference, order number, or reservation code (e.g., "TR-2026-123456", "TRANSFER-ABC")
+- **Guest Name**: Name of the passenger(s) who made the booking (e.g., "ANDERSON/THOMAS", "Jane Smith")
+- **Company**: Transfer company or service provider name (e.g., "tabi pirka LLC", "Blacklane", "Welcome Pickups")
+- **Booking Date**: Date when booking was made in ISO format YYYY-MM-DD or empty string
+- **Cost**: Total cost as a number (e.g., 15000.00) or 0 if not provided
+- **Currency**: Currency code (e.g., "JPY", "USD", "EUR") or empty string
+
+**Driver Details:**
+- **Driver Name**: Name of the assigned driver (e.g., "Marumoto, Mr", "John Smith") or empty string
+- **Driver Phone**: Contact phone number for the driver (e.g., "+81-90-1234-5678") or empty string
+- **Vehicle Type**: Type or model of vehicle (e.g., "Alphard", "Mercedes S-Class", "SUV") or empty string
+- **Plate Number**: Vehicle license plate number (e.g., "ABC-1234") or empty string
+
+**Pickup Details:**
+- **Pickup Location**: Where the passenger will be picked up (e.g., "New Chitose Airport (CTS)", "Hotel Lobby")
+- **Pickup Address**: Full pickup address or empty string if not provided
+- **Pickup Date**: Date of pickup in ISO format YYYY-MM-DD (e.g., "2026-01-30") - REQUIRED
+- **Pickup Time**: Time of pickup (e.g., "14:00", "2:00 PM") or empty string
+- **Pickup Instructions**: Specific meeting point details (e.g., "arrival hall after baggage claim", "Terminal 2 Exit A") or empty string
+
+**Dropoff Details:**
+- **Dropoff Location**: Final destination (e.g., "SANSUI NISEKO", "Downtown Hotel", "Resort Name")
+- **Dropoff Address**: Full dropoff address or empty string if not provided
+
+**Transfer Details:**
+- **Transfer Duration**: Estimated drive time (e.g., "2-2.5 hours", "45 minutes") or empty string
+- **Waiting Instructions**: How driver will identify passenger (e.g., "showing a name board", "holding sign with your name") or empty string
+- **Passenger Count**: Number of passengers (e.g., 1, 2, 4)
+- **Luggage Details**: Description of luggage (e.g., "2 ski bags", "3 suitcases", "2 carry-ons") or empty string
 - **Meet and Greet**: Boolean - whether meet and greet service is included (true/false)
-- **Special Requests**: Any special requirements (e.g., "child seat", "wheelchair accessible"), or empty string
-- **Cost**: Total cost as a number, or 0 if not provided
-- **Currency**: Currency code (e.g., "JPY", "USD", "EUR"), or empty string
+- **Special Requests**: Any special requirements (e.g., "child seat", "wheelchair accessible", "extra luggage space") or empty string
+
+### Date Format Conversion Guide
+
+Transfer services use various date formats. You MUST convert them to ISO format YYYY-MM-DD:
+
+**Common Formats:**
+- "Thursday, January 30, 2026" → "2026-01-30" (day of week, full month name, day, year)
+- "Jan 30, 2026" → "2026-01-30" (abbreviated month)
+- "January 30, 2026" → "2026-01-30" (full month name)
+- "30-Jan-2026" → "2026-01-30" (day-month-year)
+- "01/30/2026" → "2026-01-30" (MM/DD/YYYY)
+- "2026-01-30" → "2026-01-30" (already correct)
+
+**Month Name to Number:**
+Jan=01, Feb=02, Mar=03, Apr=04, May=05, Jun=06, Jul=07, Aug=08, Sep=09, Oct=10, Nov=11, Dec=12
+
+### Real Example - Airport Transfer Confirmation
+
+INPUT TEXT:
+Transfer Service Confirmation
+
+Booking Number: TR-2026-123456
+Passenger: Thomas Anderson
+Booking Date: January 26, 2026
+
+Your driver is as follows:
+Name: Marumoto, Mr
+Phone: +81-90-1234-5678
+Vehicle: Alphard (SUV)
+Plate Number: ABC-1234
+
+Pickup Details:
+Location: New Chitose Airport (CTS)
+Terminal: Domestic Terminal
+Date: Thursday, January 30, 2026
+Time: 14:00 (2:00 PM)
+Meeting Point: Arrival hall after baggage claim
+
+The driver will be waiting for you showing a name board with your name.
+
+Destination:
+Hotel: SANSUI NISEKO
+Address: 185-7 Yamada, Kutchan-cho, Abuta-gun, Hokkaido
+
+Transfer Information:
+- Passengers: 2 adults
+- Luggage: 2 ski bags, 2 suitcases
+- Drive normally takes: 2-2.5 hours
+- Service: Meet and greet included
+
+Total Cost: ¥15,000 (PAID)
+
+EXPECTED OUTPUT:
+{
+  "confirmationNumber": "TR-2026-123456",
+  "guestName": "Thomas Anderson",
+  "company": "",
+  "driverName": "Marumoto, Mr",
+  "driverPhone": "+81-90-1234-5678",
+  "vehicleType": "Alphard (SUV)",
+  "plateNumber": "ABC-1234",
+  "pickupLocation": "New Chitose Airport (CTS)",
+  "pickupAddress": "Domestic Terminal",
+  "pickupDate": "2026-01-30",
+  "pickupTime": "2:00 PM",
+  "pickupInstructions": "Arrival hall after baggage claim",
+  "dropoffLocation": "SANSUI NISEKO",
+  "dropoffAddress": "185-7 Yamada, Kutchan-cho, Abuta-gun, Hokkaido",
+  "transferDuration": "2-2.5 hours",
+  "waitingInstructions": "showing a name board with your name",
+  "passengerCount": 2,
+  "luggageDetails": "2 ski bags, 2 suitcases",
+  "meetAndGreet": true,
+  "specialRequests": "",
+  "cost": 15000,
+  "currency": "JPY",
+  "bookingDate": "2026-01-26",
+  "contactEmail": "",
+  "contactPhone": "",
+  "notes": ""
+}
+
+### Critical Rules
+
+1. **NEVER leave pickup date empty** - This is a REQUIRED field
+2. **Convert all dates to YYYY-MM-DD format** - Use the conversion guide above
+3. **Keep times in original format** - Can be 12-hour (2:00 PM) or 24-hour (14:00)
+4. **Both pickup AND dropoff locations required** - This distinguishes from taxis
+5. **Use empty strings for missing optional fields** - Not null or undefined
+6. **Use 0 for missing numeric fields** - cost, passengerCount
+7. **Use false for missing boolean fields** - meetAndGreet defaults to false
+8. **Guest names may use LAST/FIRST format** - Keep as-is from confirmation
+9. **Currency from symbols** - ¥ = JPY, $ = USD, € = EUR, £ = GBP
+10. **Combine luggage details** - "2 ski bags, 2 suitcases" as one string
 
 ### Common Email Patterns
 

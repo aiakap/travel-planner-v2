@@ -17,8 +17,8 @@ export const restaurantExtractionSchema = z.object({
   address: z.string().describe("Full address of the restaurant, or empty string if not provided"),
   phone: z.string().describe("Restaurant phone number, or empty string if not provided"),
   
-  reservationDate: z.string().describe("Date of reservation in ISO format (YYYY-MM-DD)"),
-  reservationTime: z.string().describe("Time of reservation (e.g., '7:00 PM', '19:00')"),
+  reservationDate: z.string().min(1).describe("REQUIRED: Date of reservation in ISO format YYYY-MM-DD. Convert from formats like 'Friday, January 30, 2026' to '2026-01-30'. NEVER empty."),
+  reservationTime: z.string().min(1).describe("REQUIRED: Time of reservation (e.g., '7:00 PM', '19:00'). NEVER empty."),
   
   partySize: z.number().default(2).describe("Number of guests/people in the party (default: 2)"),
   

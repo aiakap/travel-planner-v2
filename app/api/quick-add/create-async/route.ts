@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!type || !["flight", "hotel", "car-rental"].includes(type)) {
+    if (!type || !["flight", "hotel", "car-rental", "train", "restaurant", "event", "cruise", "private-driver", "generic"].includes(type)) {
       return NextResponse.json(
         { error: "Invalid reservation type" },
         { status: 400 }
@@ -47,11 +47,19 @@ export async function POST(request: NextRequest) {
     // Generate unique job ID
     const jobId = generateJobId();
 
+    // Count items based on type
+    const itemCount = 
+      extractedData.flights?.length ||
+      extractedData.trains?.length ||
+      extractedData.tickets?.length ||
+      extractedData.portsOfCall?.length ||
+      1;
+
     console.log('[CreateAsync] Starting background job:', {
       jobId,
       tripId,
       type,
-      flightCount: extractedData.flights?.length || 0
+      itemCount
     });
 
     // Start background processing (don't await)
@@ -69,7 +77,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       jobId,
       message: "Processing started",
-      flightCount: extractedData.flights?.length || 0,
+      count: itemCount,
       tripId
     });
 

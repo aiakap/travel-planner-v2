@@ -568,11 +568,13 @@ model TripIntelligence {
   hasCulturalCalendar      Boolean                @default(false)
   hasActivitySuggestions   Boolean                @default(false)
   hasDiningRecommendations Boolean                @default(false)
+  hasPackingList           Boolean                @default(false)
   currencyGeneratedAt      DateTime?
   emergencyGeneratedAt     DateTime?
   culturalGeneratedAt      DateTime?
   activityGeneratedAt      DateTime?
   diningGeneratedAt        DateTime?
+  packingGeneratedAt       DateTime?
   createdAt                DateTime               @default(now())
   updatedAt                DateTime               @updatedAt
   activitySuggestions      ActivitySuggestion[]
@@ -580,6 +582,7 @@ model TripIntelligence {
   currencyAdvice           CurrencyAdvice[]
   diningRecommendations    DiningRecommendation[]
   emergencyInfo            EmergencyInfo[]
+  packingList              PackingList[]
   trip                     Trip                   @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
   @@index([tripId])
@@ -704,6 +707,27 @@ model DiningRecommendation {
 
   @@index([intelligenceId])
   @@index([dayNumber])
+}
+
+model PackingList {
+  id                String           @id @default(cuid())
+  intelligenceId    String
+  category          String
+  itemName          String
+  quantity          String
+  reason            String
+  priority          String
+  weatherBased      Boolean          @default(false)
+  profileBased      Boolean          @default(false)
+  reasoning         String
+  relevanceScore    Float
+  profileReferences Json
+  createdAt         DateTime         @default(now())
+  intelligence      TripIntelligence @relation(fields: [intelligenceId], references: [id], onDelete: Cascade)
+
+  @@index([intelligenceId])
+  @@index([category])
+  @@index([priority])
 }
 
 model AirportTimezone {

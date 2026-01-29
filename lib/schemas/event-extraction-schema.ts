@@ -28,7 +28,7 @@ export const eventExtractionSchema = z.object({
   venueName: z.string().describe("Name of the venue or location"),
   address: z.string().describe("Full address of the venue, or empty string if not provided"),
   
-  eventDate: z.string().describe("Date of the event in ISO format (YYYY-MM-DD)"),
+  eventDate: z.string().min(1).describe("REQUIRED: Date of the event in ISO format YYYY-MM-DD. Convert from formats like 'Saturday, January 30, 2026' to '2026-01-30'. NEVER empty."),
   eventTime: z.string().describe("Start time of the event (e.g., '7:30 PM', '19:30'), or empty string if not specified"),
   doorsOpenTime: z.string().describe("Doors open or entry time if different from event time, or empty string"),
   
