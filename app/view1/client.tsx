@@ -7,7 +7,7 @@ import {
   MapPin, 
   Calendar as CalendarIcon, FileText, Sparkles,
   Share2, Download, CalendarPlus, Cloud, CheckSquare, Map,
-  DollarSign, Shield, Calendar, UtensilsCrossed, Plus
+  DollarSign, Shield, Calendar, UtensilsCrossed, Plus, Settings
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { NavButton } from "./components/nav-button"
@@ -335,6 +335,15 @@ export function View1Client({ itinerary, profileValues }: View1ClientProps) {
               icon={heading.icon} 
               title={heading.title} 
               subtitle={heading.subtitle}
+              actions={activeTab === 'journey' ? (
+                <button
+                  onClick={() => router.push(`/journey/${itinerary.id}/edit?returnTo=${encodeURIComponent(`/view1/${itinerary.id}?tab=journey`)}`)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-sm"
+                >
+                  <Settings size={16} />
+                  <span>Journey Manager</span>
+                </button>
+              ) : undefined}
             />
           </div>
         )}
