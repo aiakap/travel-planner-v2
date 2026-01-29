@@ -1,0 +1,10 @@
+/* Ntourage Design System Theme for Manage1 */
+/* Imports shared theme and adds manage1-specific styles */
+
+@import '../../view1/styles/shared-theme.css';
+
+.manage1-theme {
+  @apply ntourage-theme;
+}
+
+/* Manage1-specific overrides or extensions can go here */

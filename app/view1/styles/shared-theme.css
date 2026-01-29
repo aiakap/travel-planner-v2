@@ -1,0 +1,89 @@
+/* Ntourage Shared Design System Theme */
+/* Used by both View1 and Manage1 pages */
+
+@layer base {
+  .ntourage-theme {
+    /* Color Palette */
+    --ntourage-bg: #F8FAFC;
+    --ntourage-surface: #FFFFFF;
+    --ntourage-text: #0F172A;
+    --ntourage-primary: #2563EB;
+    --ntourage-border: #E2E8F0;
+    --ntourage-muted: #64748B;
+    --ntourage-danger: #F43F5E;
+    --ntourage-success: #10B981;
+    --ntourage-warning: #F59E0B;
+    
+    /* Typography */
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+  }
+  
+  .ntourage-theme {
+    background-color: var(--ntourage-bg);
+    color: var(--ntourage-text);
+  }
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out;
+}
+
+.delay-100 {
+  animation-delay: 0.1s;
+}
+
+.delay-200 {
+  animation-delay: 0.2s;
+}
+
+/* Scrollbar hiding for horizontal scrolls */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Smooth scroll behavior */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Selection styling */
+.ntourage-theme ::selection {
+  background-color: rgb(37 99 235 / 0.2);
+  color: rgb(37 99 235);
+}

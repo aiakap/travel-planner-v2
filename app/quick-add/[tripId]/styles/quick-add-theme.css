@@ -1,0 +1,10 @@
+/* Ntourage Design System Theme for Quick Add */
+/* Imports shared theme and adds quick-add-specific styles */
+
+@import '../../../view1/styles/shared-theme.css';
+
+.quick-add-theme {
+  @apply ntourage-theme;
+}
+
+/* Quick-add-specific overrides or extensions can go here */

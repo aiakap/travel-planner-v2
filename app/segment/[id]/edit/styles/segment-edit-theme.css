@@ -1,0 +1,10 @@
+/* Ntourage Design System Theme for Segment Edit */
+/* Imports shared theme and adds segment-edit-specific styles */
+
+@import '../../../../view1/styles/shared-theme.css';
+
+.segment-edit-theme {
+  @apply ntourage-theme;
+}
+
+/* Segment-edit-specific overrides or extensions can go here */
