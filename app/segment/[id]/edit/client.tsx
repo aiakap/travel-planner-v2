@@ -12,6 +12,7 @@ import { getTimeZoneForLocation } from "@/lib/actions/timezone"
 import { updateTripDates } from "@/lib/actions/update-trip-dates"
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion"
 import { TimelineResolutionModal } from "@/components/timeline-resolution-modal"
+import { dateToUTC, utcToDate } from "@/lib/utils/date-timezone"
 import type { Segment, Trip, SegmentType, Reservation, ReservationType, ReservationCategory } from "@prisma/client"
 
 interface SegmentEditClientProps {
@@ -47,17 +48,21 @@ export function SegmentEditClient({
   const [startLocation, setStartLocation] = useState(segment.startTitle)
   const [endLocation, setEndLocation] = useState(segment.endTitle)
   const [startDate, setStartDate] = useState(
-    segment.startTime ? segment.startTime.toISOString() : ""
+    segment.startTime 
+      ? utcToDate(segment.startTime.toISOString(), segment.startTimeZoneId || undefined)
+      : ""
   )
   const [endDate, setEndDate] = useState(
-    segment.endTime ? segment.endTime.toISOString() : ""
+    segment.endTime 
+      ? utcToDate(segment.endTime.toISOString(), segment.endTimeZoneId || segment.startTimeZoneId || undefined)
+      : ""
   )
   const [notes, setNotes] = useState(segment.notes || "")
   const [useDifferentEndLocation, setUseDifferentEndLocation] = useState(
     segment.startTitle !== segment.endTitle
   )
   
-  // Location cache
+  // Location cache - initialize with segment's existing timezone data
   const [locationCache, setLocationCache] = useState<{
     startLat?: number
     startLng?: number
@@ -67,7 +72,16 @@ export function SegmentEditClient({
     endLng?: number
     endTimeZoneId?: string
     endTimeZoneName?: string
-  }>({})
+  }>({
+    startLat: segment.startLat || undefined,
+    startLng: segment.startLng || undefined,
+    startTimeZoneId: segment.startTimeZoneId || undefined,
+    startTimeZoneName: segment.startTimeZoneName || undefined,
+    endLat: segment.endLat || undefined,
+    endLng: segment.endLng || undefined,
+    endTimeZoneId: segment.endTimeZoneId || undefined,
+    endTimeZoneName: segment.endTimeZoneName || undefined,
+  })
   
   // UI state
   const [isSaving, setIsSaving] = useState(false)
@@ -254,8 +268,12 @@ export function SegmentEditClient({
         notes: notes || null,
         startTitle: startLocation,
         endTitle: endLocation,
-        startTime: startDate ? new Date(startDate).toISOString() : null,
-        endTime: endDate ? new Date(endDate).toISOString() : null,
+        startTime: startDate 
+          ? dateToUTC(startDate, locationCache.startTimeZoneId, false)
+          : null,
+        endTime: endDate 
+          ? dateToUTC(endDate, useDifferentEndLocation ? locationCache.endTimeZoneId : locationCache.startTimeZoneId, true)
+          : null,
         segmentTypeId,
         ...locationCache,
       }
@@ -471,6 +489,11 @@ export function SegmentEditClient({
                 <div>
                   <label className="text-xs text-slate-600 block mb-1">
                     Start Date
+                    {locationCache.startTimeZoneName && (
+                      <span className="ml-1.5 text-[9px] font-normal text-slate-400">
+                        ({locationCache.startTimeZoneName.replace(/_/g, ' ')})
+                      </span>
+                    )}
                   </label>
                   <DatePopover
                     value={startDate}
@@ -485,6 +508,11 @@ export function SegmentEditClient({
                 <div>
                   <label className="text-xs text-slate-600 block mb-1">
                     End Date
+                    {(useDifferentEndLocation ? locationCache.endTimeZoneName : locationCache.startTimeZoneName) && (
+                      <span className="ml-1.5 text-[9px] font-normal text-slate-400">
+                        ({(useDifferentEndLocation ? locationCache.endTimeZoneName : locationCache.startTimeZoneName)?.replace(/_/g, ' ')})
+                      </span>
+                    )}
                   </label>
                   <DatePopover
                     value={endDate}
