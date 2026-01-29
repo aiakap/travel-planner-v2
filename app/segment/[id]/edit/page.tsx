@@ -64,7 +64,7 @@ export default async function SegmentEditPage({ params, searchParams }: PageProp
       segment={segment}
       trip={segment.trip}
       segmentTypes={segmentTypes}
-      returnTo={returnTo || `/view1?tab=journey`}
+      returnTo={returnTo || `/view1/${segment.trip.id}?tab=journey`}
     />
   )
 }

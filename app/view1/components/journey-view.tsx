@@ -3,12 +3,14 @@
 import { useState, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
-import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight } from "lucide-react"
+import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
 import { Card } from "./card"
 import { Badge } from "./badge"
 import { ActionIcon } from "./action-icon"
 import { generateAllDays, mapToCalendarData, getDayOfWeek } from "../lib/view-utils"
 import { editReservation } from "../lib/chat-integration"
+import { useOptimisticDelete } from "@/hooks/use-optimistic-delete"
+import { deleteReservation } from "@/lib/actions/delete-reservation"
 
 interface JourneyViewProps {
   itinerary: ViewItinerary
@@ -20,8 +22,33 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  const allDays = generateAllDays(itinerary.startDate, itinerary.endDate)
-  const calendarData = mapToCalendarData(itinerary)
+  // Flatten all reservations for optimistic delete
+  const allReservations = itinerary.segments.flatMap(s => s.reservations)
+  
+  // Use optimistic delete hook
+  const { items: optimisticReservations, handleDelete } = useOptimisticDelete(
+    allReservations,
+    deleteReservation,
+    {
+      itemName: "reservation",
+      successMessage: "Reservation removed from your trip",
+      errorMessage: "Could not delete reservation"
+    }
+  )
+
+  // Create optimistic itinerary with filtered reservations
+  const optimisticItinerary = {
+    ...itinerary,
+    segments: itinerary.segments.map(segment => ({
+      ...segment,
+      reservations: segment.reservations.filter(r => 
+        optimisticReservations.some(or => or.id === r.id)
+      )
+    }))
+  }
+
+  const allDays = generateAllDays(optimisticItinerary.startDate, optimisticItinerary.endDate)
+  const calendarData = mapToCalendarData(optimisticItinerary)
   
   // Get current tab from URL
   const currentTab = searchParams.get('tab') || 'journey'
@@ -63,8 +90,8 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
   // Get chapter color bar for a date
   const getChapterBarColor = (dateObj: Date) => {
     const chapter = calendarData.chapters.find(c => {
-      const start = new Date(itinerary.segments.find(s => s.id === c.id)?.startDate || '')
-      const end = new Date(itinerary.segments.find(s => s.id === c.id)?.endDate || '')
+      const start = new Date(optimisticItinerary.segments.find(s => s.id === c.id)?.startDate || '')
+      const end = new Date(optimisticItinerary.segments.find(s => s.id === c.id)?.endDate || '')
       return dateObj >= start && dateObj <= end
     })
     
@@ -81,7 +108,7 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-3">
           <div className="flex items-center gap-4">
-             <h3 className="font-bold text-slate-900 text-sm">{itinerary.dayCount}-Day Journey</h3>
+             <h3 className="font-bold text-slate-900 text-sm">{optimisticItinerary.dayCount}-Day Journey</h3>
              <div className="flex gap-1">
                <button onClick={() => scrollCalendar('left')} className="p-1 hover:bg-slate-100 rounded-full text-slate-500 hover:text-blue-600 transition-colors">
                  <ChevronLeft size={16} />
@@ -226,10 +253,17 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
                           
                           {/* Action Icons */}
                           <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
+                             <button
+                               onClick={() => handleDelete(moment.id)}
+                               className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 rounded-md transition-all"
+                               title="Delete"
+                             >
+                               <Trash2 size={14} className="text-red-600" />
+                             </button>
                              <ActionIcon icon={MessageCircle} />
                              <ActionIcon 
                                icon={Edit2} 
-                               onClick={() => editReservation(itinerary.id, moment.id, moment.chapterId, 'timeline')}
+                               onClick={() => editReservation(optimisticItinerary.id, moment.id, moment.chapterId, 'timeline')}
                              />
                           </div>
                       </Card>

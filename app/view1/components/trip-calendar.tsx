@@ -4,8 +4,10 @@ import { useState } from "react"
 import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { MessageCircle, Edit2, MapPin, Clock, Plane, Hotel, Utensils, Car, Compass } from "lucide-react"
+import { MessageCircle, Edit2, MapPin, Clock, Plane, Hotel, Utensils, Car, Compass, Trash2 } from "lucide-react"
 import { chatAboutSegment, chatAboutReservation, editReservation } from "../lib/chat-integration"
+import { useOptimisticDelete } from "@/hooks/use-optimistic-delete"
+import { deleteReservation } from "@/lib/actions/delete-reservation"
 
 interface TripCalendarProps {
   itinerary: ViewItinerary
@@ -33,9 +35,34 @@ const ActionIcon = ({ icon: Icon, onClick }: { icon: any, onClick?: () => void }
 export function TripCalendar({ itinerary }: TripCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
+  // Flatten all reservations for optimistic delete
+  const allReservations = itinerary.segments.flatMap(s => s.reservations)
+  
+  // Use optimistic delete hook
+  const { items: optimisticReservations, handleDelete } = useOptimisticDelete(
+    allReservations,
+    deleteReservation,
+    {
+      itemName: "reservation",
+      successMessage: "Reservation removed from your trip",
+      errorMessage: "Could not delete reservation"
+    }
+  )
+
+  // Create optimistic itinerary with filtered reservations
+  const optimisticItinerary = {
+    ...itinerary,
+    segments: itinerary.segments.map(segment => ({
+      ...segment,
+      reservations: segment.reservations.filter(r => 
+        optimisticReservations.some(or => or.id === r.id)
+      )
+    }))
+  }
+
   // Transform itinerary data into calendar structure
   const calendarData = {
-    segments: itinerary.segments.map(segment => {
+    segments: optimisticItinerary.segments.map(segment => {
       const segmentColor = itinerary.segmentColors[segment.id]
       const isTravel = segment.segmentType.toLowerCase().includes('travel') || 
                       segment.segmentType.toLowerCase().includes('flight')
@@ -67,8 +94,8 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
   const generateCalendarDays = () => {
     if (calendarData.segments.length === 0) return []
     
-    const startDate = new Date(itinerary.startDate)
-    const endDate = new Date(itinerary.endDate)
+    const startDate = new Date(optimisticItinerary.startDate)
+    const endDate = new Date(optimisticItinerary.endDate)
     const days = []
     
     const current = new Date(startDate)
@@ -240,7 +267,7 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
                   <div className="flex items-center gap-1">
                     <ActionIcon 
                       icon={MessageCircle} 
-                      onClick={() => chatAboutSegment(itinerary.id, itinerary.segments.find(s => s.id === segment.id)!, 'calendar')}
+                      onClick={() => chatAboutSegment(optimisticItinerary.id, optimisticItinerary.segments.find(s => s.id === segment.id)!, 'calendar')}
                     />
                     <ActionIcon icon={Edit2} />
                   </div>
@@ -290,18 +317,25 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
                         
                         {/* Action Icons */}
                         <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
+                          <button
+                            onClick={() => handleDelete(moment.id)}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 rounded-md transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} className="text-red-600" />
+                          </button>
                           <ActionIcon 
                             icon={MessageCircle}
                             onClick={() => {
-                              const res = itinerary.segments
+                              const res = optimisticItinerary.segments
                                 .find(s => s.id === segment.id)
                                 ?.reservations.find(r => r.id === moment.id)
-                              if (res) chatAboutReservation(itinerary.id, res, segment.id, 'calendar')
+                              if (res) chatAboutReservation(optimisticItinerary.id, res, segment.id, 'calendar')
                             }}
                           />
                           <ActionIcon 
                             icon={Edit2}
-                            onClick={() => editReservation(itinerary.id, moment.id, segment.id, 'calendar')}
+                            onClick={() => editReservation(optimisticItinerary.id, moment.id, segment.id, 'calendar')}
                           />
                         </div>
                       </Card>
