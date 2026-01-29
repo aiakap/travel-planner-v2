@@ -7,9 +7,11 @@ import {
   MapPin, 
   Calendar as CalendarIcon, FileText, Sparkles,
   Share2, Download, CalendarPlus, Cloud, CheckSquare, Map,
-  DollarSign, Shield, Calendar, UtensilsCrossed, Plus, Settings, ArrowLeft, Languages
+  DollarSign, Shield, Calendar, UtensilsCrossed, Plus, Settings, ArrowLeft, Languages,
+  Luggage, Mountain
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { NavButton } from "./components/nav-button"
 import { ToolbarButton } from "./components/toolbar-button"
 import { ActionIcon } from "./components/action-icon"
@@ -139,7 +141,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
 
   const getSectionHeading = () => {
     const headings = {
-      journey: { icon: CalendarIcon, title: "Your Journey", subtitle: "Full itinerary timeline" },
+      journey: { icon: CalendarIcon, title: "Timelines", subtitle: "Full itinerary timeline" },
       weather: { icon: Cloud, title: "Weather Forecast", subtitle: "Conditions for your trip" },
       todo: { icon: CheckSquare, title: "Action Items", subtitle: "Tasks pending your review" },
       map: { icon: Map, title: "Trip Map", subtitle: "Explore destinations & pins" },
@@ -160,33 +162,43 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 pb-20">
 
-      {/* Hero Section */}
-      <div className="relative h-[400px] flex items-end pb-8 overflow-hidden group">
-        <div className="absolute inset-0 z-0">
-          <img 
-            src={itinerary.coverImage}
-            alt={itinerary.title}
-            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-black/30"></div>
-          <div className="absolute inset-0 bg-blue-900/20 mix-blend-overlay"></div>
-        </div>
+      {/* Hero Section Wrapper */}
+      <div className="relative">
+        {/* Style Selector in Top Right - Outside overflow-hidden */}
+        <StyleSelector
+          tripId={itinerary.id}
+          currentStyleId={currentStyleId}
+          currentStyleName={currentStyleName}
+        />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 w-full">
-          <div className="max-w-3xl animate-fade-in-up">
-             <div className="flex items-center gap-2 mb-2">
-              <span className="text-white/60 text-sm font-medium">
-                {new Date(itinerary.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(itinerary.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </span>
+        {/* Hero Section */}
+        <div className="relative h-[400px] flex items-end pb-8 overflow-hidden group">
+          <div className="absolute inset-0 z-0">
+            <img 
+              src={itinerary.coverImage}
+              alt={itinerary.title}
+              className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-black/30"></div>
+            <div className="absolute inset-0 bg-blue-900/20 mix-blend-overlay"></div>
+          </div>
+
+          <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 w-full">
+            <div className="max-w-3xl animate-fade-in-up">
+               <div className="flex items-center gap-2 mb-2">
+                <span className="text-white/60 text-sm font-medium">
+                  {new Date(itinerary.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(itinerary.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-2 drop-shadow-lg">
+                {itinerary.title}
+              </h1>
+              {itinerary.description && (
+                <p className="text-white/80 text-lg max-w-xl">
+                  {itinerary.description}
+                </p>
+              )}
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-2 drop-shadow-lg">
-              {itinerary.title}
-            </h1>
-            {itinerary.description && (
-              <p className="text-white/80 text-lg max-w-xl">
-                {itinerary.description}
-              </p>
-            )}
           </div>
         </div>
       </div>
@@ -196,148 +208,220 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-3">
           <div className="flex items-center justify-between gap-6">
             
-            {/* Left: Main Navigation Tabs */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => router.push('/manage1')}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-                title="Back to Trips"
-              >
-                <ArrowLeft size={14} />
-                <span className="hidden sm:inline">Back</span>
-              </button>
-              <div className="h-6 w-px bg-slate-200 mx-1"></div>
-              <div className="flex bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
-                <NavButton 
-                  active={activeTab === 'journey'} 
-                  onClick={() => handleTabChange('journey')} 
-                  label="Journey" 
-                />
-                <NavButton 
-                  active={activeTab === 'weather'} 
-                  onClick={() => handleTabChange('weather')} 
-                  label="Weather" 
-                />
-                <NavButton 
-                  active={activeTab === 'todo'} 
-                  onClick={() => handleTabChange('todo')} 
-                  label="To-Dos" 
-                />
-                <NavButton 
-                  active={activeTab === 'map'} 
-                  onClick={() => handleTabChange('map')} 
-                  label="Map" 
-                />
+            {/* Unified Navigation */}
+            <TooltipProvider>
+              <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar">
+                <button
+                  onClick={() => router.push('/manage1')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+                  title="Back to Trips"
+                >
+                  <ArrowLeft size={14} />
+                  <span className="hidden sm:inline">Back</span>
+                </button>
+                <div className="h-6 w-px bg-slate-200 mx-1 flex-shrink-0"></div>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm gap-1">
+                    <NavButton 
+                      active={activeTab === 'journey'} 
+                      onClick={() => handleTabChange('journey')} 
+                      label="Timelines" 
+                    />
+                    <NavButton 
+                      active={activeTab === 'todo'} 
+                      onClick={() => handleTabChange('todo')} 
+                      label="Dashboard" 
+                    />
+                  </div>
+                  
+                  {/* Icon Navigation Buttons */}
+                  <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('weather')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'weather'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <Cloud size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Weather</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('map')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'map'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <Map size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Map</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('packing')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'packing'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <Luggage size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Packing</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('currency')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'currency'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <DollarSign size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Currency</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('emergency')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'emergency'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <Shield size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Emergency</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('cultural')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'cultural'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <Calendar size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Cultural</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('activities')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'activities'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <Mountain size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Activities</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('dining')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'dining'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <UtensilsCrossed size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Dining</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('documents')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'documents'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <FileText size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Documents</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('language')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            activeTab === 'language'
+                              ? 'text-blue-600 bg-blue-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <Languages size={18} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Language</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            {/* Center: AI Assistant Chips */}
-            <div className="flex items-center gap-2 flex-1 justify-center overflow-x-auto no-scrollbar">
-              {/* Divider */}
-              <div className="h-8 w-px bg-slate-200 mx-2"></div>
-              
-              {/* AI Chips */}
-              <div className="flex bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
-                <button
-                  onClick={() => handleTabChange('packing')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === 'packing'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  Packing
-                </button>
-
-                <button
-                  onClick={() => handleTabChange('currency')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === 'currency'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  Currency
-                </button>
-
-                <button
-                  onClick={() => handleTabChange('emergency')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === 'emergency'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  Emergency
-                </button>
-
-                <button
-                  onClick={() => handleTabChange('cultural')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === 'cultural'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  Cultural
-                </button>
-
-                <button
-                  onClick={() => handleTabChange('activities')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === 'activities'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  Activities
-                </button>
-
-                <button
-                  onClick={() => handleTabChange('dining')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === 'dining'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  Dining
-                </button>
-
-                <button
-                  onClick={() => handleTabChange('documents')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === 'documents'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  Documents
-                </button>
-
-                <button
-                  onClick={() => handleTabChange('language')}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === 'language'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  Language
-                </button>
-              </div>
-            </div>
+            </TooltipProvider>
 
             {/* Right: Action Toolbar */}
             <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-              {/* Style Selector */}
-              <StyleSelector
-                tripId={itinerary.id}
-                currentStyleId={currentStyleId}
-                currentStyleName={currentStyleName}
-              />
-              <div className="h-6 w-px bg-slate-200"></div>
-              
               <ToolbarButton icon={Plus} label="Quick Add" onClick={() => router.push(`/quick-add/${itinerary.id}`)} />
               <ToolbarButton icon={Share2} label="Share" primary />
               <div className="flex bg-white rounded-lg border border-slate-200 p-0.5">

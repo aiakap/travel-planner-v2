@@ -4,9 +4,7 @@
  * Now uses database categories instead of hardcoded ones
  */
 
-import { PrismaClient } from "@/app/generated/prisma";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export interface CategoryRule {
   keywords: string[];

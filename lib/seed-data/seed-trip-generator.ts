@@ -6,7 +6,7 @@
  * and ensuring data integrity.
  */
 
-import { PrismaClient } from '@/app/generated/prisma';
+import { prisma } from '@/lib/prisma';
 import type {
   TripTemplate,
   SegmentTemplate,
@@ -19,8 +19,6 @@ import type {
   TransportReservation,
 } from './trip-templates';
 import { LARGE_TRIP, MEDIUM_TRIP, SMALL_TRIP, MICRO_TRIP } from './trip-templates';
-
-const prisma = new PrismaClient();
 
 // ============================================================================
 // TYPE DEFINITIONS

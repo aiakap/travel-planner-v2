@@ -7,7 +7,7 @@ interface NavButtonProps {
 export const NavButton = ({ active, label, onClick }: NavButtonProps) => (
   <button
     onClick={onClick}
-    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap
+    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap
       ${active 
         ? 'bg-slate-900 text-white shadow-md' 
         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'

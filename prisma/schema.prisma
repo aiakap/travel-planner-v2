@@ -769,7 +769,7 @@ model PerformanceLog {
 }
 
 model TripPDF {
-  id           String   @id
+  id           String   @id @default(cuid())
   tripId       String
   templateId   String
   templateName String

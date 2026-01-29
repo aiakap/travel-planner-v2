@@ -117,14 +117,14 @@ export function StyleSelector({
   };
 
   return (
-    <div className="absolute top-4 right-4 md:right-8 z-20 flex items-center gap-2">
+    <div className="absolute top-4 right-4 md:right-8 z-[60] flex items-center gap-2">
       {/* Style Dropdown */}
       <Select
         value={currentStyleId || undefined}
         onValueChange={handleStyleChange}
         disabled={isChanging || loading}
       >
-        <SelectTrigger className="bg-white/10 backdrop-blur-md border-white/20 text-white hover:bg-white/20 transition-all shadow-lg min-w-[180px]">
+        <SelectTrigger className="bg-white/90 backdrop-blur-md border-white/30 text-slate-900 hover:bg-white transition-all shadow-lg min-w-[180px] font-medium">
           <SelectValue placeholder="Select style" />
         </SelectTrigger>
         <SelectContent>
@@ -165,20 +165,13 @@ export function StyleSelector({
       <button
         onClick={handleRegenerate}
         disabled={isRegenerating || !currentStyleId || loading}
-        className="p-2 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-md hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+        className="p-2 bg-white/90 backdrop-blur-md border border-white/30 text-slate-900 rounded-md hover:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
         title="Regenerate current style"
       >
         <RefreshCw
           className={cn("h-4 w-4", isRegenerating && "animate-spin")}
         />
       </button>
-
-      {/* Current Style Label (optional, shown on larger screens) */}
-      {currentStyleName && (
-        <div className="hidden lg:block px-3 py-1 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-full text-xs font-medium shadow-lg">
-          {currentStyleName}
-        </div>
-      )}
     </div>
   );
 }

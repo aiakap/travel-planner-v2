@@ -11,6 +11,7 @@ import { NewJourneyExperience } from "../components/new-journey-experience"
 import { getUserContext } from "@/lib/actions/user-context"
 import { getUserHomeLocation } from "@/lib/actions/profile-actions"
 import { utcToDate, formatTimeInTimezone } from "@/lib/utils/date-timezone"
+import { batchFetchIntelligence } from "@/lib/actions/batch-intelligence-actions"
 
 interface PageProps {
   params: Promise<{ tripId?: string[] }>
@@ -114,8 +115,11 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
     redirect("/view1")
   }
 
-  // Fetch user profile for packing suggestions
-  const profileValues = await getUserProfileValues(session.user.id)
+  // Fetch user profile and intelligence data in parallel
+  const [profileValues, intelligenceCache] = await Promise.all([
+    getUserProfileValues(session.user.id),
+    batchFetchIntelligence(tripId),
+  ])
 
   // Transform trip into the ViewItinerary format
   // Note: Trip dates don't have timezone, so we use the first segment's timezone if available
@@ -194,7 +198,7 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
   }
 
   return (
-    <IntelligenceProvider>
+    <IntelligenceProvider initialCache={intelligenceCache}>
       <View1Client 
         itinerary={itinerary} 
         profileValues={profileValues}

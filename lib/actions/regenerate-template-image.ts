@@ -15,7 +15,7 @@ export async function regenerateTemplateImage(tripId: string) {
   const trip = await prisma.trip.findUnique({
     where: { id: tripId, userId: session.user.id },
     include: {
-      imagePromptStyle: true,
+      ImagePromptStyle: true,
     },
   });
 
