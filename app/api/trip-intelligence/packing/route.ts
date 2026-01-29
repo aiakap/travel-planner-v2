@@ -1,14 +1,48 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { generateText } from 'ai'
+import { generateObject } from 'ai'
 import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
 
 interface PackingRequest {
   tripId: string
   packingStyle: string
   hasGear: string
 }
+
+// Zod schema for packing list response with required bags array
+const packingListResponseSchema = z.object({
+  categories: z.array(
+    z.object({
+      category: z.string(),
+      items: z.array(
+        z.object({
+          itemName: z.string(),
+          quantity: z.string(),
+          reason: z.string(),
+          priority: z.string(),
+          weatherBased: z.boolean(),
+          profileBased: z.boolean(),
+          relevanceScore: z.number(),
+          profileReferences: z.array(z.any()).optional().default([]),
+        })
+      ),
+    })
+  ),
+  luggageStrategy: z.object({
+    bags: z.array(
+      z.object({
+        type: z.string(),
+        reason: z.string(),
+      })
+    ),
+    organization: z.string(),
+    tips: z.array(z.string()),
+  }),
+  overallRelevanceScore: z.number(),
+  reasoning: z.string(),
+})
 
 /**
  * POST /api/trip-intelligence/packing
@@ -275,8 +309,18 @@ OUTPUT FORMAT (JSON):
     }
   ],
   "luggageStrategy": {
-    "recommendedBag": "Description based on packing style and gear ownership",
-    "packingTips": [
+    "bags": [
+      {
+        "type": "Carry-on suitcase",
+        "reason": "Perfect for your ${duration}-day trip with ${packingStyle} packing style"
+      },
+      {
+        "type": "Personal item backpack",
+        "reason": "Keep essentials accessible during travel"
+      }
+    ],
+    "organization": "Use packing cubes or plastic bags to organize by category. Roll clothes to maximize space.",
+    "tips": [
       "Roll clothes to save space",
       "Use plastic bags for organization (budget alternative to packing cubes)",
       "Wear bulkiest items on plane"
@@ -286,21 +330,66 @@ OUTPUT FORMAT (JSON):
   "reasoning": "Comprehensive explanation of packing recommendations based on weather, activities, and traveler profile."
 }
 
-Be specific and reference actual trip details, weather, and profile items. ${isBudgetConscious ? 'Emphasize budget-friendly alternatives like plastic bags, multipurpose items, and borrowing vs buying.' : ''} ${hasGear === 'none' ? 'Focus on regular household items and DIY solutions since traveler has no specialized gear.' : ''}`
+Be specific and reference actual trip details, weather, and profile items. ${isBudgetConscious ? 'Emphasize budget-friendly alternatives like plastic bags, multipurpose items, and borrowing vs buying.' : ''} ${hasGear === 'none' ? 'Focus on regular household items and DIY solutions since traveler has no specialized gear.' : ''}
 
-    const { text } = await generateText({
-      model: openai('gpt-4-turbo'),
-      prompt,
-      temperature: 0.7,
-    })
+IMPORTANT: The luggageStrategy.bags array MUST contain at least one bag recommendation. Each bag should have a type (e.g., "Carry-on suitcase", "Backpack", "Checked bag") and a reason explaining why it's recommended for this trip.`
 
-    // Parse JSON response
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('Failed to parse JSON from AI response')
+    console.log('🔵 [PACKING API DEBUG] Step 1: Prompt generated')
+    console.log('🔵 [PACKING API DEBUG] Prompt length:', prompt.length)
+    console.log('🔵 [PACKING API DEBUG] Prompt preview (first 500 chars):', prompt.substring(0, 500))
+    console.log('🔵 [PACKING API DEBUG] Prompt preview (last 500 chars):', prompt.substring(prompt.length - 500))
+
+    let result
+    try {
+      console.log('🔵 [PACKING API DEBUG] Step 2: Calling generateObject...')
+      console.log('🔵 [PACKING API DEBUG] Model: gpt-4-turbo')
+      console.log('🔵 [PACKING API DEBUG] Schema name: PackingListResponse')
+      
+      result = await generateObject({
+        model: openai('gpt-4-turbo'),
+        schema: packingListResponseSchema,
+        prompt,
+        temperature: 0.7,
+        mode: 'json',
+        schemaName: 'PackingListResponse',
+        schemaDescription: 'Comprehensive packing list with categories, items, luggage strategy, and recommendations',
+      })
+      
+      console.log('🔵 [PACKING API DEBUG] Step 3: generateObject completed successfully')
+      console.log('🔵 [PACKING API DEBUG] Result object keys:', Object.keys(result.object))
+    } catch (schemaError: any) {
+      console.error('🔴 [PACKING API DEBUG] Schema validation error:', schemaError)
+      console.error('🔴 [PACKING API DEBUG] Error name:', schemaError?.name)
+      console.error('🔴 [PACKING API DEBUG] Error message:', schemaError?.message)
+      console.error('🔴 [PACKING API DEBUG] Error details:', JSON.stringify(schemaError, null, 2))
+      if (schemaError.cause) {
+        console.error('🔴 [PACKING API DEBUG] Error cause:', schemaError.cause)
+      }
+      if (schemaError.stack) {
+        console.error('🔴 [PACKING API DEBUG] Error stack:', schemaError.stack)
+      }
+      throw new Error(`Failed to generate packing list: ${schemaError.message || 'Schema validation failed'}`)
     }
 
-    const aiResponse = JSON.parse(jsonMatch[0])
+    const aiResponse = result.object
+    console.log('🔵 [PACKING API DEBUG] Step 4: AI response received')
+    console.log('🔵 [PACKING API DEBUG] Categories count:', aiResponse.categories?.length || 0)
+    console.log('🔵 [PACKING API DEBUG] Luggage strategy:', JSON.stringify(aiResponse.luggageStrategy, null, 2))
+    console.log('🔵 [PACKING API DEBUG] Bags count:', aiResponse.luggageStrategy?.bags?.length || 0)
+
+    // Ensure bags array has at least one item (post-validation normalization)
+    if (!aiResponse.luggageStrategy.bags || aiResponse.luggageStrategy.bags.length === 0) {
+      console.warn('🔴 [PACKING API DEBUG] Generated luggageStrategy has no bags, adding default recommendation')
+      aiResponse.luggageStrategy.bags = [
+        {
+          type: 'Carry-on suitcase',
+          reason: 'Recommended for your trip duration and packing style'
+        }
+      ]
+      console.log('🔵 [PACKING API DEBUG] Added default bag recommendation')
+    }
+    
+    console.log('🔵 [PACKING API DEBUG] Step 5: Final luggageStrategy after normalization:', JSON.stringify(aiResponse.luggageStrategy, null, 2))
 
     // Create or update TripIntelligence record
     let intelligence = await prisma.tripIntelligence.findUnique({
@@ -353,16 +442,27 @@ Be specific and reference actual trip details, weather, and profile items. ${isB
       )
     )
 
-    return NextResponse.json({
+    const responseData = {
       success: true,
       packingList: savedItems,
       luggageStrategy: aiResponse.luggageStrategy,
       overallRelevanceScore: aiResponse.overallRelevanceScore
-    })
-  } catch (error) {
+    }
+    
+    console.log('🔵 [PACKING API DEBUG] Step 6: Preparing response')
+    console.log('🔵 [PACKING API DEBUG] Saved items count:', savedItems.length)
+    console.log('🔵 [PACKING API DEBUG] Response luggageStrategy:', JSON.stringify(responseData.luggageStrategy, null, 2))
+    
+    return NextResponse.json(responseData)
+  } catch (error: any) {
     console.error('Error generating packing list:', error)
+    console.error('Error stack:', error?.stack)
+    console.error('Error message:', error?.message)
     return NextResponse.json(
-      { error: 'Failed to generate packing list' },
+      { 
+        error: 'Failed to generate packing list',
+        details: error?.message || 'Unknown error occurred'
+      },
       { status: 500 }
     )
   }

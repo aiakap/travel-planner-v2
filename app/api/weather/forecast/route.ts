@@ -1,21 +1,132 @@
 import { NextResponse } from 'next/server'
 
-// Helper: Group forecasts by day and pick midday forecast
+// Helper: Group forecasts by time period (morning, afternoon, evening)
+function groupForecastsByTimePeriod(forecasts: any[]) {
+  const morning: any[] = [];
+  const afternoon: any[] = [];
+  const evening: any[] = [];
+  
+  forecasts.forEach(item => {
+    const hour = new Date(item.dt * 1000).getHours();
+    
+    // Morning: 6:00 AM - 12:00 PM (6, 9) - note: 12 goes to afternoon
+    if (hour >= 6 && hour < 12) {
+      morning.push(item);
+    }
+    // Afternoon: 12:00 PM - 6:00 PM (12, 15, 18) - note: 18 goes to evening
+    else if (hour >= 12 && hour < 18) {
+      afternoon.push(item);
+    }
+    // Evening: 6:00 PM - 6:00 AM next day (18, 21, 0, 3)
+    // Note: 0 and 3 are early morning hours but included in evening for the day they belong to
+    else if (hour >= 18 || hour < 6) {
+      evening.push(item);
+    }
+  });
+  
+  // Calculate high/low for each period and get representative forecast
+  const getPeriodData = (periodForecasts: any[], periodName: string) => {
+    if (periodForecasts.length === 0) {
+      return null;
+    }
+    
+    const tempMax = Math.max(...periodForecasts.map((f: any) => f.main.temp_max));
+    const tempMin = Math.min(...periodForecasts.map((f: any) => f.main.temp_min));
+    
+    // Get representative forecast (middle of period)
+    let representative = periodForecasts[0];
+    if (periodName === 'morning') {
+      // Prefer 9am or closest to it
+      representative = periodForecasts.reduce((prev, curr) => {
+        const prevHour = new Date(prev.dt * 1000).getHours();
+        const currHour = new Date(curr.dt * 1000).getHours();
+        return Math.abs(currHour - 9) < Math.abs(prevHour - 9) ? curr : prev;
+      });
+    } else if (periodName === 'afternoon') {
+      // Prefer 3pm or closest to it
+      representative = periodForecasts.reduce((prev, curr) => {
+        const prevHour = new Date(prev.dt * 1000).getHours();
+        const currHour = new Date(curr.dt * 1000).getHours();
+        return Math.abs(currHour - 15) < Math.abs(prevHour - 15) ? curr : prev;
+      });
+    } else if (periodName === 'evening') {
+      // Prefer 9pm or closest to it
+      representative = periodForecasts.reduce((prev, curr) => {
+        const prevHour = new Date(curr.dt * 1000).getHours();
+        const currHour = prevHour >= 18 ? prevHour : prevHour + 24;
+        const prevHourAdj = new Date(prev.dt * 1000).getHours();
+        const prevHourAdj2 = prevHourAdj >= 18 ? prevHourAdj : prevHourAdj + 24;
+        return Math.abs(currHour - 21) < Math.abs(prevHourAdj2 - 21) ? curr : prev;
+      });
+    }
+    
+    return {
+      temp_min: Math.round(tempMin),
+      temp_max: Math.round(tempMax),
+      temp: Math.round(representative.main.temp),
+      description: representative.weather[0].description,
+      icon: representative.weather[0].icon
+    };
+  };
+  
+  return {
+    morning: getPeriodData(morning, 'morning'),
+    afternoon: getPeriodData(afternoon, 'afternoon'),
+    evening: getPeriodData(evening, 'evening')
+  };
+}
+
+// Helper: Group forecasts by day and calculate true daily high/low with time periods
 function groupForecastsByDay(forecastList: any[]) {
   const dailyForecasts = new Map<string, any>();
   
+  // First pass: collect all forecasts for each day
   forecastList.forEach(item => {
     const date = new Date(item.dt * 1000);
     const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
     
-    // Pick forecast closest to noon (12:00)
+    if (!dailyForecasts.has(dateKey)) {
+      dailyForecasts.set(dateKey, {
+        forecasts: [],
+        representative: null,
+        representativeHour: null
+      });
+    }
+    
+    const dayData = dailyForecasts.get(dateKey);
+    dayData.forecasts.push(item);
+    
+    // Track forecast closest to noon (12:00) for representative data
     const hour = date.getHours();
-    if (!dailyForecasts.has(dateKey) || Math.abs(hour - 12) < Math.abs(dailyForecasts.get(dateKey).hour - 12)) {
-      dailyForecasts.set(dateKey, { ...item, hour });
+    if (!dayData.representative || Math.abs(hour - 12) < Math.abs(dayData.representativeHour - 12)) {
+      dayData.representative = item;
+      dayData.representativeHour = hour;
     }
   });
   
-  return Array.from(dailyForecasts.values());
+  // Second pass: calculate daily high/low and time periods, return aggregated data
+  return Array.from(dailyForecasts.entries()).map(([dateKey, dayData]) => {
+    const forecasts = dayData.forecasts;
+    const representative = dayData.representative;
+    
+    // Calculate true daily high/low from all forecasts for the day
+    const dailyMax = Math.max(...forecasts.map((f: any) => f.main.temp_max));
+    const dailyMin = Math.min(...forecasts.map((f: any) => f.main.temp_min));
+    
+    // Calculate time period data
+    const timePeriods = groupForecastsByTimePeriod(forecasts);
+    
+    // Use representative forecast for other fields (description, icon, etc.)
+    return {
+      ...representative,
+      main: {
+        ...representative.main,
+        temp_max: dailyMax,
+        temp_min: dailyMin
+      },
+      timePeriods
+    };
+  });
 }
 
 export async function POST(request: Request) {
@@ -106,6 +217,9 @@ export async function POST(request: Request) {
         icon: item.weather[0].icon,
         wind_speed: item.wind.speed,
         precipitation: item.pop * 100,  // Probability of precipitation as percentage
+        morning: item.timePeriods.morning,
+        afternoon: item.timePeriods.afternoon,
+        evening: item.timePeriods.evening,
       }))
     })
   } catch (error) {
@@ -143,6 +257,27 @@ function generateMockForecast(dates?: { start: string, end: string }) {
       icon: "02d",
       wind_speed: Math.round(5 + Math.random() * 10),
       precipitation: Math.round(Math.random() * 50),
+      morning: {
+        temp_min: Math.round(15 + Math.random() * 3),
+        temp_max: Math.round(18 + Math.random() * 4),
+        temp: Math.round(17 + Math.random() * 3),
+        description: "partly cloudy",
+        icon: "02d"
+      },
+      afternoon: {
+        temp_min: Math.round(20 + Math.random() * 3),
+        temp_max: Math.round(25 + Math.random() * 5),
+        temp: Math.round(23 + Math.random() * 3),
+        description: "partly cloudy",
+        icon: "02d"
+      },
+      evening: {
+        temp_min: Math.round(18 + Math.random() * 3),
+        temp_max: Math.round(22 + Math.random() * 3),
+        temp: Math.round(20 + Math.random() * 2),
+        description: "partly cloudy",
+        icon: "02n"
+      },
     })
   }
   

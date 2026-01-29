@@ -113,6 +113,14 @@ export interface WeatherData {
   forecastNote?: string
 }
 
+export interface TimePeriodForecast {
+  temp_min: number
+  temp_max: number
+  temp: number
+  description: string
+  icon: string
+}
+
 export interface WeatherForecast {
   date: string
   temp: number
@@ -124,6 +132,9 @@ export interface WeatherForecast {
   icon: string
   wind_speed: number
   precipitation: number
+  morning?: TimePeriodForecast | null
+  afternoon?: TimePeriodForecast | null
+  evening?: TimePeriodForecast | null
 }
 
 export interface PackingList {

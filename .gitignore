@@ -45,3 +45,7 @@ service-account*.json
 next-env.d.ts
 
 /app/generated/prisma
+
+# Database backups
+backups/
+*.sql

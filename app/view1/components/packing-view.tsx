@@ -18,6 +18,7 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
   const [packingList, setPackingList] = useState<PackingList | null>(null)
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [debugInfo, setDebugInfo] = useState<any>(null)
 
   useEffect(() => {
     // Check if packing list already exists
@@ -116,21 +117,62 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
   
   const generatePackingList = async (answers: Record<string, string>) => {
     setViewState('loading')
+    setDebugInfo(null)
+    
+    const requestBody = {
+      tripId: itinerary.id,
+      packingStyle: answers.packingStyle,
+      hasGear: answers.hasGear
+    }
+    
+    console.log('🔵 [PACKING DEBUG] Step 1: Request being sent')
+    console.log('🔵 [PACKING DEBUG] Request body:', JSON.stringify(requestBody, null, 2))
+    console.log('🔵 [PACKING DEBUG] Trip ID:', itinerary.id)
+    console.log('🔵 [PACKING DEBUG] Packing style:', answers.packingStyle)
+    console.log('🔵 [PACKING DEBUG] Has gear:', answers.hasGear)
     
     try {
       // Generate packing list using intelligence API
+      console.log('🔵 [PACKING DEBUG] Step 2: Calling API...')
       const response = await fetch('/api/trip-intelligence/packing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tripId: itinerary.id,
-          packingStyle: answers.packingStyle,
-          hasGear: answers.hasGear
-        })
+        body: JSON.stringify(requestBody)
       })
       
+      console.log('🔵 [PACKING DEBUG] Step 3: API response received')
+      console.log('🔵 [PACKING DEBUG] Response status:', response.status)
+      console.log('🔵 [PACKING DEBUG] Response statusText:', response.statusText)
+      console.log('🔵 [PACKING DEBUG] Response ok:', response.ok)
+      console.log('🔵 [PACKING DEBUG] Response headers:', Object.fromEntries(response.headers.entries()))
+      
+      const responseText = await response.text()
+      console.log('🔵 [PACKING DEBUG] Step 4: Raw response text length:', responseText.length)
+      console.log('🔵 [PACKING DEBUG] Raw response text:', responseText)
+      
+      let data
+      try {
+        data = JSON.parse(responseText)
+        console.log('🔵 [PACKING DEBUG] Step 5: Parsed response data:', JSON.stringify(data, null, 2))
+      } catch (parseError) {
+        console.error('🔴 [PACKING DEBUG] Failed to parse JSON:', parseError)
+        console.error('🔴 [PACKING DEBUG] Response text was:', responseText)
+        setDebugInfo({
+          step: 'parse_error',
+          error: 'Failed to parse JSON response',
+          rawResponse: responseText,
+          status: response.status
+        })
+        setViewState('questions')
+        alert(`Failed to parse response: ${parseError}`)
+        return
+      }
+      
       if (response.ok) {
-        const data = await response.json()
+        console.log('🔵 [PACKING DEBUG] Step 6: Response OK, processing data...')
+        console.log('🔵 [PACKING DEBUG] luggageStrategy:', JSON.stringify(data.luggageStrategy, null, 2))
+        console.log('🔵 [PACKING DEBUG] packingList items count:', data.packingList?.length || 0)
+        
         // Transform database response to match UI expectations
         const categorizedList: any = {
           clothing: [],
@@ -142,9 +184,11 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
           luggageStrategy: data.luggageStrategy
         }
         
+        console.log('🔵 [PACKING DEBUG] Step 7: Transforming items by category...')
         // Group items by category
         if (data.packingList) {
-          data.packingList.forEach((item: any) => {
+          data.packingList.forEach((item: any, index: number) => {
+            console.log(`🔵 [PACKING DEBUG] Processing item ${index + 1}:`, item.itemName, 'Category:', item.category)
             const categoryMap: Record<string, string> = {
               'Clothing': 'clothing',
               'Footwear': 'footwear',
@@ -166,16 +210,49 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
           })
         }
         
+        console.log('🔵 [PACKING DEBUG] Step 8: Final categorized list:', JSON.stringify(categorizedList, null, 2))
+        console.log('🔵 [PACKING DEBUG] luggageStrategy.bags:', categorizedList.luggageStrategy?.bags)
+        
+        setDebugInfo({
+          step: 'success',
+          request: requestBody,
+          rawResponse: data,
+          categorizedList: categorizedList,
+          luggageStrategy: categorizedList.luggageStrategy
+        })
+        
         setPackingList(categorizedList)
         setViewState('loaded')
+        console.log('🔵 [PACKING DEBUG] Step 9: ✅ Successfully loaded packing list')
       } else {
+        console.error('🔴 [PACKING DEBUG] Response not OK')
+        console.error('🔴 [PACKING DEBUG] Status code:', response.status)
+        console.error('🔴 [PACKING DEBUG] Status text:', response.statusText)
+        console.error('🔴 [PACKING DEBUG] Error data:', data)
+        console.error('🔴 [PACKING DEBUG] Full error object:', JSON.stringify(data, null, 2))
+        setDebugInfo({
+          step: 'api_error',
+          request: requestBody,
+          status: response.status,
+          statusText: response.statusText,
+          error: data,
+          rawResponse: responseText
+        })
         setViewState('questions')
-        alert('Failed to generate packing list. Please try again.')
+        const errorMessage = data?.error || data?.details || data?.message || `HTTP ${response.status}: ${response.statusText}`
+        alert(`Failed to generate packing list: ${errorMessage}`)
       }
-    } catch (error) {
-      console.error('Failed to generate packing list:', error)
+    } catch (error: any) {
+      console.error('🔴 [PACKING DEBUG] Exception caught:', error)
+      console.error('🔴 [PACKING DEBUG] Error message:', error?.message)
+      console.error('🔴 [PACKING DEBUG] Error stack:', error?.stack)
+      setDebugInfo({
+        step: 'exception',
+        error: error?.message || 'Unknown error',
+        stack: error?.stack
+      })
       setViewState('questions')
-      alert('An error occurred. Please try again.')
+      alert(`An error occurred: ${error?.message || 'Unknown error'}`)
     }
   }
 
@@ -239,6 +316,77 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
           Update Preferences
         </button>
       </div>
+
+      {/* Debug Panel */}
+      {debugInfo && (
+        <Card className="bg-yellow-50 border-yellow-200">
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-3 text-yellow-700">
+              <AlertCircle size={20} />
+              <h4 className="font-bold">Debug Information</h4>
+              <button
+                onClick={() => setDebugInfo(null)}
+                className="ml-auto text-xs text-yellow-600 hover:text-yellow-800"
+              >
+                Close
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div>
+                <strong className="text-yellow-800">Step:</strong> <span className="text-yellow-900">{debugInfo.step}</span>
+              </div>
+              {debugInfo.request && (
+                <div>
+                  <strong className="text-yellow-800">Request:</strong>
+                  <pre className="mt-1 p-2 bg-yellow-100 rounded text-xs overflow-auto max-h-32">
+                    {JSON.stringify(debugInfo.request, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {debugInfo.rawResponse && (
+                <div>
+                  <strong className="text-yellow-800">Raw API Response:</strong>
+                  <pre className="mt-1 p-2 bg-yellow-100 rounded text-xs overflow-auto max-h-64">
+                    {JSON.stringify(debugInfo.rawResponse, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {debugInfo.luggageStrategy && (
+                <div>
+                  <strong className="text-yellow-800">Luggage Strategy:</strong>
+                  <pre className="mt-1 p-2 bg-yellow-100 rounded text-xs overflow-auto max-h-32">
+                    {JSON.stringify(debugInfo.luggageStrategy, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {debugInfo.error && (
+                <div>
+                  <strong className="text-red-800">Error:</strong>
+                  <pre className="mt-1 p-2 bg-red-100 rounded text-xs overflow-auto max-h-32">
+                    {typeof debugInfo.error === 'string' ? debugInfo.error : JSON.stringify(debugInfo.error, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {debugInfo.status && (
+                <div>
+                  <strong className="text-yellow-800">Status Code:</strong> <span className="text-yellow-900">{debugInfo.status}</span>
+                  {debugInfo.statusText && (
+                    <span className="text-yellow-700 ml-2">({debugInfo.statusText})</span>
+                  )}
+                </div>
+              )}
+              {debugInfo.rawResponse && debugInfo.step === 'api_error' && (
+                <div>
+                  <strong className="text-yellow-800">Raw Response:</strong>
+                  <pre className="mt-1 p-2 bg-yellow-100 rounded text-xs overflow-auto max-h-32">
+                    {debugInfo.rawResponse}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
       
       {/* Special Notes Section */}
       {packingList.specialNotes && packingList.specialNotes.length > 0 && (
@@ -313,53 +461,83 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
       </div>
 
       {/* Luggage Strategy Section - MOVED TO BOTTOM */}
-      {packingList.luggageStrategy && (
-        <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
-          <div className="p-5">
-            <div className="flex items-center gap-2 mb-4 text-purple-700">
-              <Luggage size={20} />
-              <h4 className="font-bold">Luggage Strategy</h4>
-            </div>
-            
-            {/* Recommended Bags */}
-            <div className="mb-4">
-              <h5 className="text-sm font-semibold text-slate-700 mb-2">Recommended Bags:</h5>
-              <div className="space-y-2">
-                {packingList.luggageStrategy.bags.map((bag, idx) => (
-                  <div key={idx} className="flex items-start gap-2 text-sm">
-                    <Badge className="bg-purple-600 text-white flex-shrink-0">{bag.type}</Badge>
-                    <span className="text-slate-700">{bag.reason}</span>
+      {packingList.luggageStrategy && (() => {
+        // Handle both API response formats:
+        // 1. New format: { bags: LuggageBag[], organization: string, tips: string[] }
+        // 2. Old format: { recommendedBag: string, packingTips: string[] }
+        const strategy = packingList.luggageStrategy as any
+        
+        // Normalize the data structure
+        const bags = strategy.bags && Array.isArray(strategy.bags) 
+          ? strategy.bags 
+          : strategy.recommendedBag 
+            ? [{ type: 'Recommended', reason: strategy.recommendedBag }]
+            : []
+        
+        const organization = strategy.organization || strategy.recommendedBag || ''
+        const tips = strategy.tips && Array.isArray(strategy.tips) 
+          ? strategy.tips 
+          : strategy.packingTips && Array.isArray(strategy.packingTips)
+            ? strategy.packingTips
+            : []
+        
+        // Only render if we have at least some data
+        if (bags.length === 0 && !organization && tips.length === 0) {
+          return null
+        }
+        
+        return (
+          <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-4 text-purple-700">
+                <Luggage size={20} />
+                <h4 className="font-bold">Luggage Strategy</h4>
+              </div>
+              
+              {/* Recommended Bags */}
+              {bags.length > 0 && (
+                <div className="mb-4">
+                  <h5 className="text-sm font-semibold text-slate-700 mb-2">Recommended Bags:</h5>
+                  <div className="space-y-2">
+                    {bags.map((bag: any, idx: number) => (
+                      <div key={idx} className="flex items-start gap-2 text-sm">
+                        <Badge className="bg-purple-600 text-white flex-shrink-0">{bag.type}</Badge>
+                        <span className="text-slate-700">{bag.reason}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Organization Strategy */}
-            <div className="mb-4">
-              <h5 className="text-sm font-semibold text-slate-700 mb-2">Organization Strategy:</h5>
-              <p className="text-sm text-slate-700 leading-relaxed">{packingList.luggageStrategy.organization}</p>
-            </div>
-            
-            {/* Packing Tips */}
-            {packingList.luggageStrategy.tips && packingList.luggageStrategy.tips.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Lightbulb size={16} className="text-yellow-600" />
-                  <h5 className="text-sm font-semibold text-slate-700">Expert Packing Tips:</h5>
                 </div>
-                <ul className="space-y-1.5">
-                  {packingList.luggageStrategy.tips.map((tip, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
-                      <span className="mt-1 w-1.5 h-1.5 rounded-full bg-yellow-600 flex-shrink-0"></span>
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
+              )}
+              
+              {/* Organization Strategy */}
+              {organization && (
+                <div className="mb-4">
+                  <h5 className="text-sm font-semibold text-slate-700 mb-2">Organization Strategy:</h5>
+                  <p className="text-sm text-slate-700 leading-relaxed">{organization}</p>
+                </div>
+              )}
+              
+              {/* Packing Tips */}
+              {tips.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Lightbulb size={16} className="text-yellow-600" />
+                    <h5 className="text-sm font-semibold text-slate-700">Expert Packing Tips:</h5>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {tips.map((tip: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
+                        <span className="mt-1 w-1.5 h-1.5 rounded-full bg-yellow-600 flex-shrink-0"></span>
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </Card>
+        )
+      })()}
     </div>
   )
 }

@@ -7,10 +7,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { buildChatUrl } from "../lib/chat-integration"
-import { SectionHeading } from "./section-heading"
 
 interface WeatherSectionProps {
   itinerary: ViewItinerary
+}
+
+// Helper function to convert Celsius to Fahrenheit
+function celsiusToFahrenheit(celsius: number): number {
+  return Math.round((celsius * 9/5) + 32)
 }
 
 export function WeatherSection({ itinerary }: WeatherSectionProps) {
@@ -180,12 +184,6 @@ export function WeatherSection({ itinerary }: WeatherSectionProps) {
   
   return (
     <section id="weather" className="scroll-mt-32 max-w-5xl mx-auto px-4 py-12">
-      <SectionHeading 
-        icon={Cloud} 
-        title="Forecast" 
-        subtitle="5-day weather for your destinations"
-      />
-      
       {loading ? (
         (() => {
           console.log('🔄 Rendering: LOADING state');
@@ -333,7 +331,10 @@ export function WeatherSection({ itinerary }: WeatherSectionProps) {
                                       className="w-10 h-10 mx-auto"
                                     />
                                     <div className="text-lg font-bold">
-                                      {dayForecast.temp}°C
+                                      {celsiusToFahrenheit(dayForecast.temp)}°F
+                                    </div>
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                      {Math.round(dayForecast.temp)}°C
                                     </div>
                                     <div className="text-xs text-muted-foreground capitalize">
                                       {dayForecast.description}
@@ -367,9 +368,22 @@ export function WeatherSection({ itinerary }: WeatherSectionProps) {
               </div>
               
               {/* Footer note */}
-              <div className="text-xs text-muted-foreground text-center">
+              <div className="text-xs text-muted-foreground text-center mb-6">
                 Weather forecasts are updated every 10 minutes. 
                 Forecasts beyond 5 days will become available as your trip approaches.
+              </div>
+
+              {/* Forecast Availability Notice */}
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
+                <div className="p-2 bg-blue-100 rounded-full text-blue-600">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-blue-900">Forecast Availability</h4>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Real-time weather data is currently available for the next 5 days. Long-range forecasts are based on historical averages.
+                  </p>
+                </div>
               </div>
             </div>
           );

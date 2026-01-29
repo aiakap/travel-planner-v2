@@ -7,7 +7,7 @@ import {
   MapPin, 
   Calendar as CalendarIcon, FileText, Sparkles,
   Share2, Download, CalendarPlus, Cloud, CheckSquare, Map,
-  DollarSign, Shield, Calendar, UtensilsCrossed, Plus, Settings, ArrowLeft
+  DollarSign, Shield, Calendar, UtensilsCrossed, Plus, Settings, ArrowLeft, Languages
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { NavButton } from "./components/nav-button"
@@ -24,6 +24,7 @@ import { CulturalView } from "./components/cultural-view"
 import { ActivitiesView } from "./components/activities-view"
 import { DiningView } from "./components/dining-view"
 import { DocumentsView } from "./components/documents-view"
+import { LanguageView } from "./components/language-view"
 import { SectionHeading } from "./components/section-heading"
 import { QuickAddModal } from "@/components/quick-add-modal"
 import { StyleSelector } from "./components/style-selector"
@@ -131,6 +132,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
       case 'activities': return <ActivitiesView itinerary={itinerary} />
       case 'dining': return <DiningView itinerary={itinerary} />
       case 'documents': return <DocumentsView itinerary={itinerary} />
+      case 'language': return <LanguageView itinerary={itinerary} />
       default: return <JourneyView itinerary={itinerary} />
     }
   }
@@ -148,6 +150,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
       activities: { icon: Sparkles, title: "Activity Suggestions", subtitle: "Things to do" },
       dining: { icon: UtensilsCrossed, title: "Dining Recommendations", subtitle: "Restaurant suggestions" },
       documents: { icon: FileText, title: "Travel Documents", subtitle: "Passports & Visas" },
+      language: { icon: Languages, title: "Language Guide", subtitle: "Essential phrases & verbs" },
     }
     return headings[activeTab as keyof typeof headings] || headings.journey
   }
@@ -204,26 +207,28 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
                 <span className="hidden sm:inline">Back</span>
               </button>
               <div className="h-6 w-px bg-slate-200 mx-1"></div>
-              <NavButton 
-                active={activeTab === 'journey'} 
-                onClick={() => handleTabChange('journey')} 
-                label="Journey" 
-              />
-              <NavButton 
-                active={activeTab === 'weather'} 
-                onClick={() => handleTabChange('weather')} 
-                label="Weather" 
-              />
-              <NavButton 
-                active={activeTab === 'todo'} 
-                onClick={() => handleTabChange('todo')} 
-                label="To-Dos" 
-              />
-              <NavButton 
-                active={activeTab === 'map'} 
-                onClick={() => handleTabChange('map')} 
-                label="Map" 
-              />
+              <div className="flex bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+                <NavButton 
+                  active={activeTab === 'journey'} 
+                  onClick={() => handleTabChange('journey')} 
+                  label="Journey" 
+                />
+                <NavButton 
+                  active={activeTab === 'weather'} 
+                  onClick={() => handleTabChange('weather')} 
+                  label="Weather" 
+                />
+                <NavButton 
+                  active={activeTab === 'todo'} 
+                  onClick={() => handleTabChange('todo')} 
+                  label="To-Dos" 
+                />
+                <NavButton 
+                  active={activeTab === 'map'} 
+                  onClick={() => handleTabChange('map')} 
+                  label="Map" 
+                />
+              </div>
             </div>
 
             {/* Center: AI Assistant Chips */}
@@ -315,6 +320,18 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
                 <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
                 <span className="relative">Documents</span>
               </button>
+
+              <button
+                onClick={() => handleTabChange('language')}
+                className={`relative overflow-hidden px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  activeTab === 'language'
+                    ? 'bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-md scale-105'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
+                <span className="relative">Language</span>
+              </button>
             </div>
 
             {/* Right: Action Toolbar */}
@@ -348,7 +365,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
 
       <main className="max-w-5xl mx-auto px-4 md:px-8 py-8 min-h-[500px]">
         {/* Section Header (shown for main tabs only, not AI assistants) */}
-        {!['packing', 'currency', 'emergency', 'cultural', 'activities', 'dining', 'documents'].includes(activeTab) && (
+        {!['weather', 'packing', 'currency', 'emergency', 'cultural', 'activities', 'dining', 'documents', 'language'].includes(activeTab) && (
           <div className="mb-6">
             <SectionHeading 
               icon={heading.icon} 

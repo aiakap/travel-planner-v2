@@ -61,7 +61,7 @@ const COMMON_LANGUAGES = [
 ]
 
 export function LanguageView({ itinerary }: LanguageViewProps) {
-  const { data, loading, invalidateCache } = useCachedIntelligence<{ guides: LanguageGuide[] }>(
+  const { data, loading, invalidateCache, initialCheckComplete } = useCachedIntelligence<{ guides: LanguageGuide[] }>(
     'language',
     itinerary.id,
     '/api/trip-intelligence/language'
