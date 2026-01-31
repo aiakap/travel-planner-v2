@@ -5,8 +5,11 @@
  */
 
 import React from 'react'
-import { Document, Page, View, Text } from '@react-pdf/renderer'
+import { Document, Page, View, Text, Image } from '@react-pdf/renderer'
 import { styles } from './styles'
+
+// Logo URL - using absolute URL for PDF rendering
+const LOGO_URL = 'https://ntourage.travel/ntourage-logo.png'
 import { PDFHeader } from './PDFHeader'
 import { PDFQuickReference } from './PDFQuickReference'
 import { PDFSegment } from './PDFSegment'
@@ -84,14 +87,21 @@ export function FullItineraryPDF({
         
         {/* Footer */}
         <View style={styles.footer} fixed>
-          <Text>
-            Generated on {generatedDate} • Travel Planner v2
-          </Text>
-          <Text
-            render={({ pageNumber, totalPages }) =>
-              `Page ${pageNumber} of ${totalPages}`
-            }
-          />
+          <View style={styles.footerContent}>
+            <View style={styles.footerLeft}>
+              <Image src={LOGO_URL} style={styles.footerLogo} />
+              <Text style={styles.footerBrand}>Ntourage.travel</Text>
+            </View>
+            <Text style={styles.footerCenter}>
+              Generated on {generatedDate}
+            </Text>
+            <Text
+              style={styles.footerRight}
+              render={({ pageNumber, totalPages }) =>
+                `Page ${pageNumber} of ${totalPages}`
+              }
+            />
+          </View>
         </View>
       </Page>
     </Document>

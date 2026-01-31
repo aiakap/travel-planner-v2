@@ -58,6 +58,12 @@ export interface ViewItinerary {
   dayCount: number
   segmentColors: Record<string, string>
   pendingCount: number
+  // Pre-formatted date range to avoid hydration mismatch
+  formattedDateRange: string
+  // Style information
+  imagePromptStyleId?: string | null
+  imagePromptStyleName?: string | null
+  imagePromptStyleSlug?: string | null
 }
 
 export const reservationTypeIcons: Record<ViewReservation["type"], string> = {

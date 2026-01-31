@@ -181,6 +181,14 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
     count + seg.reservations.filter(r => r.status === 'pending').length, 0
   )
   
+  // Format date range on server to avoid hydration mismatch
+  const formatDateForDisplay = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`
+  }
+  const formattedDateRange = `${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}`
+  
   const itinerary: ViewItinerary = {
     id: trip.id,
     title: trip.title,
@@ -192,6 +200,7 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
     dayCount: calculateDayCount(startDate, endDate),
     segmentColors: calculateSegmentColors(segments),
     pendingCount,
+    formattedDateRange,
     imagePromptStyleId: trip.imagePromptStyleId,
     imagePromptStyleName: trip.ImagePromptStyle?.name || null,
     imagePromptStyleSlug: trip.ImagePromptStyle?.slug || null,

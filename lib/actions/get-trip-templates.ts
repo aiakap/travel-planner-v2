@@ -9,6 +9,7 @@ export interface TripTemplate {
   slug: string;
   description: string | null;
   hasImage: boolean;
+  imageUrl: string | null;
   isCurrent: boolean;
   isGenerating?: boolean;
 }
@@ -83,7 +84,8 @@ export async function getTripTemplates(tripId: string): Promise<TripTemplate[]> 
 
   // Build templates with accurate cache detection
   const templates: TripTemplate[] = styles.map((style) => {
-    const hasImage = imageCache.has(style.name);
+    const imageUrl = imageCache.get(style.name) || null;
+    const hasImage = !!imageUrl;
     const isCurrent = trip.imagePromptStyleId === style.id;
     const isGenerating = generatingSlugs.includes(style.slug);
 
@@ -93,6 +95,7 @@ export async function getTripTemplates(tripId: string): Promise<TripTemplate[]> 
       slug: style.slug,
       description: style.description,
       hasImage,
+      imageUrl,
       isCurrent,
       isGenerating,
     };

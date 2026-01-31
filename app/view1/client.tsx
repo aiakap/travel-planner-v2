@@ -166,12 +166,14 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
 
       {/* Hero Section Wrapper */}
       <div className="relative">
-        {/* Style Selector in Top Right - Outside overflow-hidden */}
-        <StyleSelector
-          tripId={itinerary.id}
-          currentStyleId={currentStyleId}
-          currentStyleName={currentStyleName}
-        />
+        {/* Style Selector - Outside overflow-hidden, aligned with content */}
+        <div className="absolute top-20 left-0 right-0 z-[60] max-w-7xl mx-auto px-4 md:px-8">
+          <StyleSelector
+            tripId={itinerary.id}
+            currentStyleId={currentStyleId}
+            currentStyleName={currentStyleName}
+          />
+        </div>
 
         {/* Hero Section */}
         <div className="relative h-[400px] flex items-end pb-8 overflow-hidden group">
@@ -189,7 +191,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
             <div className="max-w-3xl animate-fade-in-up">
                <div className="flex items-center gap-2 mb-2">
                 <span className="text-white/60 text-sm font-medium">
-                  {new Date(itinerary.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(itinerary.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {itinerary.formattedDateRange}
                 </span>
               </div>
               <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-2 drop-shadow-lg">

@@ -180,15 +180,44 @@ export const styles = StyleSheet.create({
   // Footer
   footer: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 20,
     left: 40,
     right: 40,
-    fontSize: 8,
-    color: '#94a3b8',
-    textAlign: 'center',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     paddingTop: 8,
+  },
+  footerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '33%',
+  },
+  footerLogo: {
+    width: 16,
+    height: 16,
+    marginRight: 4,
+  },
+  footerBrand: {
+    fontSize: 8,
+    color: '#3b82f6',
+    fontWeight: 'bold',
+  },
+  footerCenter: {
+    fontSize: 7,
+    color: '#94a3b8',
+    textAlign: 'center',
+    width: '34%',
+  },
+  footerRight: {
+    fontSize: 7,
+    color: '#94a3b8',
+    textAlign: 'right',
+    width: '33%',
   },
   
   // Utility

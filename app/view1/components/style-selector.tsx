@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, Check, Clock } from "lucide-react";
+import { RefreshCw, Check, Clock, Loader2, ImagePlus } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -12,6 +12,7 @@ import {
 import { getTripTemplates, type TripTemplate } from "@/lib/actions/get-trip-templates";
 import { updateTripTemplate } from "@/lib/actions/update-trip-template";
 import { regenerateTemplateImage } from "@/lib/actions/regenerate-template-image";
+import { generateStyleImage } from "@/lib/actions/generate-style-image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -54,31 +55,39 @@ export function StyleSelector({
   };
 
   const handleStyleChange = async (newStyleId: string) => {
+    // Check if this is a "generate" action
+    if (newStyleId.startsWith("generate:")) {
+      const styleId = newStyleId.replace("generate:", "");
+      const template = templates.find((t) => t.id === styleId);
+      if (template) {
+        await handleGenerateStyle(template);
+      }
+      return;
+    }
+
     // Don't do anything if selecting the same style
     if (newStyleId === currentStyleId) return;
 
     // Find the selected template
     const template = templates.find((t) => t.id === newStyleId);
-
     if (!template) return;
 
     // If no cached image, show toast and don't switch
     if (!template.hasImage) {
-      toast.info("Generating image, come back soon", {
-        description: `${template.name} needs to be generated first.`,
-        duration: 4000,
+      toast.info("This style needs to be generated first", {
+        description: "Select 'Generate' to create it.",
+        duration: 3000,
       });
-      return; // Don't change the value
+      return;
     }
 
     // Has cached image, proceed with switch
     setIsChanging(true);
     try {
-      const result = await updateTripTemplate(tripId, newStyleId);
+      await updateTripTemplate(tripId, newStyleId);
       toast.success("Style updated!", {
         description: `Switched to ${template.name}`,
       });
-      // Delay refresh slightly to ensure toast is visible
       setTimeout(() => {
         router.refresh();
       }, 100);
@@ -96,6 +105,22 @@ export function StyleSelector({
     }
   };
 
+  const handleGenerateStyle = async (template: TripTemplate) => {
+    try {
+      await generateStyleImage(tripId, template.id);
+      toast.info("Generating image", {
+        description: `${template.name} will be ready soon.`,
+        duration: 4000,
+      });
+      await loadTemplates();
+    } catch (error) {
+      console.error("Failed to queue image generation:", error);
+      toast.error("Failed to start generation", {
+        description: "Please try again.",
+      });
+    }
+  };
+
   const handleRegenerate = async () => {
     if (!currentStyleId) return;
 
@@ -106,6 +131,7 @@ export function StyleSelector({
         description: "Your new image will show up when ready.",
         duration: 5000,
       });
+      await loadTemplates();
     } catch (error) {
       console.error("Failed to regenerate image:", error);
       toast.error("Failed to regenerate image", {
@@ -116,21 +142,38 @@ export function StyleSelector({
     }
   };
 
+  // Get state indicator for a template
+  const getStateIcon = (template: TripTemplate) => {
+    if (template.isGenerating) {
+      return <Loader2 className="h-3 w-3 text-blue-400 animate-spin" />;
+    }
+    if (template.isCurrent) {
+      return <Check className="h-3 w-3 text-green-400" />;
+    }
+    if (!template.hasImage) {
+      return <Clock className="h-3 w-3 text-white/40" />;
+    }
+    return null;
+  };
+
   return (
-    <div className="absolute top-24 left-12 md:left-20 z-[60] flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       {/* Style Dropdown */}
       <Select
         value={currentStyleId || undefined}
         onValueChange={handleStyleChange}
         disabled={isChanging || loading}
       >
-        <SelectTrigger className="bg-white/20 backdrop-blur-xl border border-white/30 text-white hover:bg-white/30 transition-all shadow-lg min-w-[180px] font-medium">
-          <SelectValue placeholder="Select style" />
+        <SelectTrigger className="bg-white/10 backdrop-blur-sm border border-white/20 text-white/90 hover:bg-white/20 hover:text-white transition-all min-w-[140px] h-8 text-xs font-medium">
+          <SelectValue placeholder={loading ? "Loading..." : "Select style"} />
         </SelectTrigger>
         <SelectContent>
           {loading ? (
             <SelectItem value="loading" disabled>
-              Loading styles...
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Loading styles...</span>
+              </div>
             </SelectItem>
           ) : templates.length === 0 ? (
             <SelectItem value="empty" disabled>
@@ -141,18 +184,21 @@ export function StyleSelector({
               <SelectItem
                 key={template.id}
                 value={template.id}
-                disabled={!template.hasImage}
+                disabled={!template.hasImage && !template.isGenerating}
               >
-                <div className="flex items-center gap-2">
-                  <span>{template.name}</span>
-                  {template.isCurrent && (
-                    <Check className="h-3 w-3 text-green-600" />
-                  )}
-                  {!template.hasImage && (
-                    <Clock className="h-3 w-3 text-slate-400" />
-                  )}
-                  {template.isGenerating && (
-                    <RefreshCw className="h-3 w-3 text-blue-500 animate-spin" />
+                <div className="flex items-center gap-2 w-full">
+                  <span className="flex-1">{template.name}</span>
+                  {getStateIcon(template)}
+                  {!template.hasImage && !template.isGenerating && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleGenerateStyle(template);
+                      }}
+                      className="text-[10px] text-blue-500 hover:text-blue-600 font-medium"
+                    >
+                      Generate
+                    </button>
                   )}
                 </div>
               </SelectItem>
@@ -161,15 +207,15 @@ export function StyleSelector({
         </SelectContent>
       </Select>
 
-      {/* Refresh Button */}
+      {/* Small Regenerate Button */}
       <button
         onClick={handleRegenerate}
         disabled={isRegenerating || !currentStyleId || loading}
-        className="p-2 bg-white/20 backdrop-blur-xl border border-white/30 text-white rounded-md hover:bg-white/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+        className="p-1.5 bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 rounded-md hover:bg-white/20 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
         title="Regenerate current style"
       >
         <RefreshCw
-          className={cn("h-4 w-4", isRegenerating && "animate-spin")}
+          className={cn("h-3.5 w-3.5", isRegenerating && "animate-spin")}
         />
       </button>
     </div>
