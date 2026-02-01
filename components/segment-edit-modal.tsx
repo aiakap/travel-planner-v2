@@ -349,7 +349,7 @@ export function SegmentEditModal({
                       value={editEndDate}
                       onChange={handleEndDateChange}
                       label="Select end date"
-                      minDate={editStartDate ? new Date(editStartDate) : undefined}
+                      minDate={editStartDate || undefined}
                       className="w-full justify-start text-sm"
                     />
                   </div>

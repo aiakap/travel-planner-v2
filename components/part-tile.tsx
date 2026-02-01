@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { MapPin, ArrowRight, Check } from "lucide-react";
 import { SegmentTypeSelect } from "./ui/segment-type-select";
 import { DatePopover } from "./ui/date-popover";
-import { addDays, startOfDay } from "date-fns";
+import { addDays, startOfDay, format } from "date-fns";
 
 interface InMemorySegment {
   tempId: string;
@@ -276,7 +276,7 @@ export function PartTile({
                   value={editStartTime}
                   onChange={handleStartTimeChange}
                   label="Start date"
-                  minDate={startOfDay(new Date())}
+                  minDate={format(new Date(), 'yyyy-MM-dd')}
                   className="w-full text-xs"
                 />
               </div>
@@ -303,7 +303,7 @@ export function PartTile({
                   value={editEndTime}
                   onChange={handleEndTimeChange}
                   label="End date"
-                  minDate={new Date(editStartTime)}
+                  minDate={editStartTime}
                   className="w-full text-xs"
                 />
               </div>

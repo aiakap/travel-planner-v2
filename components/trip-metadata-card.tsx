@@ -906,7 +906,7 @@ export function TripMetadataCard({
                     value={editStart}
                     onChange={handleStartDateChange}
                     label="Select start date"
-                    minDate={startOfDay(new Date())}
+                    minDate={format(new Date(), 'yyyy-MM-dd')}
                     className="w-full justify-start"
                   />
                 </div>
@@ -943,7 +943,7 @@ export function TripMetadataCard({
                     value={editEnd}
                     onChange={handleEndDateChange}
                     label="Select end date"
-                    minDate={new Date(editStart)}
+                    minDate={editStart}
                     className="w-full justify-start"
                   />
                 </div>

@@ -11,7 +11,7 @@ import { deleteSegment } from "@/lib/actions/delete-segment"
 import { getTimeZoneForLocation } from "@/lib/actions/timezone"
 import { updateTripDates } from "@/lib/actions/update-trip-dates"
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion"
-import { dateToUTC, utcToDate } from "@/lib/utils/date-timezone"
+import { pgDateToString } from "@/lib/utils/local-time"
 import type { Segment, Trip, SegmentType, Reservation, ReservationType, ReservationCategory } from "@prisma/client"
 
 interface SegmentEditClientProps {
@@ -46,14 +46,15 @@ export function SegmentEditClient({
   const [segmentTypeId, setSegmentTypeId] = useState(segment.segmentTypeId)
   const [startLocation, setStartLocation] = useState(segment.startTitle)
   const [endLocation, setEndLocation] = useState(segment.endTitle)
+  // Read directly from wall_* fields (local time) - no timezone conversion needed
   const [startDate, setStartDate] = useState(
-    segment.startTime 
-      ? utcToDate(segment.startTime.toISOString(), segment.startTimeZoneId || undefined)
+    segment.wall_start_date 
+      ? pgDateToString(segment.wall_start_date)
       : ""
   )
   const [endDate, setEndDate] = useState(
-    segment.endTime 
-      ? utcToDate(segment.endTime.toISOString(), segment.endTimeZoneId || segment.startTimeZoneId || undefined)
+    segment.wall_end_date 
+      ? pgDateToString(segment.wall_end_date)
       : ""
   )
   const [notes, setNotes] = useState(segment.notes || "")
@@ -196,25 +197,25 @@ export function SegmentEditClient({
     setIsSaving(true)
 
     try {
+      // Use localStartDate/localEndDate - updatePersistedSegment will handle
+      // writing to wall_* fields and calculating UTC for sorting
       const updates: any = {
         name,
         notes: notes || null,
         startTitle: startLocation,
         endTitle: endLocation,
-        startTime: startDate 
-          ? dateToUTC(startDate, locationCache.startTimeZoneId, false)
-          : null,
-        endTime: endDate 
-          ? dateToUTC(endDate, useDifferentEndLocation ? locationCache.endTimeZoneId : locationCache.startTimeZoneId, true)
-          : null,
+        // Pass local dates directly - no conversion needed
+        localStartDate: startDate || null,
+        localEndDate: endDate || null,
         segmentTypeId,
         ...locationCache,
       }
 
       await updatePersistedSegment(segment.id, updates)
       
-      // Navigate back with success
-      router.push(returnTo)
+      // Navigate back with success, scrolling to the edited segment
+      const scrollToUrl = `/view1/${segment.trip.id}?tab=journey&scrollTo=segment-${segment.id}`
+      router.push(scrollToUrl)
       router.refresh()
     } catch (error) {
       console.error("Failed to save segment:", error)
@@ -455,7 +456,7 @@ export function SegmentEditClient({
                       setIsDirty(true)
                     }}
                     label="Select end date"
-                    minDate={startDate ? new Date(startDate) : undefined}
+                    minDate={startDate || undefined}
                     className="w-full justify-start text-sm"
                     allowPastDates
                   />

@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { queueReservationImageGeneration } from "./queue-image-generation";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
+import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
 
 export interface CreateReservationSimpleParams {
   segmentId: string;
@@ -14,8 +15,18 @@ export interface CreateReservationSimpleParams {
   cost?: number;
   currency?: string;
   notes?: string;
+  /** @deprecated Use localStartDate + localStartTime instead */
   startTime?: Date;
+  /** @deprecated Use localEndDate + localEndTime instead */
   endTime?: Date;
+  /** Local start date in YYYY-MM-DD format */
+  localStartDate?: string;
+  /** Local start time in HH:mm format */
+  localStartTime?: string;
+  /** Local end date in YYYY-MM-DD format */
+  localEndDate?: string;
+  /** Local end time in HH:mm format */
+  localEndTime?: string;
   location?: string;
   url?: string;
   confirmationNumber?: string;
@@ -38,6 +49,10 @@ export async function createReservationSimple({
   notes,
   startTime,
   endTime,
+  localStartDate,
+  localStartTime,
+  localEndDate,
+  localEndTime,
   location,
   url,
   confirmationNumber,
@@ -69,6 +84,34 @@ export async function createReservationSimple({
   // Get cached reservation type and status
   const reservationType = await getReservationType(category, type);
   const reservationStatus = await getReservationStatus(status);
+  
+  // Get timezone from segment
+  const effectiveTimeZoneId = segment.startTimeZoneId || null;
+  
+  // Calculate local and UTC dates
+  let wallStartDate: Date | null = null;
+  let wallStartTime: Date | null = null;
+  let wallEndDate: Date | null = null;
+  let wallEndTime: Date | null = null;
+  let utcStartTime: Date | null = startTime || null;
+  let utcEndTime: Date | null = endTime || null;
+  
+  // If local date/time strings are provided, use them for wall_* fields and calculate UTC
+  if (localStartDate) {
+    wallStartDate = stringToPgDate(localStartDate);
+    wallStartTime = localStartTime ? stringToPgTime(localStartTime) : null;
+    if (effectiveTimeZoneId) {
+      utcStartTime = localToUTC(localStartDate, localStartTime || null, effectiveTimeZoneId, false);
+    }
+  }
+  
+  if (localEndDate) {
+    wallEndDate = stringToPgDate(localEndDate);
+    wallEndTime = localEndTime ? stringToPgTime(localEndTime) : null;
+    if (effectiveTimeZoneId) {
+      utcEndTime = localToUTC(localEndDate, localEndTime || null, effectiveTimeZoneId, true);
+    }
+  }
 
   // Create reservation
   const reservation = await prisma.reservation.create({
@@ -83,8 +126,16 @@ export async function createReservationSimple({
       currency: cost ? currency : null,
       location: location || null,
       url: url || null,
-      startTime: startTime || null,
-      endTime: endTime || null,
+      // Local time fields (primary)
+      wall_start_date: wallStartDate,
+      wall_start_time: wallStartTime,
+      wall_end_date: wallEndDate,
+      wall_end_time: wallEndTime,
+      // UTC fields (for sorting)
+      startTime: utcStartTime,
+      endTime: utcEndTime,
+      // Timezone
+      timeZoneId: effectiveTimeZoneId,
       contactPhone: contactPhone || null,
       imageUrl: null,
       imageIsCustom: false,

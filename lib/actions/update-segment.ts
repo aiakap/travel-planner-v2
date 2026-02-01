@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { queueSegmentImageGeneration } from "./queue-image-generation";
+import { localToUTC, stringToPgDate } from "@/lib/utils/local-time";
 
 async function geocodeAddress(address: string) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY!;
@@ -41,6 +42,11 @@ export async function updateSegment(segmentId: string, formData: FormData) {
   const endTimeStr = formData.get("endTime")?.toString();
   const imageUrl = formData.get("imageUrl")?.toString();
   const segmentTypeId = formData.get("segmentTypeId")?.toString();
+  // Local date strings (new approach)
+  const localStartDate = formData.get("localStartDate")?.toString();
+  const localEndDate = formData.get("localEndDate")?.toString();
+  const startTimeZoneId = formData.get("startTimeZoneId")?.toString();
+  const endTimeZoneId = formData.get("endTimeZoneId")?.toString();
 
   if (!name || !startAddress || !endAddress || !segmentTypeId) {
     throw new Error(
@@ -79,10 +85,28 @@ export async function updateSegment(segmentId: string, formData: FormData) {
     endLat: endGeo.lat,
     endLng: endGeo.lng,
     notes: notes || null,
-    startTime: startTimeStr ? new Date(startTimeStr) : null,
-    endTime: endTimeStr ? new Date(endTimeStr) : null,
     segmentTypeId,
   };
+
+  // Handle local date fields (new approach) or fall back to old approach
+  if (localStartDate && startTimeZoneId) {
+    updateData.wall_start_date = stringToPgDate(localStartDate);
+    updateData.startTime = localToUTC(localStartDate, null, startTimeZoneId, false);
+    updateData.startTimeZoneId = startTimeZoneId;
+  } else if (startTimeStr) {
+    updateData.startTime = new Date(startTimeStr);
+  }
+
+  if (localEndDate) {
+    const endTz = endTimeZoneId || startTimeZoneId;
+    updateData.wall_end_date = stringToPgDate(localEndDate);
+    if (endTz) {
+      updateData.endTime = localToUTC(localEndDate, null, endTz, true);
+      updateData.endTimeZoneId = endTz;
+    }
+  } else if (endTimeStr) {
+    updateData.endTime = new Date(endTimeStr);
+  }
 
   // Handle image logic
   if (imageUrl && imageUrl !== existingSegment.imageUrl) {

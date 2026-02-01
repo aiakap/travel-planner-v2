@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Day Reservation Timeline Mockup</title>
+  <!-- Tailwind CSS via CDN for easy prototyping -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    /* View1 Theme Variables - matches app/view1/styles/view1-theme.css */
+    :root {
+      --ntourage-bg: #F8FAFC;
+      --ntourage-surface: #FFFFFF;
+      --ntourage-text: #0F172A;
+      --ntourage-primary: #2563EB;
+      --ntourage-border: #E2E8F0;
+      --ntourage-muted: #64748B;
+      --ntourage-danger: #F43F5E;
+      --ntourage-success: #10B981;
+      --ntourage-warning: #F59E0B;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: var(--ntourage-bg);
+      color: var(--ntourage-text);
+    }
+
+    /* Animations from view1-theme.css */
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-fade-in { animation: fade-in 0.4s ease-out; }
+    .animate-fade-in-up { animation: fade-in-up 0.6s ease-out; }
+
+    /* Scrollbar hiding */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Multi-day spanning styles (Option A only - uses segment colors) */
+    .multi-day-bar {
+      background: linear-gradient(90deg, rgba(244, 63, 94, 0.15) 0%, rgba(244, 63, 94, 0.08) 50%, rgba(244, 63, 94, 0.15) 100%);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+
+    /* Tab active state */
+    .tab-active {
+      background-color: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Sticky card pulse effect */
+    @keyframes subtle-pulse {
+      0%, 100% { box-shadow: 0 4px 6px -1px rgba(244, 63, 94, 0.1), 0 2px 4px -1px rgba(244, 63, 94, 0.06); }
+      50% { box-shadow: 0 4px 15px -1px rgba(244, 63, 94, 0.2), 0 2px 8px -1px rgba(244, 63, 94, 0.1); }
+    }
+
+    .multi-day-sticky-card {
+      animation: subtle-pulse 3s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen p-6">
+  <!-- Header -->
+  <div class="max-w-4xl mx-auto mb-8">
+    <h1 class="text-2xl font-bold text-slate-900 mb-2">Multi-Day Reservation Timeline Mockup</h1>
+    <p class="text-slate-600 mb-4">Prototype different ways to display reservations that span multiple days. Edit this HTML directly to iterate on the design.</p>
+    
+    <!-- Design Option Tabs -->
+    <div class="flex gap-2 bg-slate-100 p-1 rounded-lg w-fit">
+      <button onclick="showOption('A')" id="tab-A" class="tab-active px-4 py-2 rounded-md text-sm font-medium transition-all">
+        Option A: Spanning Bar
+      </button>
+      <button onclick="showOption('B')" id="tab-B" class="px-4 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
+        Option B: Connected Dots
+      </button>
+      <button onclick="showOption('C')" id="tab-C" class="px-4 py-2 rounded-md text-sm font-medium text-slate-600 hover:bg-white/50 transition-all">
+        Option C: Sticky Card
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       OPTION A: SPANNING BAR (Gantt-style)
+       Maps to: app/view1/components/journey-view.tsx calendar grid
+       ============================================================ -->
+  <div id="option-A" class="max-w-4xl mx-auto space-y-6 animate-fade-in">
+    <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-sm font-bold text-slate-900">Option A: Spanning Bar (Gantt-style)</span>
+        <span class="text-xs text-slate-500">— Multi-day reservations render as horizontal bars spanning day columns</span>
+      </div>
+
+      <!-- Calendar Grid Header -->
+      <div class="overflow-x-auto pb-2 no-scrollbar">
+        <div class="min-w-[700px]">
+          <!-- Month Label -->
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 pl-1">January 2026</div>
+          
+          <!-- Day Headers -->
+          <div class="grid grid-cols-7 gap-1 mb-3">
+            <div class="text-center">
+              <div class="w-12 h-14 mx-auto rounded-lg border border-slate-100 bg-slate-50 flex flex-col items-center justify-start pt-2">
+                <span class="text-sm font-bold text-slate-700">5</span>
+                <span class="text-[9px] text-slate-400 uppercase">Mon</span>
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="w-12 h-14 mx-auto rounded-lg border border-slate-100 bg-slate-50 flex flex-col items-center justify-start pt-2">
+                <span class="text-sm font-bold text-slate-700">6</span>
+                <span class="text-[9px] text-slate-400 uppercase">Tue</span>
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="w-12 h-14 mx-auto rounded-lg border border-slate-100 bg-slate-50 flex flex-col items-center justify-start pt-2">
+                <span class="text-sm font-bold text-slate-700">7</span>
+                <span class="text-[9px] text-slate-400 uppercase">Wed</span>
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="w-12 h-14 mx-auto rounded-lg border border-slate-100 bg-slate-50 flex flex-col items-center justify-start pt-2">
+                <span class="text-sm font-bold text-slate-700">8</span>
+                <span class="text-[9px] text-slate-400 uppercase">Thu</span>
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="w-12 h-14 mx-auto rounded-lg border border-slate-100 bg-slate-50 flex flex-col items-center justify-start pt-2">
+                <span class="text-sm font-bold text-slate-700">9</span>
+                <span class="text-[9px] text-slate-400 uppercase">Fri</span>
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="w-12 h-14 mx-auto rounded-lg border border-slate-100 bg-slate-50 flex flex-col items-center justify-start pt-2">
+                <span class="text-sm font-bold text-slate-700">10</span>
+                <span class="text-[9px] text-slate-400 uppercase">Sat</span>
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="w-12 h-14 mx-auto rounded-lg border border-slate-100 bg-slate-50 flex flex-col items-center justify-start pt-2">
+                <span class="text-sm font-bold text-slate-700">11</span>
+                <span class="text-[9px] text-slate-400 uppercase">Sun</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reservation Lanes -->
+          <div class="space-y-2 relative">
+            <!-- Lane 1: Flight (single day) -->
+            <div class="grid grid-cols-7 gap-1 h-10">
+              <div class="col-span-1">
+                <div class="h-full rounded-md bg-blue-100 border border-blue-200 flex items-center justify-center gap-1 px-2">
+                  <i data-lucide="plane" class="w-3 h-3 text-blue-600"></i>
+                  <span class="text-[10px] font-medium text-blue-700 truncate">Flight SFO→LAX</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lane 2: Hotel (multi-day spanning bar) -->
+            <div class="grid grid-cols-7 gap-1 h-12">
+              <div class="col-span-4">
+                <div class="h-full rounded-md multi-day-bar flex items-center justify-between px-3 cursor-pointer hover:border-rose-400 transition-colors">
+                  <div class="flex items-center gap-2">
+                    <div class="p-1.5 rounded bg-rose-100">
+                      <i data-lucide="building-2" class="w-4 h-4 text-rose-600"></i>
+                    </div>
+                    <div>
+                      <span class="text-xs font-medium text-rose-700">Marriott Downtown LA</span>
+                      <div class="flex items-center gap-1 text-[10px] text-rose-500">
+                        <i data-lucide="moon" class="w-3 h-3"></i>
+                        <span>4 nights</span>
+                        <span class="mx-1">•</span>
+                        <span>Check-in 3:00 PM</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-xs font-semibold text-emerald-600">$892</span>
+                    <div class="text-[9px] text-slate-400">total</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lane 3: Car Rental (multi-day spanning bar) -->
+            <div class="grid grid-cols-7 gap-1 h-10">
+              <div class="col-start-1 col-span-5">
+                <div class="h-full rounded-md bg-amber-50 border border-amber-200 flex items-center justify-between px-3">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="car" class="w-4 h-4 text-amber-600"></i>
+                    <span class="text-[10px] font-medium text-amber-700">Hertz - Toyota Camry</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-600">5 days</span>
+                  </div>
+                  <span class="text-xs font-semibold text-emerald-600">$245</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lane 4: Single-day activities -->
+            <div class="grid grid-cols-7 gap-1 h-10">
+              <div class="col-start-2 col-span-1">
+                <div class="h-full rounded-md bg-purple-50 border border-purple-200 flex items-center justify-center gap-1 px-2">
+                  <i data-lucide="utensils" class="w-3 h-3 text-purple-600"></i>
+                  <span class="text-[10px] font-medium text-purple-700 truncate">Dinner</span>
+                </div>
+              </div>
+              <div class="col-start-3 col-span-1">
+                <div class="h-full rounded-md bg-emerald-50 border border-emerald-200 flex items-center justify-center gap-1 px-2">
+                  <i data-lucide="camera" class="w-3 h-3 text-emerald-600"></i>
+                  <span class="text-[10px] font-medium text-emerald-700 truncate">Studio Tour</span>
+                </div>
+              </div>
+              <div class="col-start-5 col-span-1">
+                <div class="h-full rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center gap-1 px-2">
+                  <i data-lucide="plane" class="w-3 h-3 text-blue-600"></i>
+                  <span class="text-[10px] font-medium text-blue-700 truncate">Return Flight</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design Notes -->
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
+      <div class="font-semibold text-amber-800 mb-2">Design Notes - Option A:</div>
+      <ul class="text-amber-700 space-y-1 list-disc list-inside text-xs">
+        <li>Multi-day items span across day columns visually</li>
+        <li>Uses Gantt-chart style layout with swim lanes for each reservation type</li>
+        <li>Check-in/check-out info visible at a glance</li>
+        <li>Shows total cost and duration inline</li>
+        <li>Single-day items still work naturally in this layout</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       OPTION B: CONNECTED TIMELINE DOTS
+       Maps to: app/view1/components/vertical-timeline-view.tsx
+       ============================================================ -->
+  <div id="option-B" class="max-w-4xl mx-auto space-y-6 animate-fade-in hidden">
+    <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-sm font-bold text-slate-900">Option B: Connected Timeline Dots</span>
+        <span class="text-xs text-slate-500">— Vertical timeline with spanning indicators for multi-day items</span>
+      </div>
+
+      <!-- Segment Header -->
+      <div class="border-l-4 border-rose-400 bg-slate-50 rounded-r-lg p-3 mb-4">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-bold text-slate-900">Los Angeles Stay</h3>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-rose-100 text-rose-600 border border-rose-200">stay</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+          <span>Jan 5 - Jan 9, 2026</span>
+          <span class="w-1 h-1 rounded-full bg-slate-300"></span>
+          <span class="flex items-center gap-1">
+            <i data-lucide="map-pin" class="w-3 h-3"></i>
+            Los Angeles, CA
+          </span>
+        </div>
+      </div>
+
+      <!-- Timeline Content -->
+      <div class="pl-6 relative">
+        <!-- Vertical Timeline Line -->
+        <div class="absolute left-2 top-0 bottom-0 w-0.5 bg-slate-200 rounded-full"></div>
+
+        <!-- Day 1: January 5 -->
+        <div class="relative pb-6">
+          <!-- Day Node -->
+          <div class="absolute left-[-20px] top-0 w-4 h-4 rounded-full bg-white border-2 border-slate-400 z-10"></div>
+          
+          <div class="text-sm font-semibold text-slate-900 mb-3">Monday, January 5</div>
+          
+          <!-- Flight Card -->
+          <div class="mb-3 p-3 rounded-lg bg-white border border-slate-200 hover:border-slate-300 transition-colors">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-md bg-blue-50">
+                <i data-lucide="plane" class="w-4 h-4 text-blue-600"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-sm font-medium text-slate-900">United Airlines UA 1234</div>
+                <div class="text-xs text-slate-500">SFO → LAX • Departs 9:00 AM</div>
+              </div>
+              <span class="text-sm font-semibold text-emerald-600">$289</span>
+            </div>
+          </div>
+
+          <!-- Hotel Check-in - Full Reservation Card (neutral styling) -->
+          <div class="p-3 rounded-lg bg-white border border-slate-200 hover:border-slate-300 transition-colors">
+            <div class="flex items-center gap-3">
+              <!-- Icon uses segment color at 20% opacity -->
+              <div class="p-2 rounded-md" style="background-color: rgba(244, 63, 94, 0.2)">
+                <i data-lucide="building-2" class="w-4 h-4" style="color: #F43F5E"></i>
+              </div>
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-slate-900">Marriott Downtown LA</span>
+                  <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-0.5">
+                    <i data-lucide="moon" class="w-2.5 h-2.5"></i>
+                    4 nights
+                  </span>
+                </div>
+                <div class="text-xs text-slate-500">Check-in 3:00 PM • Jan 5 - Jan 9</div>
+              </div>
+              <div class="text-right">
+                <span class="text-sm font-semibold text-emerald-600">$892</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Day 2: January 6 -->
+        <div class="relative pb-6">
+          <!-- Small continuation dot (neutral) -->
+          <div class="absolute left-[-20px] top-0 w-3 h-3 rounded-full bg-slate-100 border-2 border-slate-300 z-10 mt-0.5"></div>
+          
+          <div class="text-sm font-semibold text-slate-900 mb-3">Tuesday, January 6</div>
+          
+          <!-- Hotel continuation indicator (neutral styling) -->
+          <div class="mb-3 p-2 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2">
+            <i data-lucide="building-2" class="w-3 h-3"></i>
+            <span>Marriott Downtown LA — Night 2 of 4</span>
+          </div>
+          
+          <!-- Dinner reservation -->
+          <div class="p-3 rounded-lg bg-white border border-slate-200 hover:border-slate-300 transition-colors">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-md bg-purple-50">
+                <i data-lucide="utensils" class="w-4 h-4 text-purple-600"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-sm font-medium text-slate-900">Bestia Restaurant</div>
+                <div class="text-xs text-slate-500">7:30 PM • Party of 2</div>
+              </div>
+              <span class="text-sm font-semibold text-emerald-600">$150</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Day 3: January 7 -->
+        <div class="relative pb-6">
+          <!-- Small continuation dot (neutral) -->
+          <div class="absolute left-[-20px] top-0 w-3 h-3 rounded-full bg-slate-100 border-2 border-slate-300 z-10 mt-0.5"></div>
+          
+          <div class="text-sm font-semibold text-slate-900 mb-3">Wednesday, January 7</div>
+          
+          <!-- Hotel continuation indicator (neutral styling) -->
+          <div class="mb-3 p-2 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2">
+            <i data-lucide="building-2" class="w-3 h-3"></i>
+            <span>Marriott Downtown LA — Night 3 of 4</span>
+          </div>
+          
+          <!-- Activity -->
+          <div class="p-3 rounded-lg bg-white border border-slate-200 hover:border-slate-300 transition-colors">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-md bg-emerald-50">
+                <i data-lucide="camera" class="w-4 h-4 text-emerald-600"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-sm font-medium text-slate-900">Universal Studios Tour</div>
+                <div class="text-xs text-slate-500">10:00 AM • VIP Access</div>
+              </div>
+              <span class="text-sm font-semibold text-emerald-600">$199</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Day 4: January 8 -->
+        <div class="relative pb-6">
+          <!-- Small continuation dot (neutral) -->
+          <div class="absolute left-[-20px] top-0 w-3 h-3 rounded-full bg-slate-100 border-2 border-slate-300 z-10 mt-0.5"></div>
+          
+          <div class="text-sm font-semibold text-slate-900 mb-3">Thursday, January 8</div>
+          
+          <!-- Hotel continuation indicator (neutral styling) - Night 4 of 4 -->
+          <div class="mb-3 p-2 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2">
+            <i data-lucide="building-2" class="w-3 h-3"></i>
+            <span>Marriott Downtown LA — Night 4 of 4</span>
+          </div>
+          
+          <!-- Free day -->
+          <div class="p-3 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-400 flex items-center gap-2">
+            <i data-lucide="calendar" class="w-3 h-3"></i>
+            <span>No reservations — Free day to explore!</span>
+          </div>
+        </div>
+
+        <!-- Day 5: January 9 -->
+        <div class="relative">
+          <!-- Regular day node -->
+          <div class="absolute left-[-20px] top-0 w-4 h-4 rounded-full bg-white border-2 border-slate-400 z-10"></div>
+          
+          <div class="text-sm font-semibold text-slate-900 mb-3">Friday, January 9</div>
+          
+          <!-- Return Flight only - no checkout card -->
+          <div class="p-3 rounded-lg bg-white border border-slate-200 hover:border-slate-300 transition-colors">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-md bg-blue-50">
+                <i data-lucide="plane" class="w-4 h-4 text-blue-600"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-sm font-medium text-slate-900">United Airlines UA 5678</div>
+                <div class="text-xs text-slate-500">LAX → SFO • Departs 2:00 PM</div>
+              </div>
+              <span class="text-sm font-semibold text-emerald-600">$259</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design Notes -->
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
+      <div class="font-semibold text-amber-800 mb-2">Design Notes - Option B:</div>
+      <ul class="text-amber-700 space-y-1 list-disc list-inside text-xs">
+        <li>Keeps familiar vertical timeline layout</li>
+        <li>Multi-day items show full card on first day only</li>
+        <li>Subsequent days show subtle "Night X of Y" continuation indicator</li>
+        <li>No separate checkout event - cleaner timeline</li>
+        <li>Neutral styling matches existing card design</li>
+        <li>Segment color only used on icon background (20% opacity)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       OPTION C: STICKY CARD WITH RANGE
+       Maps to: app/view1/components/journey-view.tsx (new component)
+       ============================================================ -->
+  <div id="option-C" class="max-w-4xl mx-auto space-y-6 animate-fade-in hidden">
+    <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-sm font-bold text-slate-900">Option C: Sticky Card with Range</span>
+        <span class="text-xs text-slate-500">— Multi-day items as special cards with embedded timeline</span>
+      </div>
+
+      <!-- Multi-day Reservations Section -->
+      <div class="mb-6">
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Multi-Day Reservations</div>
+        
+        <!-- Hotel Sticky Card -->
+        <div class="multi-day-sticky-card mb-4 p-4 rounded-xl bg-gradient-to-br from-rose-50 to-white border border-rose-200">
+          <div class="flex items-start gap-4">
+            <!-- Hotel Image -->
+            <div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-slate-200">
+              <img src="/luxury-hotel-room.png" alt="Hotel" class="w-full h-full object-cover" onerror="this.style.display='none'">
+            </div>
+            
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <i data-lucide="building-2" class="w-4 h-4 text-rose-500"></i>
+                <h4 class="font-bold text-slate-900">Marriott Downtown LA</h4>
+                <span class="text-[9px] px-2 py-0.5 rounded-full bg-green-100 text-green-600 border border-green-200">Confirmed</span>
+              </div>
+              
+              <div class="text-sm text-slate-600 mb-3">
+                <span class="font-medium">Jan 5 - Jan 9, 2026</span>
+                <span class="mx-2 text-slate-300">•</span>
+                <span>4 nights</span>
+                <span class="mx-2 text-slate-300">•</span>
+                <span class="text-emerald-600 font-semibold">$892 total</span>
+              </div>
+              
+              <!-- Embedded Day Range Visual -->
+              <div class="bg-white/70 rounded-lg p-3 border border-rose-100">
+                <div class="flex items-center justify-between text-[10px] text-slate-400 mb-2">
+                  <span>Check-in 3pm</span>
+                  <span>Check-out 11am</span>
+                </div>
+                <div class="relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="absolute inset-y-0 left-0 right-0 bg-gradient-to-r from-rose-400 via-rose-300 to-rose-400 rounded-full"></div>
+                </div>
+                <div class="flex justify-between mt-2">
+                  <div class="flex flex-col items-center">
+                    <div class="w-2 h-2 rounded-full bg-rose-400 mb-1"></div>
+                    <span class="text-[9px] font-medium text-slate-600">Mon 5</span>
+                  </div>
+                  <div class="flex flex-col items-center">
+                    <div class="w-1.5 h-1.5 rounded-full bg-rose-300 mb-1"></div>
+                    <span class="text-[9px] text-slate-500">Tue 6</span>
+                  </div>
+                  <div class="flex flex-col items-center">
+                    <div class="w-1.5 h-1.5 rounded-full bg-rose-300 mb-1"></div>
+                    <span class="text-[9px] text-slate-500">Wed 7</span>
+                  </div>
+                  <div class="flex flex-col items-center">
+                    <div class="w-1.5 h-1.5 rounded-full bg-rose-300 mb-1"></div>
+                    <span class="text-[9px] text-slate-500">Thu 8</span>
+                  </div>
+                  <div class="flex flex-col items-center">
+                    <div class="w-2 h-2 rounded-full bg-rose-400 mb-1"></div>
+                    <span class="text-[9px] font-medium text-slate-600">Fri 9</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Quick Actions -->
+          <div class="flex gap-2 mt-3 pt-3 border-t border-rose-100">
+            <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors">
+              <i data-lucide="message-circle" class="w-3 h-3"></i>
+              Chat
+            </button>
+            <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors">
+              <i data-lucide="edit-2" class="w-3 h-3"></i>
+              Edit
+            </button>
+            <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors">
+              <i data-lucide="phone" class="w-3 h-3"></i>
+              Contact Hotel
+            </button>
+          </div>
+        </div>
+
+        <!-- Car Rental Sticky Card -->
+        <div class="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-white border border-amber-200">
+          <div class="flex items-start gap-4">
+            <div class="p-3 rounded-lg bg-amber-100 flex-shrink-0">
+              <i data-lucide="car" class="w-6 h-6 text-amber-600"></i>
+            </div>
+            
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <h4 class="font-bold text-slate-900">Hertz Car Rental</h4>
+                <span class="text-[9px] px-2 py-0.5 rounded-full bg-green-100 text-green-600 border border-green-200">Confirmed</span>
+              </div>
+              
+              <div class="text-sm text-slate-600 mb-2">
+                Toyota Camry or similar
+              </div>
+              
+              <div class="text-sm text-slate-600 mb-3">
+                <span class="font-medium">Jan 5 - Jan 9, 2026</span>
+                <span class="mx-2 text-slate-300">•</span>
+                <span>5 days</span>
+                <span class="mx-2 text-slate-300">•</span>
+                <span class="text-emerald-600 font-semibold">$245 total</span>
+              </div>
+              
+              <!-- Simple Range Bar -->
+              <div class="bg-white/70 rounded-lg p-2 border border-amber-100">
+                <div class="flex items-center gap-2 text-[10px]">
+                  <span class="text-amber-600 font-medium">Pick-up: LAX 10am</span>
+                  <div class="flex-1 h-1 bg-amber-200 rounded-full"></div>
+                  <span class="text-amber-600 font-medium">Return: LAX 10am</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily Reservations Section -->
+      <div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Daily Schedule</div>
+        
+        <div class="space-y-3">
+          <!-- Day 1 -->
+          <div class="p-3 rounded-lg bg-slate-50 border border-slate-100">
+            <div class="text-xs font-semibold text-slate-700 mb-2">Monday, January 5</div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-3 p-2 rounded bg-white border border-slate-100">
+                <i data-lucide="plane" class="w-4 h-4 text-blue-500"></i>
+                <span class="text-sm">Flight: SFO → LAX</span>
+                <span class="text-xs text-slate-400 ml-auto">9:00 AM</span>
+              </div>
+              <div class="flex items-center gap-3 p-2 rounded bg-rose-50/50 border border-rose-100 text-rose-600">
+                <i data-lucide="log-in" class="w-4 h-4"></i>
+                <span class="text-sm">Hotel Check-in</span>
+                <span class="text-xs ml-auto">3:00 PM</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Day 2 -->
+          <div class="p-3 rounded-lg bg-slate-50 border border-slate-100">
+            <div class="text-xs font-semibold text-slate-700 mb-2">Tuesday, January 6</div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-3 p-2 rounded bg-white border border-slate-100">
+                <i data-lucide="utensils" class="w-4 h-4 text-purple-500"></i>
+                <span class="text-sm">Dinner at Bestia</span>
+                <span class="text-xs text-slate-400 ml-auto">7:30 PM</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Day 3 -->
+          <div class="p-3 rounded-lg bg-slate-50 border border-slate-100">
+            <div class="text-xs font-semibold text-slate-700 mb-2">Wednesday, January 7</div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-3 p-2 rounded bg-white border border-slate-100">
+                <i data-lucide="camera" class="w-4 h-4 text-emerald-500"></i>
+                <span class="text-sm">Universal Studios Tour</span>
+                <span class="text-xs text-slate-400 ml-auto">10:00 AM</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Day 4 -->
+          <div class="p-3 rounded-lg bg-slate-50 border border-slate-100">
+            <div class="text-xs font-semibold text-slate-700 mb-2">Thursday, January 8</div>
+            <div class="p-2 rounded bg-slate-100/50 border border-dashed border-slate-200 text-xs text-slate-400 flex items-center gap-2">
+              <i data-lucide="calendar" class="w-3 h-3"></i>
+              <span>Free day — no reservations</span>
+            </div>
+          </div>
+
+          <!-- Day 5 -->
+          <div class="p-3 rounded-lg bg-slate-50 border border-slate-100">
+            <div class="text-xs font-semibold text-slate-700 mb-2">Friday, January 9</div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-3 p-2 rounded bg-rose-50/50 border border-rose-100 text-rose-600">
+                <i data-lucide="log-out" class="w-4 h-4"></i>
+                <span class="text-sm">Hotel Check-out</span>
+                <span class="text-xs ml-auto">11:00 AM</span>
+              </div>
+              <div class="flex items-center gap-3 p-2 rounded bg-white border border-slate-100">
+                <i data-lucide="plane" class="w-4 h-4 text-blue-500"></i>
+                <span class="text-sm">Flight: LAX → SFO</span>
+                <span class="text-xs text-slate-400 ml-auto">2:00 PM</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design Notes -->
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
+      <div class="font-semibold text-amber-800 mb-2">Design Notes - Option C:</div>
+      <ul class="text-amber-700 space-y-1 list-disc list-inside text-xs">
+        <li>Multi-day items displayed as prominent "sticky" cards at the top</li>
+        <li>Each card has an embedded mini-timeline showing the span</li>
+        <li>Daily schedule below only shows point-in-time events</li>
+        <li>Check-in/check-out appear as events in the daily schedule</li>
+        <li>Clear separation between "ongoing" and "scheduled" items</li>
+        <li>Good for trips with multiple overlapping multi-day reservations</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="max-w-4xl mx-auto mt-12 pt-6 border-t border-slate-200">
+    <div class="text-xs text-slate-500">
+      <p class="mb-2"><strong>How to iterate:</strong></p>
+      <ol class="list-decimal list-inside space-y-1">
+        <li>Open browser DevTools (F12 or Cmd+Option+I)</li>
+        <li>Use the Elements panel to edit HTML and see changes live</li>
+        <li>Adjust Tailwind classes to tweak spacing, colors, sizing</li>
+        <li>When satisfied, copy the patterns to the React components</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Tab switching
+    function showOption(option) {
+      // Hide all options
+      document.getElementById('option-A').classList.add('hidden');
+      document.getElementById('option-B').classList.add('hidden');
+      document.getElementById('option-C').classList.add('hidden');
+      
+      // Remove active state from all tabs
+      document.getElementById('tab-A').classList.remove('tab-active');
+      document.getElementById('tab-B').classList.remove('tab-active');
+      document.getElementById('tab-C').classList.remove('tab-active');
+      document.getElementById('tab-A').classList.add('text-slate-600');
+      document.getElementById('tab-B').classList.add('text-slate-600');
+      document.getElementById('tab-C').classList.add('text-slate-600');
+      
+      // Show selected option
+      document.getElementById('option-' + option).classList.remove('hidden');
+      
+      // Activate selected tab
+      document.getElementById('tab-' + option).classList.add('tab-active');
+      document.getElementById('tab-' + option).classList.remove('text-slate-600');
+      
+      // Re-initialize icons for newly visible content
+      lucide.createIcons();
+    }
+
+    // Sample trip data (for reference when editing)
+    const sampleTripData = {
+      id: "sample-trip-1",
+      title: "LA Weekend Getaway",
+      startDate: "2026-01-05",
+      endDate: "2026-01-09",
+      segments: [
+        {
+          id: "seg-1",
+          title: "Los Angeles Stay",
+          type: "stay",
+          startDate: "2026-01-05",
+          endDate: "2026-01-09",
+          reservations: [
+            {
+              id: "res-1",
+              type: "flight",
+              title: "United Airlines UA 1234",
+              date: "2026-01-05",
+              startTime: "2026-01-05T09:00:00",
+              endTime: "2026-01-05T10:30:00",
+              isMultiDay: false
+            },
+            {
+              id: "res-2",
+              type: "hotel",
+              title: "Marriott Downtown LA",
+              date: "2026-01-05",
+              startTime: "2026-01-05T15:00:00",
+              endTime: "2026-01-09T11:00:00",
+              nights: 4,
+              checkInDate: "Jan 5, 2026",
+              checkOutDate: "Jan 9, 2026",
+              checkInTime: "3:00 PM",
+              checkOutTime: "11:00 AM",
+              isMultiDay: true
+            },
+            {
+              id: "res-3",
+              type: "transport",
+              title: "Hertz Car Rental",
+              date: "2026-01-05",
+              startTime: "2026-01-05T10:00:00",
+              endTime: "2026-01-09T10:00:00",
+              days: 5,
+              isMultiDay: true
+            },
+            {
+              id: "res-4",
+              type: "restaurant",
+              title: "Bestia Restaurant",
+              date: "2026-01-06",
+              startTime: "2026-01-06T19:30:00",
+              endTime: "2026-01-06T21:30:00",
+              isMultiDay: false
+            },
+            {
+              id: "res-5",
+              type: "activity",
+              title: "Universal Studios Tour",
+              date: "2026-01-07",
+              startTime: "2026-01-07T10:00:00",
+              endTime: "2026-01-07T17:00:00",
+              isMultiDay: false
+            },
+            {
+              id: "res-6",
+              type: "flight",
+              title: "United Airlines UA 5678",
+              date: "2026-01-09",
+              startTime: "2026-01-09T14:00:00",
+              endTime: "2026-01-09T15:30:00",
+              isMultiDay: false
+            }
+          ]
+        }
+      ]
+    };
+
+    console.log("Sample trip data available in console as 'sampleTripData':", sampleTripData);
+  </script>
+</body>
+</html>

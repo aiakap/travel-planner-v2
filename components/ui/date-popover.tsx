@@ -10,8 +10,8 @@ interface DatePopoverProps {
   value: string; // YYYY-MM-DD
   onChange: (date: string) => void;
   label?: string;
-  minDate?: Date;
-  maxDate?: Date;
+  minDate?: string; // YYYY-MM-DD format
+  maxDate?: string; // YYYY-MM-DD format
   className?: string;
   disabled?: boolean;
   /** If true, allows selecting dates in the past. Default: false */
@@ -30,10 +30,27 @@ export function DatePopover({
 }: DatePopoverProps) {
   const [open, setOpen] = useState(false);
 
+  // Parse YYYY-MM-DD string as local time (not UTC)
+  const parseLocalDate = (dateStr: string): Date | undefined => {
+    if (!dateStr) return undefined;
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  // Compare two dates by calendar day only (ignores time)
+  const compareDates = (a: Date, b: Date): number => {
+    const aYear = a.getFullYear(), aMonth = a.getMonth(), aDay = a.getDate();
+    const bYear = b.getFullYear(), bMonth = b.getMonth(), bDay = b.getDate();
+    if (aYear !== bYear) return aYear - bYear;
+    if (aMonth !== bMonth) return aMonth - bMonth;
+    return aDay - bDay;
+  };
+
   const formatDisplayDate = (dateStr: string) => {
     if (!dateStr) return "Select date";
     try {
-      const date = new Date(dateStr);
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
       return format(date, "MMM d, yyyy");
     } catch {
       return "Select date";
@@ -41,7 +58,11 @@ export function DatePopover({
   };
 
   const handleSelect = (date: Date) => {
-    onChange(date.toISOString().split("T")[0]);
+    // Use local date components to avoid UTC conversion
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    onChange(`${year}-${month}-${day}`);
     setOpen(false);
   };
 
@@ -66,22 +87,30 @@ export function DatePopover({
           sideOffset={5}
         >
           <CalendarComponent
-            selected={value ? new Date(value) : undefined}
+            selected={parseLocalDate(value)}
             onSelect={handleSelect}
             disabledDates={(date) => {
-              // Check minDate constraint
-              if (minDate && date < minDate) {
-                return true;
+              // Check minDate constraint (compare by calendar day)
+              if (minDate) {
+                const minDateParsed = parseLocalDate(minDate);
+                if (minDateParsed && compareDates(date, minDateParsed) < 0) {
+                  return true;
+                }
               }
-              // Check maxDate constraint
-              if (maxDate && date > maxDate) {
-                return true;
+              // Check maxDate constraint (compare by calendar day)
+              if (maxDate) {
+                const maxDateParsed = parseLocalDate(maxDate);
+                if (maxDateParsed && compareDates(date, maxDateParsed) > 0) {
+                  return true;
+                }
               }
               // Only restrict past dates if allowPastDates is false
               if (!allowPastDates && !minDate) {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-                return date < today;
+                if (compareDates(date, today) < 0) {
+                  return true;
+                }
               }
               return false;
             }}

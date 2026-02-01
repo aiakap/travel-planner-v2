@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useRef, useMemo } from "react"
+import { useState, useRef, useMemo, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
-import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2, Sparkles, Plus } from "lucide-react"
+import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2, Sparkles, Plus, Moon } from "lucide-react"
 import { Card } from "./card"
 import { Badge } from "./badge"
 import { ActionIcon } from "./action-icon"
@@ -14,12 +14,14 @@ import { deleteReservation } from "@/lib/actions/delete-reservation"
 
 interface JourneyViewProps {
   itinerary: ViewItinerary
+  scrollToId?: string | null
 }
 
-export function JourneyView({ itinerary }: JourneyViewProps) {
+export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Flatten all reservations for optimistic delete (memoized to prevent re-renders)
@@ -56,6 +58,25 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
   // Get current tab from URL
   const currentTab = searchParams.get('tab') || 'journey'
 
+  // Scroll to element on mount if scrollToId is provided
+  useEffect(() => {
+    if (!scrollToId) return
+
+    // Small delay to ensure DOM is ready
+    const timeoutId = setTimeout(() => {
+      const element = document.getElementById(scrollToId)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Add highlight effect
+        setHighlightedId(scrollToId)
+        // Remove highlight after animation
+        setTimeout(() => setHighlightedId(null), 2000)
+      }
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
+  }, [scrollToId])
+
   const scrollToDate = (fullId: string) => {
     setSelectedDate(fullId)
     
@@ -64,10 +85,10 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
     if (momentElement) {
       momentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
     } else {
-      // Find relevant chapter
+      // Find relevant chapter/segment
       const relevantChapter = calendarData.chapters.find(c => c.dateRange.includes(fullId))
       if (relevantChapter) {
-        const chapterElement = document.getElementById(`chapter-${relevantChapter.id}`)
+        const chapterElement = document.getElementById(`segment-${relevantChapter.id}`)
         if (chapterElement) {
            chapterElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
@@ -181,7 +202,9 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
           const chapterMoments = calendarData.moments.filter(m => m.chapterId === chapter.id)
           
           return (
-            <div key={chapter.id} id={`chapter-${chapter.id}`} className="relative scroll-mt-[120px]">
+            <div key={chapter.id} id={`segment-${chapter.id}`} className={`relative scroll-mt-[120px] ${
+                highlightedId === `segment-${chapter.id}` ? 'animate-highlight-pulse' : ''
+              }`}>
               
               {/* Compact Chapter Header */}
               <div className="sticky top-[65px] z-20 bg-slate-50/95 backdrop-blur-md border-b border-slate-200 py-3 mb-4 transition-all">
@@ -235,11 +258,48 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
               <div className="space-y-3 pl-3 md:pl-4 border-l-2 border-slate-200 ml-2">
                 {chapterMoments.map((moment, momentIdx) => {
                   const momentId = `${moment.month}-${moment.date}`
+                  
+                  // Render continuation indicator for multi-day reservations (days 2+)
+                  if (moment.isContinuation) {
+                    const label = moment.nightNumber 
+                      ? `Night ${moment.nightNumber} of ${moment.totalNights}`
+                      : `Day ${moment.dayNumber} of ${moment.totalDays}`
+                    
+                    return (
+                      <div key={moment.id} className="relative">
+                        {/* Smaller timeline dot for continuation */}
+                        <div className="absolute -left-[18px] md:-left-[22px] top-2 w-2.5 h-2.5 rounded-full bg-slate-100 border-2 border-slate-300 z-10"></div>
+                        
+                        {/* Continuation indicator - subtle and compact */}
+                        <div 
+                          className="p-2 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors"
+                          onClick={() => {
+                            // Scroll to the parent reservation
+                            if (moment.parentReservationId) {
+                              const parentElement = document.getElementById(`reservation-${moment.parentReservationId}`)
+                              if (parentElement) {
+                                parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              }
+                            }
+                          }}
+                          title={`View full ${moment.reservationType === 'hotel' ? 'hotel' : 'rental'} details`}
+                        >
+                          <moment.icon className="w-3 h-3 text-slate-400" />
+                          <span>{moment.title} — {label}</span>
+                        </div>
+                      </div>
+                    )
+                  }
+                  
+                  // Render full reservation card (day 1 or single-day reservations)
                   return (
                     <div key={moment.id}>
                       <div 
-                        id={`date-${momentId}`} 
-                        className={`relative group transition-all duration-300 scroll-mt-[140px]`}
+                        id={`reservation-${moment.id}`}
+                        data-date-id={`date-${momentId}`}
+                        className={`relative group transition-all duration-300 scroll-mt-[140px] ${
+                          highlightedId === `reservation-${moment.id}` ? 'animate-highlight-pulse' : ''
+                        }`}
                       >
                         {/* Timeline Dot */}
                         <div className={`absolute -left-[19px] md:-left-[23px] top-4 w-3 h-3 rounded-full border-2 border-white shadow-sm transition-colors duration-300
@@ -261,6 +321,19 @@ export function JourneyView({ itinerary }: JourneyViewProps) {
                               <div className="flex items-center gap-2 mb-0.5">
                                 <h4 className="font-bold text-sm text-slate-900 truncate">{moment.title}</h4>
                                 <moment.icon className="text-slate-400 flex-shrink-0" size={14} />
+                                {/* Multi-day badge for hotels */}
+                                {moment.isMultiDay && moment.totalNights && moment.totalNights > 1 && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-0.5">
+                                    <Moon className="w-2.5 h-2.5" />
+                                    {moment.totalNights} nights
+                                  </span>
+                                )}
+                                {/* Multi-day badge for transport/car rentals */}
+                                {moment.isMultiDay && moment.totalDays && moment.totalDays > 1 && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                    {moment.totalDays} days
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-slate-500 truncate">Reservation confirmed</p>
                             </div>

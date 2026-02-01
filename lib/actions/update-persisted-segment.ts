@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { localToUTC, stringToPgDate } from "@/lib/utils/local-time";
 
 export async function updatePersistedSegment(segmentId: string, updates: any) {
   const session = await auth();
@@ -35,10 +36,28 @@ export async function updatePersistedSegment(segmentId: string, updates: any) {
   if (updates.endTimeZoneId !== undefined) updateData.endTimeZoneId = updates.endTimeZoneId;
   if (updates.endTimeZoneName !== undefined) updateData.endTimeZoneName = updates.endTimeZoneName;
   
-  if (updates.startTime !== undefined) {
+  // Get timezone IDs for local time conversion
+  const startTzId = updates.startTimeZoneId || existingSegment.startTimeZoneId;
+  const endTzId = updates.endTimeZoneId || existingSegment.endTimeZoneId || startTzId;
+  
+  // Handle local date fields (new approach)
+  if (updates.localStartDate !== undefined) {
+    updateData.wall_start_date = stringToPgDate(updates.localStartDate);
+    if (updates.localStartDate && startTzId) {
+      updateData.startTime = localToUTC(updates.localStartDate, null, startTzId, false);
+    }
+  } else if (updates.startTime !== undefined) {
+    // Fall back to old approach
     updateData.startTime = updates.startTime ? new Date(updates.startTime) : null;
   }
-  if (updates.endTime !== undefined) {
+  
+  if (updates.localEndDate !== undefined) {
+    updateData.wall_end_date = stringToPgDate(updates.localEndDate);
+    if (updates.localEndDate && endTzId) {
+      updateData.endTime = localToUTC(updates.localEndDate, null, endTzId, true);
+    }
+  } else if (updates.endTime !== undefined) {
+    // Fall back to old approach
     updateData.endTime = updates.endTime ? new Date(updates.endTime) : null;
   }
 

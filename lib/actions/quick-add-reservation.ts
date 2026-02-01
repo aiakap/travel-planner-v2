@@ -7,6 +7,8 @@ import { assignFlights } from "@/lib/utils/flight-assignment";
 import { updateMetadataForType } from "@/lib/utils/reservation-metadata";
 import { enrichSegment } from "./enrich-segment";
 import { enrichReservation } from "./enrich-reservation";
+import { getAirportTimezones } from "./airport-timezone";
+import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
 import type { FlightExtraction } from "@/lib/schemas/flight-extraction-schema";
 import type { HotelExtraction } from "@/lib/schemas/hotel-extraction-schema";
 import type { CarRentalExtraction } from "@/lib/schemas/car-rental-extraction-schema";
@@ -69,6 +71,17 @@ async function processFlightReservations(
     throw new Error("Travel segment type not found. Please run db:seed.");
   }
 
+  // Collect all unique airport codes for batch timezone lookup
+  const airportCodes = new Set<string>();
+  for (const flight of extractedData.flights) {
+    if (flight.departureAirport) airportCodes.add(flight.departureAirport);
+    if (flight.arrivalAirport) airportCodes.add(flight.arrivalAirport);
+  }
+  
+  // Batch lookup all airport timezones
+  const timezoneMap = await getAirportTimezones([...airportCodes]);
+  console.log('[QuickAdd] Timezone lookup for airports:', timezoneMap);
+
   // Parse flight dates
   const flightsWithDates = extractedData.flights.map((flight) => {
     // Ensure dates are valid strings before parsing
@@ -76,9 +89,32 @@ async function processFlightReservations(
     const arrivalDate = flight.arrivalDate || new Date().toISOString().split('T')[0];
     const departureTime = flight.departureTime || "12:00 PM";
     const arrivalTime = flight.arrivalTime || "12:00 PM";
-
-    const departureDateTime = new Date(`${departureDate}T${convertTo24Hour(departureTime)}`);
-    const arrivalDateTime = new Date(`${arrivalDate}T${convertTo24Hour(arrivalTime)}`);
+    
+    // Get timezones for this flight's airports
+    const depTimezone = timezoneMap[flight.departureAirport] || null;
+    const arrTimezone = timezoneMap[flight.arrivalAirport] || null;
+    
+    // Convert to 24-hour format
+    const depTime24 = convertTo24Hour(departureTime);
+    const arrTime24 = convertTo24Hour(arrivalTime);
+    
+    // Calculate UTC times using the airport timezones (for assignment logic)
+    let departureDateTime: Date;
+    let arrivalDateTime: Date;
+    
+    if (depTimezone) {
+      departureDateTime = localToUTC(departureDate, depTime24, depTimezone, false);
+    } else {
+      // Fallback: treat as UTC (old behavior)
+      departureDateTime = new Date(`${departureDate}T${depTime24}`);
+    }
+    
+    if (arrTimezone) {
+      arrivalDateTime = localToUTC(arrivalDate, arrTime24, arrTimezone, false);
+    } else {
+      // Fallback: treat as UTC (old behavior)
+      arrivalDateTime = new Date(`${arrivalDate}T${arrTime24}`);
+    }
 
     // Validate that dates are valid
     if (isNaN(departureDateTime.getTime())) {
@@ -92,6 +128,13 @@ async function processFlightReservations(
       ...flight,
       departureDateTime,
       arrivalDateTime,
+      // Store the local times and timezones for reservation creation
+      departureDateLocal: departureDate,
+      departureTime24: depTime24,
+      arrivalDateLocal: arrivalDate,
+      arrivalTime24: arrTime24,
+      depTimezone,
+      arrTimezone,
     };
   });
 
@@ -284,16 +327,28 @@ async function processFlightReservations(
       },
     };
 
-    // Create reservation
+    // Create reservation with proper timezone handling
     const reservation = await prisma.reservation.create({
       data: {
         name: `${flight.carrier} ${flight.flightNumber} - ${flight.departureAirport} to ${flight.arrivalAirport}`,
+        // Wall clock fields (what the user sees - the actual local times)
+        wall_start_date: stringToPgDate(flight.departureDateLocal),
+        wall_start_time: stringToPgTime(flight.departureTime24),
+        wall_end_date: stringToPgDate(flight.arrivalDateLocal),
+        wall_end_time: stringToPgTime(flight.arrivalTime24),
+        // UTC fields (for sorting/filtering)
         startTime: flight.departureDateTime,
-        departureLocation: flight.departureCity,
         endTime: flight.arrivalDateTime,
+        // Timezone info
+        departureTimezone: flight.depTimezone,
+        arrivalTimezone: flight.arrTimezone,
+        // Other fields
+        departureLocation: flight.departureCity,
         arrivalLocation: flight.arrivalCity,
         confirmationNumber: extractedData.confirmationNumber || undefined,
-        cost: extractedData.totalCost || undefined,
+        cost: extractedData.totalCost 
+          ? Math.round((extractedData.totalCost / flightsWithDates.length) * 100) / 100 
+          : undefined,
         currency: extractedData.currency || undefined,
         segmentId: segmentId,
         reservationTypeId: flightType.id,
@@ -302,7 +357,7 @@ async function processFlightReservations(
       },
     });
 
-    // Trigger async enrichment for timezone correction
+    // Trigger async enrichment for any additional data (geocoding, etc.)
     enrichReservation(reservation.id, {
       departure: flight.departureAirport,
       arrival: flight.arrivalAirport
@@ -584,8 +639,37 @@ export async function createDraftReservation(
   const departureTime = flightData.departureTime || "12:00 PM";
   const arrivalTime = flightData.arrivalTime || "12:00 PM";
 
-  const departureDateTime = new Date(`${departureDate}T${convertTo24Hour(departureTime)}`);
-  const arrivalDateTime = new Date(`${arrivalDate}T${convertTo24Hour(arrivalTime)}`);
+  // Convert to 24-hour format
+  const depTime24 = convertTo24Hour(departureTime);
+  const arrTime24 = convertTo24Hour(arrivalTime);
+
+  // Lookup airport timezones
+  const airportCodes: string[] = [];
+  if (flightData.departureAirport) airportCodes.push(flightData.departureAirport);
+  if (flightData.arrivalAirport) airportCodes.push(flightData.arrivalAirport);
+  
+  const timezoneMap = airportCodes.length > 0 
+    ? await getAirportTimezones(airportCodes)
+    : {};
+  
+  const depTimezone = timezoneMap[flightData.departureAirport] || null;
+  const arrTimezone = timezoneMap[flightData.arrivalAirport] || null;
+
+  // Calculate UTC times
+  let departureDateTime: Date;
+  let arrivalDateTime: Date;
+  
+  if (depTimezone) {
+    departureDateTime = localToUTC(departureDate, depTime24, depTimezone, false);
+  } else {
+    departureDateTime = new Date(`${departureDate}T${depTime24}`);
+  }
+  
+  if (arrTimezone) {
+    arrivalDateTime = localToUTC(arrivalDate, arrTime24, arrTimezone, false);
+  } else {
+    arrivalDateTime = new Date(`${arrivalDate}T${arrTime24}`);
+  }
 
   // Create or use segment
   let segmentId: string;
@@ -626,13 +710,23 @@ export async function createDraftReservation(
     needsAttention: true
   };
 
-  // Create draft reservation
+  // Create draft reservation with proper timezone handling
   const reservation = await prisma.reservation.create({
     data: {
       name: `${flightData.carrier || 'Unknown'} ${flightData.flightNumber || ''} - NEEDS ATTENTION`,
+      // Wall clock fields
+      wall_start_date: stringToPgDate(departureDate),
+      wall_start_time: stringToPgTime(depTime24),
+      wall_end_date: stringToPgDate(arrivalDate),
+      wall_end_time: stringToPgTime(arrTime24),
+      // UTC fields
       startTime: departureDateTime,
-      departureLocation: flightData.departureCity || "Unknown",
       endTime: arrivalDateTime,
+      // Timezone info
+      departureTimezone: depTimezone,
+      arrivalTimezone: arrTimezone,
+      // Other fields
+      departureLocation: flightData.departureCity || "Unknown",
       arrivalLocation: flightData.arrivalCity || "Unknown",
       notes: `VALIDATION ERROR: ${errorMessage}\n\nPlease review and fix the issues below, then save to continue.`,
       segmentId,
@@ -703,8 +797,37 @@ export async function createSingleFlight(
   const departureTime = flightData.departureTime || "12:00 PM";
   const arrivalTime = flightData.arrivalTime || "12:00 PM";
 
-  const departureDateTime = new Date(`${departureDate}T${convertTo24Hour(departureTime)}`);
-  const arrivalDateTime = new Date(`${arrivalDate}T${convertTo24Hour(arrivalTime)}`);
+  // Convert to 24-hour format
+  const depTime24 = convertTo24Hour(departureTime);
+  const arrTime24 = convertTo24Hour(arrivalTime);
+
+  // Lookup airport timezones
+  const airportCodes: string[] = [];
+  if (flightData.departureAirport) airportCodes.push(flightData.departureAirport);
+  if (flightData.arrivalAirport) airportCodes.push(flightData.arrivalAirport);
+  
+  const timezoneMap = airportCodes.length > 0 
+    ? await getAirportTimezones(airportCodes)
+    : {};
+  
+  const depTimezone = timezoneMap[flightData.departureAirport] || null;
+  const arrTimezone = timezoneMap[flightData.arrivalAirport] || null;
+
+  // Calculate UTC times using the airport timezones
+  let departureDateTime: Date;
+  let arrivalDateTime: Date;
+  
+  if (depTimezone) {
+    departureDateTime = localToUTC(departureDate, depTime24, depTimezone, false);
+  } else {
+    departureDateTime = new Date(`${departureDate}T${depTime24}`);
+  }
+  
+  if (arrTimezone) {
+    arrivalDateTime = localToUTC(arrivalDate, arrTime24, arrTimezone, false);
+  } else {
+    arrivalDateTime = new Date(`${arrivalDate}T${arrTime24}`);
+  }
 
   // Validate dates
   if (isNaN(departureDateTime.getTime())) {
@@ -770,16 +893,28 @@ export async function createSingleFlight(
     },
   };
 
-  // Create reservation
+  // Create reservation with proper timezone handling
   const reservation = await prisma.reservation.create({
     data: {
       name: `${flightData.carrier} ${flightData.flightNumber} - ${flightData.departureAirport} to ${flightData.arrivalAirport}`,
+      // Wall clock fields
+      wall_start_date: stringToPgDate(departureDate),
+      wall_start_time: stringToPgTime(depTime24),
+      wall_end_date: stringToPgDate(arrivalDate),
+      wall_end_time: stringToPgTime(arrTime24),
+      // UTC fields
       startTime: departureDateTime,
-      departureLocation: flightData.departureCity,
       endTime: arrivalDateTime,
+      // Timezone info
+      departureTimezone: depTimezone,
+      arrivalTimezone: arrTimezone,
+      // Other fields
+      departureLocation: flightData.departureCity,
       arrivalLocation: flightData.arrivalCity,
       confirmationNumber: extractedData.confirmationNumber || undefined,
-      cost: extractedData.totalCost || undefined,
+      cost: extractedData.totalCost && extractedData.flights?.length
+        ? Math.round((extractedData.totalCost / extractedData.flights.length) * 100) / 100
+        : undefined,
       currency: extractedData.currency || undefined,
       segmentId,
       reservationTypeId: flightType.id,
@@ -788,7 +923,7 @@ export async function createSingleFlight(
     },
   });
 
-  // Trigger async enrichment for timezone correction
+  // Trigger async enrichment for any additional data
   enrichReservation(reservation.id, {
     departure: flightData.departureAirport,
     arrival: flightData.arrivalAirport

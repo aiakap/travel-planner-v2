@@ -5,6 +5,26 @@ import { prisma } from "@/lib/prisma"
 import { calculateTravelTime, shouldCreateTravelSegment } from "@/lib/google-maps/calculate-travel-time"
 import { linkConversationToTrip } from "./link-conversation-to-trip"
 import { getSegmentTimeZones } from "./timezone"
+import { stringToPgDate } from "@/lib/utils/local-time"
+
+// Helper to convert Date to YYYY-MM-DD string in a timezone
+function dateToLocalString(date: Date, timeZoneId?: string | null): string {
+  if (!timeZoneId) {
+    // Fallback to UTC
+    return date.toISOString().split('T')[0]
+  }
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZoneId,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+    return formatter.format(date)
+  } catch {
+    return date.toISOString().split('T')[0]
+  }
+}
 
 interface CityStop {
   city: string
@@ -179,6 +199,12 @@ export async function createMultiCityTrip({
       stayEndDate
     ) : { start: null, end: null, hasTimeZoneChange: false }
 
+    // Calculate local date strings for wall_* fields
+    const stayStartTz = stayTimezones.start?.timeZoneId ?? null
+    const stayEndTz = stayTimezones.end?.timeZoneId ?? stayStartTz
+    const stayLocalStartDate = dateToLocalString(currentDate, stayStartTz)
+    const stayLocalEndDate = dateToLocalString(stayEndDate, stayEndTz)
+
     // Create stay segment
     const staySegment = await prisma.segment.create({
       data: {
@@ -190,11 +216,15 @@ export async function createMultiCityTrip({
         endTitle: city.city,
         endLat: cityGeo?.lat || 0,
         endLng: cityGeo?.lng || 0,
+        // Local time fields (primary)
+        wall_start_date: stringToPgDate(stayLocalStartDate),
+        wall_end_date: stringToPgDate(stayLocalEndDate),
+        // UTC fields (for sorting)
         startTime: currentDate,
         endTime: stayEndDate,
-        startTimeZoneId: stayTimezones.start?.timeZoneId ?? null,
+        startTimeZoneId: stayStartTz,
         startTimeZoneName: stayTimezones.start?.timeZoneName ?? null,
-        endTimeZoneId: stayTimezones.end?.timeZoneId ?? null,
+        endTimeZoneId: stayEndTz,
         endTimeZoneName: stayTimezones.end?.timeZoneName ?? null,
         order: segmentOrder++,
         segmentTypeId: stayType.id,
@@ -237,6 +267,12 @@ export async function createMultiCityTrip({
           travelEndDate
         ) : { start: null, end: null, hasTimeZoneChange: false }
 
+        // Calculate local date strings for travel segment wall_* fields
+        const travelStartTz = travelTimezones.start?.timeZoneId ?? null
+        const travelEndTz = travelTimezones.end?.timeZoneId ?? travelStartTz
+        const travelLocalStartDate = dateToLocalString(travelStartDate, travelStartTz)
+        const travelLocalEndDate = dateToLocalString(travelEndDate, travelEndTz)
+
         const travelSegment = await prisma.segment.create({
           data: {
             tripId: trip.id,
@@ -247,11 +283,15 @@ export async function createMultiCityTrip({
             endTitle: nextCity.city,
             endLat: nextCityGeo?.lat || 0,
             endLng: nextCityGeo?.lng || 0,
+            // Local time fields (primary)
+            wall_start_date: stringToPgDate(travelLocalStartDate),
+            wall_end_date: stringToPgDate(travelLocalEndDate),
+            // UTC fields (for sorting)
             startTime: travelStartDate,
             endTime: travelEndDate,
-            startTimeZoneId: travelTimezones.start?.timeZoneId ?? null,
+            startTimeZoneId: travelStartTz,
             startTimeZoneName: travelTimezones.start?.timeZoneName ?? null,
-            endTimeZoneId: travelTimezones.end?.timeZoneId ?? null,
+            endTimeZoneId: travelEndTz,
             endTimeZoneName: travelTimezones.end?.timeZoneName ?? null,
             order: segmentOrder++,
             segmentTypeId: flightType.id,

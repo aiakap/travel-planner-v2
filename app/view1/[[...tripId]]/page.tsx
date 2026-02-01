@@ -10,7 +10,7 @@ import { IntelligenceProvider } from "../contexts/intelligence-context"
 import { NewJourneyExperience } from "../components/new-journey-experience"
 import { getUserContext } from "@/lib/actions/user-context"
 import { getUserHomeLocation } from "@/lib/actions/profile-actions"
-import { utcToDate, formatTimeInTimezone } from "@/lib/utils/date-timezone"
+import { pgDateToString, pgTimeToString } from "@/lib/utils/local-time"
 import { batchFetchIntelligence } from "@/lib/actions/batch-intelligence-actions"
 
 interface PageProps {
@@ -122,59 +122,102 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
   ])
 
   // Transform trip into the ViewItinerary format
-  // Note: Trip dates don't have timezone, so we use the first segment's timezone if available
-  const firstSegmentTz = trip.segments[0]?.startTimeZoneId || undefined
-  const startDate = utcToDate(trip.startDate.toISOString(), firstSegmentTz)
-  const endDate = utcToDate(trip.endDate.toISOString(), firstSegmentTz)
+  // Use wall_* fields directly (local time) - no timezone conversion needed
+  // Fallback to trip dates if wall dates not available
+  const tripStartDate = trip.startDate.toISOString().split('T')[0]
+  const tripEndDate = trip.endDate.toISOString().split('T')[0]
   
-  const segments = trip.segments.map(segment => ({
-    id: segment.id,
-    title: segment.name,
-    startDate: segment.startTime 
-      ? utcToDate(segment.startTime.toISOString(), segment.startTimeZoneId || undefined)
-      : startDate,
-    endDate: segment.endTime 
-      ? utcToDate(segment.endTime.toISOString(), segment.endTimeZoneId || segment.startTimeZoneId || undefined)
-      : endDate,
-    destination: segment.endTitle || segment.startTitle,
-    startLat: segment.startLat,
-    startLng: segment.startLng,
-    endLat: segment.endLat,
-    endLng: segment.endLng,
-    startTitle: segment.startTitle,
-    endTitle: segment.endTitle,
-    segmentType: segment.segmentType.name,
-    imageUrl: segment.imageUrl || undefined,
-    reservations: segment.reservations.map(res => ({
-      id: res.id,
-      type: mapCategoryToType(res.reservationType.category.name),
-      title: res.name,
-      description: res.reservationType.name,
-      date: res.startTime 
-        ? utcToDate(res.startTime.toISOString(), res.timeZoneId || segment.startTimeZoneId || undefined)
-        : segment.startTime
-          ? utcToDate(segment.startTime.toISOString(), segment.startTimeZoneId || undefined)
-          : startDate,
-      time: res.startTime 
-        ? formatTimeInTimezone(res.startTime, res.timeZoneId || segment.startTimeZoneId || undefined)
-        : "00:00",
-      location: res.location || segment.endTitle || "",
-      confirmationNumber: res.confirmationNumber || "",
-      image: res.imageUrl || getDefaultImage(mapCategoryToType(res.reservationType.category.name)),
-      price: res.cost || 0,
-      notes: res.notes || "",
-      latitude: res.latitude || undefined,
-      longitude: res.longitude || undefined,
-      departureLocation: res.departureLocation || undefined,
-      arrivalLocation: res.arrivalLocation || undefined,
-      categoryName: res.reservationType.category.name,
-      startTime: res.startTime?.toISOString(),
-      endTime: res.endTime?.toISOString(),
-      status: mapReservationStatus(res.reservationStatus.name),
-      statusName: res.reservationStatus.name,
-      reservationStatusId: res.reservationStatusId,
-    }))
-  }))
+  const segments = trip.segments.map(segment => {
+    // Read directly from wall_* fields (local time)
+    const segmentStartDate = segment.wall_start_date 
+      ? pgDateToString(segment.wall_start_date)
+      : tripStartDate
+    const segmentEndDate = segment.wall_end_date 
+      ? pgDateToString(segment.wall_end_date)
+      : tripEndDate
+    
+    return {
+      id: segment.id,
+      title: segment.name,
+      startDate: segmentStartDate,
+      endDate: segmentEndDate,
+      destination: segment.endTitle || segment.startTitle,
+      startLat: segment.startLat,
+      startLng: segment.startLng,
+      endLat: segment.endLat,
+      endLng: segment.endLng,
+      startTitle: segment.startTitle,
+      endTitle: segment.endTitle,
+      segmentType: segment.segmentType.name,
+      imageUrl: segment.imageUrl || undefined,
+      reservations: segment.reservations.map(res => {
+        // Read directly from wall_* fields (local time)
+        const resDate = res.wall_start_date 
+          ? pgDateToString(res.wall_start_date)
+          : segmentStartDate
+        const resTime = res.wall_start_time 
+          ? pgTimeToString(res.wall_start_time)
+          : "00:00"
+        
+        // Calculate multi-day fields
+        const resType = mapCategoryToType(res.reservationType.category.name)
+        const startDate = res.wall_start_date || res.startTime
+        const endDate = res.wall_end_date || res.endTime
+        let nights: number | undefined
+        let durationDays: number | undefined
+        let checkInDate: string | undefined
+        let checkOutDate: string | undefined
+        
+        if (startDate && endDate) {
+          const start = new Date(startDate)
+          const end = new Date(endDate)
+          const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+          
+          if (resType === 'hotel' && daysDiff > 0) {
+            nights = daysDiff
+            checkInDate = pgDateToString(res.wall_start_date) || res.startTime?.toISOString().split('T')[0]
+            checkOutDate = pgDateToString(res.wall_end_date) || res.endTime?.toISOString().split('T')[0]
+          } else if (resType === 'transport' && daysDiff > 0) {
+            // Car rentals span multiple days
+            durationDays = daysDiff + 1 // Include both start and end days
+          }
+        }
+        
+        return {
+          id: res.id,
+          type: resType,
+          title: res.name,
+          description: res.reservationType.name,
+          date: resDate,
+          time: resTime,
+          location: res.location || segment.endTitle || "",
+          confirmationNumber: res.confirmationNumber || "",
+          image: res.imageUrl || getDefaultImage(resType),
+          price: res.cost || 0,
+          notes: res.notes || "",
+          latitude: res.latitude || undefined,
+          longitude: res.longitude || undefined,
+          departureLocation: res.departureLocation || undefined,
+          arrivalLocation: res.arrivalLocation || undefined,
+          categoryName: res.reservationType.category.name,
+          startTime: res.startTime?.toISOString(),
+          endTime: res.endTime?.toISOString(),
+          status: mapReservationStatus(res.reservationStatus.name),
+          statusName: res.reservationStatus.name,
+          reservationStatusId: res.reservationStatusId,
+          // Multi-day fields
+          nights,
+          durationDays,
+          checkInDate,
+          checkOutDate,
+        }
+      })
+    }
+  })
+  
+  // Calculate trip start/end from first/last segment
+  const startDate = segments.length > 0 ? segments[0].startDate : tripStartDate
+  const endDate = segments.length > 0 ? segments[segments.length - 1].endDate : tripEndDate
   
   // Calculate pending count
   const pendingCount = segments.reduce((count, seg) => 

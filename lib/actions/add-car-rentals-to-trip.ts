@@ -6,7 +6,8 @@ import { CarRentalExtraction } from "@/lib/schemas/car-rental-extraction-schema"
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { createCarRentalCluster } from "@/lib/utils/car-rental-clustering";
 import { findBestSegmentForCarRental } from "@/lib/utils/segment-matching";
-import { getSegmentTimeZones } from "./timezone";
+import { getSegmentTimeZones, getTimeZoneForLocation } from "./timezone";
+import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -257,12 +258,73 @@ export async function addCarRentalToTrip(params: {
   });
 
   try {
-    const startDateTime = parseDateTime(carRentalData.pickupDate, carRentalData.pickupTime, "09:00:00");
-    const endDateTime = parseDateTime(carRentalData.returnDate, carRentalData.returnTime, "11:00:00");
+    // Convert times to 24-hour format
+    const pickupTime24 = convertTo24Hour(carRentalData.pickupTime);
+    const returnTime24 = convertTo24Hour(carRentalData.returnTime);
+
+    // Geocode pickup and return locations for timezone lookup
+    const pickupLocation = carRentalData.pickupAddress || carRentalData.pickupLocation;
+    const returnLocation = carRentalData.returnAddress || carRentalData.returnLocation;
     
+    const pickupGeo = await geocodeLocation(pickupLocation);
+    const returnGeo = await geocodeLocation(returnLocation);
+
+    let pickupTimezone: string | null = null;
+    let returnTimezone: string | null = null;
+
+    if (pickupGeo && pickupGeo.lat !== 0 && pickupGeo.lng !== 0) {
+      const tzInfo = await getTimeZoneForLocation(pickupGeo.lat, pickupGeo.lng);
+      if (tzInfo) {
+        pickupTimezone = tzInfo.timeZoneId;
+        console.log(`[AddCarRental] Pickup timezone: ${pickupTimezone}`);
+      }
+    }
+
+    if (returnGeo && returnGeo.lat !== 0 && returnGeo.lng !== 0) {
+      const tzInfo = await getTimeZoneForLocation(returnGeo.lat, returnGeo.lng);
+      if (tzInfo) {
+        returnTimezone = tzInfo.timeZoneId;
+        console.log(`[AddCarRental] Return timezone: ${returnTimezone}`);
+      }
+    }
+
+    // Normalize pickup date
+    let pickupDateStr = carRentalData.pickupDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(pickupDateStr)) {
+      const parsed = new Date(pickupDateStr);
+      if (!isNaN(parsed.getTime())) {
+        pickupDateStr = parsed.toISOString().split('T')[0];
+      }
+    }
+
+    // Normalize return date
+    let returnDateStr = carRentalData.returnDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDateStr)) {
+      const parsed = new Date(returnDateStr);
+      if (!isNaN(parsed.getTime())) {
+        returnDateStr = parsed.toISOString().split('T')[0];
+      }
+    }
+
+    // Calculate UTC times
+    let utcStartTime: Date | null = null;
+    let utcEndTime: Date | null = null;
+
+    if (pickupTimezone) {
+      utcStartTime = localToUTC(pickupDateStr, pickupTime24, pickupTimezone, false);
+    } else {
+      utcStartTime = parseDateTime(carRentalData.pickupDate, carRentalData.pickupTime, "09:00:00");
+    }
+
+    if (returnTimezone) {
+      utcEndTime = localToUTC(returnDateStr, returnTime24, returnTimezone, false);
+    } else {
+      utcEndTime = parseDateTime(carRentalData.returnDate, carRentalData.returnTime, "11:00:00");
+    }
+
     console.log('✅ Parsed datetimes:', {
-      startDateTime: startDateTime.toISOString(),
-      endDateTime: endDateTime.toISOString(),
+      startDateTime: utcStartTime?.toISOString(),
+      endDateTime: utcEndTime?.toISOString(),
     });
 
     const reservation = await prisma.reservation.create({
@@ -272,10 +334,23 @@ export async function addCarRentalToTrip(params: {
         reservationTypeId: carRentalType.id,
         reservationStatusId: confirmedStatus.id,
         segmentId: targetSegmentId,
-        startTime: startDateTime,
-        endTime: endDateTime,
-        startLocation: carRentalData.pickupLocation,
-        endLocation: carRentalData.returnLocation,
+        // Wall clock fields (what the user sees)
+        wall_start_date: stringToPgDate(pickupDateStr),
+        wall_start_time: stringToPgTime(pickupTime24),
+        wall_end_date: stringToPgDate(returnDateStr),
+        wall_end_time: stringToPgTime(returnTime24),
+        // UTC fields (for sorting/filtering)
+        startTime: utcStartTime,
+        endTime: utcEndTime,
+        // Timezone info (use departure/arrival for car rentals)
+        departureTimezone: pickupTimezone,
+        arrivalTimezone: returnTimezone,
+        // Location info
+        departureLocation: carRentalData.pickupLocation,
+        arrivalLocation: carRentalData.returnLocation,
+        latitude: pickupGeo?.lat && pickupGeo.lat !== 0 ? pickupGeo.lat : null,
+        longitude: pickupGeo?.lng && pickupGeo.lng !== 0 ? pickupGeo.lng : null,
+        // Other fields
         notes: notes || null,
         metadata: metadata as any,
         cost: carRentalData.totalCost > 0 ? carRentalData.totalCost : null,

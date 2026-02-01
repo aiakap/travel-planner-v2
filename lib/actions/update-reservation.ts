@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { queueReservationImageGeneration } from "./queue-image-generation";
+import { localToUTC, stringToPgDate, stringToPgTime, parseToLocalComponents } from "@/lib/utils/local-time";
 
 export async function updateReservation(formData: FormData) {
   const session = await auth();
@@ -80,6 +81,9 @@ export async function updateReservation(formData: FormData) {
     notes !== existingReservation.notes ||
     location !== existingReservation.location;
 
+  // Get effective timezone
+  const effectiveTimeZoneId = timeZoneId || existingReservation.timeZoneId || existingReservation.segment.startTimeZoneId || null;
+
   // Prepare update data
   const updateData: any = {
     name,
@@ -87,8 +91,6 @@ export async function updateReservation(formData: FormData) {
     notes: notes || null,
     reservationTypeId,
     reservationStatusId,
-    startTime: startTime ? new Date(startTime) : null,
-    endTime: endTime ? new Date(endTime) : null,
     cost: cost ? parseFloat(cost) : null,
     currency: currency || null,
     location: location || null,
@@ -99,7 +101,7 @@ export async function updateReservation(formData: FormData) {
     vendor: vendor || null,
     latitude: latitude ? parseFloat(latitude) : null,
     longitude: longitude ? parseFloat(longitude) : null,
-    timeZoneId: timeZoneId || null,
+    timeZoneId: effectiveTimeZoneId,
     timeZoneName: timeZoneName || null,
     // Flight-specific fields
     departureLocation: departureLocation || null,
@@ -107,6 +109,41 @@ export async function updateReservation(formData: FormData) {
     arrivalLocation: arrivalLocation || null,
     arrivalTimezone: arrivalTimezone || null,
   };
+
+  // Parse datetime-local values into local date/time components
+  if (startTime) {
+    const startComponents = parseToLocalComponents(startTime);
+    if (startComponents.date) {
+      updateData.wall_start_date = stringToPgDate(startComponents.date);
+      updateData.wall_start_time = stringToPgTime(startComponents.time);
+      if (effectiveTimeZoneId) {
+        updateData.startTime = localToUTC(startComponents.date, startComponents.time, effectiveTimeZoneId, false);
+      } else {
+        updateData.startTime = new Date(startTime);
+      }
+    }
+  } else {
+    updateData.wall_start_date = null;
+    updateData.wall_start_time = null;
+    updateData.startTime = null;
+  }
+  
+  if (endTime) {
+    const endComponents = parseToLocalComponents(endTime);
+    if (endComponents.date) {
+      updateData.wall_end_date = stringToPgDate(endComponents.date);
+      updateData.wall_end_time = stringToPgTime(endComponents.time);
+      if (effectiveTimeZoneId) {
+        updateData.endTime = localToUTC(endComponents.date, endComponents.time, effectiveTimeZoneId, true);
+      } else {
+        updateData.endTime = new Date(endTime);
+      }
+    }
+  } else {
+    updateData.wall_end_date = null;
+    updateData.wall_end_time = null;
+    updateData.endTime = null;
+  }
 
   // Handle image logic
   if (imageUrl && imageUrl !== existingReservation.imageUrl) {

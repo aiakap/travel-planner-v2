@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { queueSegmentImageGeneration } from "./queue-image-generation";
 import { getSegmentTimeZones } from "./timezone";
+import { localToUTC, stringToPgDate } from "@/lib/utils/local-time";
 
 async function geocodeAddress(address: string) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY!;
@@ -42,6 +43,9 @@ export async function addSegment(formData: FormData, tripId: string) {
   const endTimeStr = formData.get("endTime")?.toString();
   const imageUrl = formData.get("imageUrl")?.toString();
   const segmentTypeId = formData.get("segmentTypeId")?.toString();
+  // Local date strings (new approach)
+  const localStartDate = formData.get("localStartDate")?.toString();
+  const localEndDate = formData.get("localEndDate")?.toString();
 
   if (!name || !startAddress || !endAddress || !segmentTypeId) {
     throw new Error(
@@ -72,25 +76,54 @@ export async function addSegment(formData: FormData, tripId: string) {
   });
 
   const imageIsCustom = !!imageUrl;
+  
+  // Prepare timezone IDs
+  const startTzId = timezones.start?.timeZoneId || null;
+  const endTzId = timezones.end?.timeZoneId || startTzId;
+  
+  // Calculate local and UTC dates
+  let wallStartDate: Date | null = null;
+  let wallEndDate: Date | null = null;
+  let utcStartTime: Date | null = startTime || null;
+  let utcEndTime: Date | null = endTime || null;
+  
+  // If local date strings are provided, use them for wall_* fields and calculate UTC
+  if (localStartDate) {
+    wallStartDate = stringToPgDate(localStartDate);
+    if (startTzId) {
+      utcStartTime = localToUTC(localStartDate, null, startTzId, false);
+    }
+  }
+  
+  if (localEndDate) {
+    wallEndDate = stringToPgDate(localEndDate);
+    if (endTzId) {
+      utcEndTime = localToUTC(localEndDate, null, endTzId, true);
+    }
+  }
 
   const segment = await prisma.segment.create({
     data: {
       startTitle: startGeo.formatted,
       startLat: startGeo.lat,
       startLng: startGeo.lng,
-      startTimeZoneId: timezones.start?.timeZoneId,
+      startTimeZoneId: startTzId,
       startTimeZoneName: timezones.start?.timeZoneName,
       endTitle: endGeo.formatted,
       endLat: endGeo.lat,
       endLng: endGeo.lng,
-      endTimeZoneId: timezones.end?.timeZoneId,
+      endTimeZoneId: endTzId,
       endTimeZoneName: timezones.end?.timeZoneName,
       name,
       imageUrl: imageUrl || null,
       imageIsCustom,
       notes: notes || null,
-      startTime: startTime || null,
-      endTime: endTime || null,
+      // Local time fields (primary)
+      wall_start_date: wallStartDate,
+      wall_end_date: wallEndDate,
+      // UTC fields (for sorting)
+      startTime: utcStartTime,
+      endTime: utcEndTime,
       segmentTypeId,
       tripId,
       order: count,

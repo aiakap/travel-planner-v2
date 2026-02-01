@@ -1,16 +1,23 @@
 /**
  * Timezone-aware date utilities for segments
  * 
- * Philosophy:
- * - User selects calendar dates (Jan 29)
- * - System stores as 12:01 AM (start) or 11:59:59 PM (end) in LOCAL timezone, converted to UTC
- * - Display converts UTC back to local timezone to show the calendar date
- * - This makes dates work like humans think while keeping UTC in the database
+ * @deprecated This file contains legacy UTC conversion functions.
+ * For new code, use lib/utils/local-time.ts which provides simpler utilities
+ * for working with wall_* fields directly.
+ * 
+ * Migration guide:
+ * - dateToUTC() -> Not needed; write to wall_* fields directly
+ * - utcToDate() -> Not needed; read from wall_* fields using pgDateToString()
+ * - formatTimeInTimezone() -> Not needed; read from wall_start_time using pgTimeToString()
+ * - utcToDateTimeLocal() -> Not needed; use toDateTimeLocal() with wall_* values
+ * - dateTimeLocalToUTC() -> Not needed; use parseToLocalComponents() + localToUTC()
  */
 
 /**
  * Converts a calendar date to a UTC ISO string representing the start of that day
  * in the specified timezone (12:01 AM local time).
+ * 
+ * @deprecated Use wall_* fields with localToUTC() from lib/utils/local-time.ts instead.
  * 
  * @param dateStr - Date string in YYYY-MM-DD format
  * @param timeZoneId - IANA timezone identifier (e.g., "America/Los_Angeles")
@@ -111,6 +118,8 @@ export function dateToUTC(
  * Converts a UTC ISO string to a calendar date (YYYY-MM-DD) in the specified timezone.
  * This ensures that when we display dates, users see the date in their local timezone.
  * 
+ * @deprecated Read from wall_start_date/wall_end_date with pgDateToString() from lib/utils/local-time.ts instead.
+ * 
  * @param isoStr - ISO date string in UTC
  * @param timeZoneId - IANA timezone identifier
  * @returns Date string in YYYY-MM-DD format
@@ -158,6 +167,8 @@ export function utcToDate(isoStr: string, timeZoneId?: string): string {
 
 /**
  * Formats a UTC datetime to wall clock time (HH:mm) in the specified timezone.
+ * 
+ * @deprecated Read from wall_start_time/wall_end_time with pgTimeToString() from lib/utils/local-time.ts instead.
  * 
  * @param date - Date object or ISO string
  * @param timeZoneId - IANA timezone identifier

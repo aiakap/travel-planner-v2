@@ -2,11 +2,16 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { localToUTC, stringToPgDate } from "@/lib/utils/local-time";
 
 interface SegmentAdjustment {
   id: string;
   startDate: Date;
   endDate: Date;
+  /** Local start date in YYYY-MM-DD format (new approach) */
+  localStartDate?: string;
+  /** Local end date in YYYY-MM-DD format (new approach) */
+  localEndDate?: string;
 }
 
 export async function adjustSegmentDates(
@@ -14,7 +19,11 @@ export async function adjustSegmentDates(
   newStartDate: Date,
   newEndDate: Date,
   adjustmentStrategy: "extend-trip" | "adjust-segments",
-  segmentAdjustments?: SegmentAdjustment[]
+  segmentAdjustments?: SegmentAdjustment[],
+  /** Local start date in YYYY-MM-DD format (new approach) */
+  localStartDate?: string,
+  /** Local end date in YYYY-MM-DD format (new approach) */
+  localEndDate?: string
 ) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -70,34 +79,85 @@ export async function adjustSegmentDates(
         });
       }
 
+      // Build segment update data
+      const segmentUpdateData: any = {
+        startTime: newStartDate,
+        endTime: newEndDate,
+      };
+      
+      // Add local date fields if provided
+      if (localStartDate) {
+        segmentUpdateData.wall_start_date = stringToPgDate(localStartDate);
+        if (segment.startTimeZoneId) {
+          segmentUpdateData.startTime = localToUTC(localStartDate, null, segment.startTimeZoneId, false);
+        }
+      }
+      if (localEndDate) {
+        segmentUpdateData.wall_end_date = stringToPgDate(localEndDate);
+        const endTz = segment.endTimeZoneId || segment.startTimeZoneId;
+        if (endTz) {
+          segmentUpdateData.endTime = localToUTC(localEndDate, null, endTz, true);
+        }
+      }
+
       // Update the segment
       await prisma.segment.update({
         where: { id: segmentId },
-        data: {
-          startTime: newStartDate,
-          endTime: newEndDate,
-        },
+        data: segmentUpdateData,
       });
     } else if (adjustmentStrategy === "adjust-segments" && segmentAdjustments) {
       // Batch update multiple segments
-      const updatePromises = segmentAdjustments.map((adjustment) =>
-        prisma.segment.update({
+      const updatePromises = segmentAdjustments.map(async (adjustment) => {
+        const adjSegment = trip.segments.find(s => s.id === adjustment.id);
+        const updateData: any = {
+          startTime: adjustment.startDate,
+          endTime: adjustment.endDate,
+        };
+        
+        // Add local date fields if provided
+        if (adjustment.localStartDate) {
+          updateData.wall_start_date = stringToPgDate(adjustment.localStartDate);
+          if (adjSegment?.startTimeZoneId) {
+            updateData.startTime = localToUTC(adjustment.localStartDate, null, adjSegment.startTimeZoneId, false);
+          }
+        }
+        if (adjustment.localEndDate) {
+          updateData.wall_end_date = stringToPgDate(adjustment.localEndDate);
+          const endTz = adjSegment?.endTimeZoneId || adjSegment?.startTimeZoneId;
+          if (endTz) {
+            updateData.endTime = localToUTC(adjustment.localEndDate, null, endTz, true);
+          }
+        }
+        
+        return prisma.segment.update({
           where: { id: adjustment.id },
-          data: {
-            startTime: adjustment.startDate,
-            endTime: adjustment.endDate,
-          },
-        })
-      );
+          data: updateData,
+        });
+      });
 
       // Also update the current segment
+      const currentSegmentData: any = {
+        startTime: newStartDate,
+        endTime: newEndDate,
+      };
+      if (localStartDate) {
+        currentSegmentData.wall_start_date = stringToPgDate(localStartDate);
+        if (segment.startTimeZoneId) {
+          currentSegmentData.startTime = localToUTC(localStartDate, null, segment.startTimeZoneId, false);
+        }
+      }
+      if (localEndDate) {
+        currentSegmentData.wall_end_date = stringToPgDate(localEndDate);
+        const endTz = segment.endTimeZoneId || segment.startTimeZoneId;
+        if (endTz) {
+          currentSegmentData.endTime = localToUTC(localEndDate, null, endTz, true);
+        }
+      }
+      
       updatePromises.push(
         prisma.segment.update({
           where: { id: segmentId },
-          data: {
-            startTime: newStartDate,
-            endTime: newEndDate,
-          },
+          data: currentSegmentData,
         })
       );
 

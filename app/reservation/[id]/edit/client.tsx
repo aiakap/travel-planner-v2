@@ -423,6 +423,9 @@ export function ReservationEditClient({
     setIsSaving(true)
 
     try {
+      // Build the return URL with scroll-to parameter
+      const scrollToUrl = `/view1/${trip.id}?tab=journey&scrollTo=reservation-${reservation.id}`
+      
       const formData = new FormData()
       formData.set("reservationId", reservation.id)
       formData.set("name", name)
@@ -435,7 +438,7 @@ export function ReservationEditClient({
       formData.set("contactEmail", contactEmail)
       formData.set("cancellationPolicy", cancellationPolicy)
       formData.set("vendor", vendor)
-      formData.set("returnTo", returnTo)
+      formData.set("returnTo", scrollToUrl)
       
       if (cost) formData.set("cost", cost)
       if (currency) formData.set("currency", currency)
@@ -460,8 +463,9 @@ export function ReservationEditClient({
 
       await updateReservation(formData)
       
-      // The server action will redirect, but if it doesn't for some reason:
-      router.push(returnTo)
+      // The server action will redirect using the scrollToUrl we passed as returnTo
+      // But if it doesn't for some reason, fallback to client-side navigation
+      router.push(scrollToUrl)
       router.refresh()
     } catch (error) {
       console.error("Failed to save reservation:", error)
@@ -1198,7 +1202,7 @@ export function ReservationEditClient({
               </div>
             </div>
 
-            <div>
+            <div suppressHydrationWarning>
               <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
                 Confirmation Number
               </label>
@@ -1211,11 +1215,12 @@ export function ReservationEditClient({
                 }}
                 className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 placeholder="e.g., ABC123XYZ"
+                data-lpignore="true"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
+              <div suppressHydrationWarning>
                 <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
                   Contact Phone
                 </label>
@@ -1228,9 +1233,10 @@ export function ReservationEditClient({
                   }}
                   className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   placeholder="+1 (555) 123-4567"
+                  data-lpignore="true"
                 />
               </div>
-              <div>
+              <div suppressHydrationWarning>
                 <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
                   Contact Email
                 </label>
@@ -1243,11 +1249,12 @@ export function ReservationEditClient({
                   }}
                   className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   placeholder="contact@example.com"
+                  data-lpignore="true"
                 />
               </div>
             </div>
 
-            <div>
+            <div suppressHydrationWarning>
               <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
                 Booking URL
               </label>
@@ -1260,6 +1267,7 @@ export function ReservationEditClient({
                 }}
                 className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 placeholder="https://..."
+                data-lpignore="true"
               />
             </div>
 

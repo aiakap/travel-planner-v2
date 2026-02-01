@@ -25,6 +25,11 @@ export interface ViewReservation {
   status: "pending" | "confirmed" | "cancelled" | "completed" | "waitlisted"
   statusName: string
   reservationStatusId: string
+  // Multi-day reservation support
+  nights?: number              // Number of nights (for hotels)
+  durationDays?: number        // Total days spanning (for car rentals, etc.)
+  checkInDate?: string         // Formatted check-in date
+  checkOutDate?: string        // Formatted check-out date
 }
 
 export interface ViewSegment {

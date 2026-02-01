@@ -221,8 +221,115 @@ export function groupReservationsByDate(itinerary: ViewItinerary): Record<string
   return grouped
 }
 
+// Calendar moment type with multi-day support
+export interface CalendarMoment {
+  id: string
+  date: string
+  month: string
+  day: string
+  time: string
+  title: string
+  icon: typeof Plane  // LucideIcon type
+  chapterId: string
+  // Multi-day reservation support
+  isMultiDay: boolean
+  isContinuation: boolean
+  nightNumber?: number      // e.g., 2 (for "Night 2 of 4")
+  totalNights?: number      // e.g., 4
+  dayNumber?: number        // e.g., 2 (for "Day 2 of 5" - car rentals)
+  totalDays?: number        // e.g., 5
+  parentReservationId?: string
+  reservationType?: ViewReservation['type']
+}
+
 // Map itinerary to calendar data structure
 export function mapToCalendarData(itinerary: ViewItinerary) {
+  const moments: CalendarMoment[] = []
+  
+  // Generate moments including continuations for multi-day reservations
+  itinerary.segments.forEach(seg => {
+    seg.reservations.forEach(res => {
+      const date = new Date(res.date)
+      const isMultiDayHotel = res.type === 'hotel' && res.nights && res.nights > 1
+      const isMultiDayTransport = res.type === 'transport' && res.durationDays && res.durationDays > 1
+      const isMultiDay = isMultiDayHotel || isMultiDayTransport
+      
+      // Add the primary moment (day 1)
+      moments.push({
+        id: res.id,
+        date: date.getUTCDate().toString(),
+        month: MONTHS_SHORT[date.getUTCMonth()],
+        day: DAYS_SHORT[date.getUTCDay()],
+        time: res.time,
+        title: res.title,
+        icon: getIconForType(res.type),
+        chapterId: seg.id,
+        isMultiDay,
+        isContinuation: false,
+        totalNights: res.nights,
+        totalDays: res.durationDays,
+        reservationType: res.type
+      })
+      
+      // Generate continuation moments for multi-day hotel reservations
+      if (isMultiDayHotel && res.nights) {
+        for (let night = 2; night <= res.nights; night++) {
+          const contDate = new Date(date)
+          contDate.setUTCDate(contDate.getUTCDate() + night - 1)
+          
+          moments.push({
+            id: `${res.id}-night-${night}`,
+            date: contDate.getUTCDate().toString(),
+            month: MONTHS_SHORT[contDate.getUTCMonth()],
+            day: DAYS_SHORT[contDate.getUTCDay()],
+            time: '',
+            title: res.title,
+            icon: getIconForType(res.type),
+            chapterId: seg.id,
+            isMultiDay: true,
+            isContinuation: true,
+            nightNumber: night,
+            totalNights: res.nights,
+            parentReservationId: res.id,
+            reservationType: res.type
+          })
+        }
+      }
+      
+      // Generate continuation moments for multi-day transport (car rentals)
+      if (isMultiDayTransport && res.durationDays) {
+        for (let day = 2; day <= res.durationDays; day++) {
+          const contDate = new Date(date)
+          contDate.setUTCDate(contDate.getUTCDate() + day - 1)
+          
+          moments.push({
+            id: `${res.id}-day-${day}`,
+            date: contDate.getUTCDate().toString(),
+            month: MONTHS_SHORT[contDate.getUTCMonth()],
+            day: DAYS_SHORT[contDate.getUTCDay()],
+            time: '',
+            title: res.title,
+            icon: getIconForType(res.type),
+            chapterId: seg.id,
+            isMultiDay: true,
+            isContinuation: true,
+            dayNumber: day,
+            totalDays: res.durationDays,
+            parentReservationId: res.id,
+            reservationType: res.type
+          })
+        }
+      }
+    })
+  })
+  
+  // Sort moments by date (month-day order)
+  moments.sort((a, b) => {
+    const monthOrder = MONTHS_SHORT.indexOf(a.month) - MONTHS_SHORT.indexOf(b.month)
+    if (monthOrder !== 0) return monthOrder
+    return parseInt(a.date) - parseInt(b.date)
+  })
+  
   return {
     months: generateMonths(itinerary.startDate, itinerary.endDate),
     chapters: itinerary.segments.map(seg => ({
@@ -238,21 +345,7 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
       type: seg.segmentType.toLowerCase().includes('travel') ? 'travel' : 'stay',
       dateRange: generateDateRange(seg.startDate, seg.endDate)
     })),
-    moments: itinerary.segments.flatMap(seg => 
-      seg.reservations.map(res => {
-        const date = new Date(res.date)
-        return {
-          id: res.id,
-          date: date.getUTCDate().toString(),
-          month: MONTHS_SHORT[date.getUTCMonth()],
-          day: DAYS_SHORT[date.getUTCDay()],
-          time: res.time,
-          title: res.title,
-          icon: getIconForType(res.type),
-          chapterId: seg.id
-        }
-      })
-    )
+    moments
   }
 }
 

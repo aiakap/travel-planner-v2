@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { queueReservationImageGeneration } from "./queue-image-generation";
 import { GooglePlaceData } from "@/lib/types/place-suggestion";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
+import { localToUTC, stringToPgDate, stringToPgTime, parseToLocalComponents } from "@/lib/utils/local-time";
 
 export async function createReservation(formData: FormData) {
   const session = await auth();
@@ -28,6 +29,8 @@ export async function createReservation(formData: FormData) {
   const location = formData.get("location")?.toString();
   const url = formData.get("url")?.toString();
   const imageUrl = formData.get("imageUrl")?.toString();
+  // Timezone field
+  const timeZoneId = formData.get("timeZoneId")?.toString();
 
   // Flight-specific fields
   const departureLocation = formData.get("departureLocation")?.toString();
@@ -60,6 +63,43 @@ export async function createReservation(formData: FormData) {
   const finalImageUrl = imageUrl || null;
   const imageIsCustom = !!imageUrl;
 
+  // Get timezone from form or fall back to segment timezone
+  const effectiveTimeZoneId = timeZoneId || segment.startTimeZoneId || null;
+  
+  // Parse datetime-local values into local date/time components
+  let wallStartDate: Date | null = null;
+  let wallStartTime: Date | null = null;
+  let wallEndDate: Date | null = null;
+  let wallEndTime: Date | null = null;
+  let utcStartTime: Date | null = null;
+  let utcEndTime: Date | null = null;
+  
+  if (startTime) {
+    const startComponents = parseToLocalComponents(startTime);
+    if (startComponents.date) {
+      wallStartDate = stringToPgDate(startComponents.date);
+      wallStartTime = stringToPgTime(startComponents.time);
+      if (effectiveTimeZoneId) {
+        utcStartTime = localToUTC(startComponents.date, startComponents.time, effectiveTimeZoneId, false);
+      } else {
+        utcStartTime = new Date(startTime);
+      }
+    }
+  }
+  
+  if (endTime) {
+    const endComponents = parseToLocalComponents(endTime);
+    if (endComponents.date) {
+      wallEndDate = stringToPgDate(endComponents.date);
+      wallEndTime = stringToPgTime(endComponents.time);
+      if (effectiveTimeZoneId) {
+        utcEndTime = localToUTC(endComponents.date, endComponents.time, effectiveTimeZoneId, true);
+      } else {
+        utcEndTime = new Date(endTime);
+      }
+    }
+  }
+
   // Create reservation
   const reservation = await prisma.reservation.create({
     data: {
@@ -69,8 +109,16 @@ export async function createReservation(formData: FormData) {
       reservationTypeId,
       reservationStatusId,
       segmentId,
-      startTime: startTime ? new Date(startTime) : null,
-      endTime: endTime ? new Date(endTime) : null,
+      // Local time fields (primary)
+      wall_start_date: wallStartDate,
+      wall_start_time: wallStartTime,
+      wall_end_date: wallEndDate,
+      wall_end_time: wallEndTime,
+      // UTC fields (for sorting)
+      startTime: utcStartTime,
+      endTime: utcEndTime,
+      // Timezone
+      timeZoneId: effectiveTimeZoneId,
       cost: cost ? parseFloat(cost) : null,
       currency: currency || null,
       location: location || null,
@@ -333,6 +381,32 @@ export async function createReservationFromSuggestion({
     }
   }
 
+  // Calculate local date/time strings for wall_* fields
+  const formatDateForPg = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const formatTimeForPg = (d: Date): string => {
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+  
+  const wallStartDateStr = formatDateForPg(startDateTime);
+  const wallStartTimeStr = formatTimeForPg(startDateTime);
+  const wallEndDateStr = formatDateForPg(endDateTime);
+  const wallEndTimeStr = formatTimeForPg(endDateTime);
+  
+  // Calculate UTC times for sorting
+  let utcStartTime = startDateTime;
+  let utcEndTime = endDateTime;
+  if (timeZoneId) {
+    utcStartTime = localToUTC(wallStartDateStr, wallStartTimeStr, timeZoneId, false);
+    utcEndTime = localToUTC(wallEndDateStr, wallEndTimeStr, timeZoneId, true);
+  }
+
   // Create reservation with Google Places data and timezone
   const reservation = await prisma.reservation.create({
     data: {
@@ -340,8 +414,14 @@ export async function createReservationFromSuggestion({
       segmentId: targetSegment.id,
       reservationTypeId: reservationType.id,
       reservationStatusId: status.id,
-      startTime: startDateTime,
-      endTime: endDateTime,
+      // Local time fields (primary)
+      wall_start_date: stringToPgDate(wallStartDateStr),
+      wall_start_time: stringToPgTime(wallStartTimeStr),
+      wall_end_date: stringToPgDate(wallEndDateStr),
+      wall_end_time: stringToPgTime(wallEndTimeStr),
+      // UTC fields (for sorting)
+      startTime: utcStartTime,
+      endTime: utcEndTime,
       timeZoneId,
       timeZoneName,
       latitude,

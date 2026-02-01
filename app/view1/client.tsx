@@ -45,6 +45,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
   
   // Read active tab from URL or default to 'journey'
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'journey')
+  const scrollToId = searchParams.get('scrollTo')
   const [scrolled, setScrolled] = useState(false)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
   const [isExportingCalendar, setIsExportingCalendar] = useState(false)
@@ -125,7 +126,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'journey': return <JourneyView itinerary={itinerary} />
+      case 'journey': return <JourneyView itinerary={itinerary} scrollToId={scrollToId} />
       case 'weather': return <WeatherView itinerary={itinerary} />
       case 'todo': return <TodoView itinerary={itinerary} profileValues={profileValues} />
       case 'map': return <MapView itinerary={itinerary} />
@@ -137,7 +138,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
       case 'dining': return <DiningView itinerary={itinerary} />
       case 'documents': return <DocumentsView itinerary={itinerary} />
       case 'language': return <LanguageView itinerary={itinerary} />
-      default: return <JourneyView itinerary={itinerary} />
+      default: return <JourneyView itinerary={itinerary} scrollToId={scrollToId} />
     }
   }
 

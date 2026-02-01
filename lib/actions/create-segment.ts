@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getSegmentTimeZones } from "./timezone";
+import { localToUTC, stringToPgDate } from "@/lib/utils/local-time";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -44,8 +45,14 @@ export interface CreateSegmentParams {
   name: string;
   startLocation: string;
   endLocation: string;
+  /** @deprecated Use localStartDate instead */
   startTime?: Date;
+  /** @deprecated Use localEndDate instead */
   endTime?: Date;
+  /** Local start date in YYYY-MM-DD format */
+  localStartDate?: string;
+  /** Local end date in YYYY-MM-DD format */
+  localEndDate?: string;
   segmentType?: string;
   notes?: string;
 }
@@ -61,6 +68,8 @@ export async function createSegment({
   endLocation,
   startTime,
   endTime,
+  localStartDate,
+  localEndDate,
   segmentType = "Other",
   notes,
 }: CreateSegmentParams): Promise<string> {
@@ -127,6 +136,31 @@ export async function createSegment({
   });
   const nextOrder = existingSegments.length > 0 ? existingSegments[0].order + 1 : 0;
 
+  // Prepare timezone IDs
+  const startTzId = timezones.start?.timeZoneId ?? null;
+  const endTzId = timezones.end?.timeZoneId ?? startTzId;
+  
+  // Calculate local and UTC dates
+  let wallStartDate: Date | null = null;
+  let wallEndDate: Date | null = null;
+  let utcStartTime: Date | null = startTime || null;
+  let utcEndTime: Date | null = endTime || null;
+  
+  // If local date strings are provided, use them for wall_* fields and calculate UTC
+  if (localStartDate) {
+    wallStartDate = stringToPgDate(localStartDate);
+    if (startTzId) {
+      utcStartTime = localToUTC(localStartDate, null, startTzId, false);
+    }
+  }
+  
+  if (localEndDate) {
+    wallEndDate = stringToPgDate(localEndDate);
+    if (endTzId) {
+      utcEndTime = localToUTC(localEndDate, null, endTzId, true);
+    }
+  }
+
   // Create segment
   const segment = await prisma.segment.create({
     data: {
@@ -139,11 +173,16 @@ export async function createSegment({
       endTitle: endGeo.formatted,
       endLat: endGeo.lat,
       endLng: endGeo.lng,
-      startTime: startTime || null,
-      endTime: endTime || null,
-      startTimeZoneId: timezones.start?.timeZoneId ?? null,
+      // Local time fields (primary)
+      wall_start_date: wallStartDate,
+      wall_end_date: wallEndDate,
+      // UTC fields (for sorting)
+      startTime: utcStartTime,
+      endTime: utcEndTime,
+      // Timezone info
+      startTimeZoneId: startTzId,
       startTimeZoneName: timezones.start?.timeZoneName ?? null,
-      endTimeZoneId: timezones.end?.timeZoneId ?? null,
+      endTimeZoneId: endTzId,
       endTimeZoneName: timezones.end?.timeZoneName ?? null,
       notes: notes || null,
       order: nextOrder,

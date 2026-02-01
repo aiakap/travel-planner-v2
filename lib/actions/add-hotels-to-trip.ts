@@ -6,7 +6,8 @@ import { HotelExtraction } from "@/lib/schemas/hotel-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { createHotelCluster } from "@/lib/utils/hotel-clustering";
 import { findBestSegmentForHotel } from "@/lib/utils/segment-matching";
-import { getSegmentTimeZones } from "./timezone";
+import { getSegmentTimeZones, getTimeZoneForLocation } from "./timezone";
+import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -202,7 +203,41 @@ export async function addHotelsToTrip(params: {
     hotelData.bookingDate && hotelData.bookingDate !== "" ? `Booked: ${hotelData.bookingDate}` : null,
   ].filter(Boolean).join('\n');
 
-  // Create the hotel reservation
+  // Convert check-in/out times to 24-hour format
+  const checkInTime24 = convertTo24Hour(hotelData.checkInTime);
+  const checkOutTime24 = convertTo24Hour(hotelData.checkOutTime || "11:00 AM");
+
+  // Geocode hotel location to get timezone
+  const hotelLocation = hotelData.address || hotelData.hotelName;
+  const geo = await geocodeLocation(hotelLocation);
+  let hotelTimezone: string | null = null;
+  let hotelLat: number | null = null;
+  let hotelLng: number | null = null;
+  
+  if (geo && geo.lat !== 0 && geo.lng !== 0) {
+    hotelLat = geo.lat;
+    hotelLng = geo.lng;
+    const tzInfo = await getTimeZoneForLocation(geo.lat, geo.lng);
+    if (tzInfo) {
+      hotelTimezone = tzInfo.timeZoneId;
+      console.log(`[AddHotels] Timezone for ${hotelData.hotelName}: ${hotelTimezone}`);
+    }
+  }
+
+  // Calculate UTC times using hotel timezone
+  let utcStartTime: Date | null = null;
+  let utcEndTime: Date | null = null;
+
+  if (hotelTimezone) {
+    utcStartTime = localToUTC(hotelData.checkInDate, checkInTime24, hotelTimezone, false);
+    utcEndTime = localToUTC(hotelData.checkOutDate, checkOutTime24, hotelTimezone, false);
+  } else {
+    // Fallback: treat as local server time
+    utcStartTime = new Date(`${hotelData.checkInDate}T${checkInTime24}`);
+    utcEndTime = new Date(`${hotelData.checkOutDate}T${checkOutTime24}`);
+  }
+
+  // Create the hotel reservation with proper timezone handling
   const reservation = await prisma.reservation.create({
     data: {
       name: hotelData.hotelName,
@@ -210,11 +245,22 @@ export async function addHotelsToTrip(params: {
       reservationTypeId: hotelType.id,
       reservationStatusId: confirmedStatus.id,
       segmentId: targetSegmentId,
-      startTime: new Date(`${hotelData.checkInDate}T${convertTo24Hour(hotelData.checkInTime)}`),
-      endTime: new Date(`${hotelData.checkOutDate}T${convertTo24Hour(hotelData.checkOutTime || "11:00 AM")}`),
+      // Wall clock fields (what the user sees)
+      wall_start_date: stringToPgDate(hotelData.checkInDate),
+      wall_start_time: stringToPgTime(checkInTime24),
+      wall_end_date: stringToPgDate(hotelData.checkOutDate),
+      wall_end_time: stringToPgTime(checkOutTime24),
+      // UTC fields (for sorting/filtering)
+      startTime: utcStartTime,
+      endTime: utcEndTime,
+      // Location and timezone info
+      location: hotelData.address && hotelData.address !== "" ? hotelData.address : undefined,
+      latitude: hotelLat,
+      longitude: hotelLng,
+      timeZoneId: hotelTimezone,
+      // Other fields
       cost: hotelData.totalCost && hotelData.totalCost !== 0 ? hotelData.totalCost : undefined,
       currency: hotelData.currency && hotelData.currency !== "" ? hotelData.currency : undefined,
-      location: hotelData.address && hotelData.address !== "" ? hotelData.address : undefined,
       notes: notes || undefined,
     },
   });
