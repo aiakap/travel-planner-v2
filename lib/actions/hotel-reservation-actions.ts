@@ -4,6 +4,38 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
+import { getTimeZoneForLocation } from "./timezone";
+import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
+
+// Geocoding helper for hotel addresses
+async function geocodeAddress(address: string): Promise<{
+  lat: number;
+  lng: number;
+} | null> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
+    );
+    const data = await response.json();
+
+    if (data.status === "OK" && data.results[0]) {
+      const result = data.results[0];
+      return {
+        lat: result.geometry.location.lat,
+        lng: result.geometry.location.lng,
+      };
+    }
+  } catch (error) {
+    console.error("Hotel address geocoding error:", error);
+  }
+
+  return null;
+}
 
 interface HotelReservationData {
   hotelName: string;
@@ -97,18 +129,47 @@ export async function createHotelReservation(
       throw new Error("No segment ID provided and unable to create Stay segment");
     }
 
-    // Combine date and time for startTime and endTime
-    const startTime = data.checkInDate && data.checkInTime
-      ? new Date(`${data.checkInDate}T${convertTo24Hour(data.checkInTime)}`)
-      : data.checkInDate
-      ? new Date(data.checkInDate)
-      : null;
+    // Get timezone for hotel location
+    let hotelTimezone: string | null = null;
+    let hotelLat: number | null = null;
+    let hotelLng: number | null = null;
 
-    const endTime = data.checkOutDate && data.checkOutTime
-      ? new Date(`${data.checkOutDate}T${convertTo24Hour(data.checkOutTime)}`)
-      : data.checkOutDate
-      ? new Date(data.checkOutDate)
-      : null;
+    if (data.address) {
+      const geo = await geocodeAddress(data.address);
+      if (geo) {
+        hotelLat = geo.lat;
+        hotelLng = geo.lng;
+        const tzInfo = await getTimeZoneForLocation(geo.lat, geo.lng);
+        if (tzInfo) {
+          hotelTimezone = tzInfo.timeZoneId;
+          console.log(`[HotelReservation] Timezone for ${data.hotelName}: ${hotelTimezone}`);
+        }
+      }
+    }
+
+    // Convert times to 24-hour format
+    const checkInTime24 = data.checkInTime ? convertTo24Hour(data.checkInTime) : "15:00:00";
+    const checkOutTime24 = data.checkOutTime ? convertTo24Hour(data.checkOutTime) : "11:00:00";
+
+    // Calculate UTC times
+    let utcStartTime: Date | null = null;
+    let utcEndTime: Date | null = null;
+
+    if (data.checkInDate) {
+      if (hotelTimezone) {
+        utcStartTime = localToUTC(data.checkInDate, checkInTime24, hotelTimezone, false);
+      } else {
+        utcStartTime = new Date(`${data.checkInDate}T${checkInTime24}`);
+      }
+    }
+
+    if (data.checkOutDate) {
+      if (hotelTimezone) {
+        utcEndTime = localToUTC(data.checkOutDate, checkOutTime24, hotelTimezone, false);
+      } else {
+        utcEndTime = new Date(`${data.checkOutDate}T${checkOutTime24}`);
+      }
+    }
 
     // Create notes with room details
     const notes = [
@@ -120,7 +181,7 @@ export async function createHotelReservation(
       .filter(Boolean)
       .join(' • ');
 
-    // Create the reservation
+    // Create the reservation with proper timezone handling
     const reservation = await prisma.reservation.create({
       data: {
         name: data.hotelName,
@@ -130,11 +191,22 @@ export async function createHotelReservation(
         reservationTypeId: hotelType.id,
         reservationStatusId: confirmedStatus.id,
         segmentId: targetSegmentId,
-        startTime,
-        endTime,
+        // Wall clock fields (what the user sees)
+        wall_start_date: data.checkInDate ? stringToPgDate(data.checkInDate) : null,
+        wall_start_time: stringToPgTime(checkInTime24),
+        wall_end_date: data.checkOutDate ? stringToPgDate(data.checkOutDate) : null,
+        wall_end_time: stringToPgTime(checkOutTime24),
+        // UTC fields (for sorting/filtering)
+        startTime: utcStartTime,
+        endTime: utcEndTime,
+        // Location and timezone info
+        location: data.address,
+        latitude: hotelLat,
+        longitude: hotelLng,
+        timeZoneId: hotelTimezone,
+        // Other fields
         cost: data.totalCost,
         currency: data.currency || 'USD',
-        location: data.address,
         contactPhone: data.contactPhone,
         contactEmail: data.contactEmail,
         cancellationPolicy: data.cancellationPolicy,
@@ -211,19 +283,85 @@ export async function updateHotelReservation(
     if (data.url !== undefined) updateData.url = data.url;
     if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl;
 
-    // Handle date/time updates
-    if (data.checkInDate || data.checkInTime) {
-      const currentStart = reservation.startTime ? new Date(reservation.startTime) : new Date();
-      const newDate = data.checkInDate || currentStart.toISOString().split('T')[0];
-      const newTime = data.checkInTime || currentStart.toTimeString().slice(0, 5);
-      updateData.startTime = new Date(`${newDate}T${convertTo24Hour(newTime)}`);
-    }
+    // Handle date/time updates with timezone awareness
+    if (data.checkInDate || data.checkInTime || data.checkOutDate || data.checkOutTime) {
+      // Get timezone - use existing or geocode if address is provided/updated
+      let hotelTimezone = (reservation as any).timeZoneId || null;
+      
+      if (data.address && !hotelTimezone) {
+        const geo = await geocodeAddress(data.address);
+        if (geo) {
+          const tzInfo = await getTimeZoneForLocation(geo.lat, geo.lng);
+          if (tzInfo) {
+            hotelTimezone = tzInfo.timeZoneId;
+            updateData.timeZoneId = hotelTimezone;
+            updateData.latitude = geo.lat;
+            updateData.longitude = geo.lng;
+          }
+        }
+      }
 
-    if (data.checkOutDate || data.checkOutTime) {
-      const currentEnd = reservation.endTime ? new Date(reservation.endTime) : new Date();
-      const newDate = data.checkOutDate || currentEnd.toISOString().split('T')[0];
-      const newTime = data.checkOutTime || currentEnd.toTimeString().slice(0, 5);
-      updateData.endTime = new Date(`${newDate}T${convertTo24Hour(newTime)}`);
+      if (data.checkInDate || data.checkInTime) {
+        // Get current date/time from wall clock fields if available
+        const currentWallDate = (reservation as any).wall_start_date;
+        const currentWallTime = (reservation as any).wall_start_time;
+        
+        let newDate = data.checkInDate;
+        if (!newDate && currentWallDate) {
+          newDate = currentWallDate.toISOString().split('T')[0];
+        } else if (!newDate && reservation.startTime) {
+          newDate = reservation.startTime.toISOString().split('T')[0];
+        }
+        
+        let newTime24 = data.checkInTime ? convertTo24Hour(data.checkInTime) : "15:00:00";
+        if (!data.checkInTime && currentWallTime) {
+          const h = currentWallTime.getUTCHours().toString().padStart(2, '0');
+          const m = currentWallTime.getUTCMinutes().toString().padStart(2, '0');
+          newTime24 = `${h}:${m}:00`;
+        }
+        
+        if (newDate) {
+          updateData.wall_start_date = stringToPgDate(newDate);
+          updateData.wall_start_time = stringToPgTime(newTime24);
+          
+          if (hotelTimezone) {
+            updateData.startTime = localToUTC(newDate, newTime24, hotelTimezone, false);
+          } else {
+            updateData.startTime = new Date(`${newDate}T${newTime24}`);
+          }
+        }
+      }
+
+      if (data.checkOutDate || data.checkOutTime) {
+        // Get current date/time from wall clock fields if available
+        const currentWallDate = (reservation as any).wall_end_date;
+        const currentWallTime = (reservation as any).wall_end_time;
+        
+        let newDate = data.checkOutDate;
+        if (!newDate && currentWallDate) {
+          newDate = currentWallDate.toISOString().split('T')[0];
+        } else if (!newDate && reservation.endTime) {
+          newDate = reservation.endTime.toISOString().split('T')[0];
+        }
+        
+        let newTime24 = data.checkOutTime ? convertTo24Hour(data.checkOutTime) : "11:00:00";
+        if (!data.checkOutTime && currentWallTime) {
+          const h = currentWallTime.getUTCHours().toString().padStart(2, '0');
+          const m = currentWallTime.getUTCMinutes().toString().padStart(2, '0');
+          newTime24 = `${h}:${m}:00`;
+        }
+        
+        if (newDate) {
+          updateData.wall_end_date = stringToPgDate(newDate);
+          updateData.wall_end_time = stringToPgTime(newTime24);
+          
+          if (hotelTimezone) {
+            updateData.endTime = localToUTC(newDate, newTime24, hotelTimezone, false);
+          } else {
+            updateData.endTime = new Date(`${newDate}T${newTime24}`);
+          }
+        }
+      }
     }
 
     // Update notes if room details changed

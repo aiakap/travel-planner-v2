@@ -5,6 +5,40 @@ import { prisma } from "@/lib/prisma";
 import { TrainExtraction } from "@/lib/schemas/train-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { findBestSegmentForCluster } from "@/lib/utils/segment-matching";
+import { getTimeZoneForLocation } from "./timezone";
+import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
+
+// Geocoding helper for train stations
+async function geocodeStation(stationName: string, city: string): Promise<{
+  lat: number;
+  lng: number;
+} | null> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  try {
+    // Search for station + city for better results
+    const query = `${stationName} train station ${city}`;
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`
+    );
+    const data = await response.json();
+
+    if (data.status === "OK" && data.results[0]) {
+      const result = data.results[0];
+      return {
+        lat: result.geometry.location.lat,
+        lng: result.geometry.location.lng,
+      };
+    }
+  } catch (error) {
+    console.error("Station geocoding error:", error);
+  }
+
+  return null;
+}
 
 interface AddTrainsOptions {
   autoCluster?: boolean;
@@ -81,11 +115,54 @@ export async function addTrainsToTrip(
   for (const train of trainData.trains) {
     console.log(`🚂 Processing train ${train.trainNumber}: ${train.departureCity} → ${train.arrivalCity}`);
 
+    // Convert times to 24-hour format
+    const depTime24 = convertTo24Hour(train.departureTime);
+    const arrTime24 = convertTo24Hour(train.arrivalTime);
+
+    // Geocode stations and get timezones
+    const depGeo = await geocodeStation(train.departureStation, train.departureCity);
+    const arrGeo = await geocodeStation(train.arrivalStation, train.arrivalCity);
+
+    let depTimezone: string | null = null;
+    let arrTimezone: string | null = null;
+
+    if (depGeo) {
+      const tzInfo = await getTimeZoneForLocation(depGeo.lat, depGeo.lng);
+      if (tzInfo) {
+        depTimezone = tzInfo.timeZoneId;
+        console.log(`[AddTrains] Departure timezone (${train.departureStation}): ${depTimezone}`);
+      }
+    }
+
+    if (arrGeo) {
+      const tzInfo = await getTimeZoneForLocation(arrGeo.lat, arrGeo.lng);
+      if (tzInfo) {
+        arrTimezone = tzInfo.timeZoneId;
+        console.log(`[AddTrains] Arrival timezone (${train.arrivalStation}): ${arrTimezone}`);
+      }
+    }
+
+    // Calculate UTC times
+    let utcStartTime: Date;
+    let utcEndTime: Date;
+
+    if (depTimezone) {
+      utcStartTime = localToUTC(train.departureDate, depTime24, depTimezone, false);
+    } else {
+      utcStartTime = new Date(`${train.departureDate}T${depTime24}`);
+    }
+
+    if (arrTimezone) {
+      utcEndTime = localToUTC(train.arrivalDate, arrTime24, arrTimezone, false);
+    } else {
+      utcEndTime = new Date(`${train.arrivalDate}T${arrTime24}`);
+    }
+
     // Create a cluster for this single train (for segment matching)
     const singleTrainCluster = {
       flights: [train], // Reuse flight matching logic structure
-      startTime: new Date(`${train.departureDate}T${convertTo24Hour(train.departureTime)}`),
-      endTime: new Date(`${train.arrivalDate}T${convertTo24Hour(train.arrivalTime)}`),
+      startTime: utcStartTime,
+      endTime: utcEndTime,
       startLocation: train.departureCity,
       endLocation: train.arrivalCity,
       startAirport: train.departureStationCode || train.departureStation,
@@ -123,13 +200,13 @@ export async function addTrainsToTrip(
             tripId: trip.id,
             segmentTypeId: travelType.id,
             startTitle: train.departureStation,
-            startLat: 0, // TODO: Could geocode station locations
-            startLng: 0,
+            startLat: depGeo?.lat || 0,
+            startLng: depGeo?.lng || 0,
             endTitle: train.arrivalStation,
-            endLat: 0,
-            endLng: 0,
-            startTime: singleTrainCluster.startTime,
-            endTime: singleTrainCluster.endTime,
+            endLat: arrGeo?.lat || 0,
+            endLng: arrGeo?.lng || 0,
+            startTime: utcStartTime,
+            endTime: utcEndTime,
             order: trip.segments.length,
           },
         });
@@ -165,7 +242,7 @@ export async function addTrainsToTrip(
 
     const notes = notesLines.join('\n');
 
-    // Create the reservation
+    // Create the reservation with proper timezone handling
     const reservation = await prisma.reservation.create({
       data: {
         name: reservationName,
@@ -174,8 +251,18 @@ export async function addTrainsToTrip(
         reservationTypeId: trainType.id,
         reservationStatusId: confirmedStatus.id,
         segmentId: targetSegmentId,
-        startTime: singleTrainCluster.startTime,
-        endTime: singleTrainCluster.endTime,
+        // Wall clock fields (what the user sees)
+        wall_start_date: stringToPgDate(train.departureDate),
+        wall_start_time: stringToPgTime(depTime24),
+        wall_end_date: stringToPgDate(train.arrivalDate),
+        wall_end_time: stringToPgTime(arrTime24),
+        // UTC fields (for sorting/filtering)
+        startTime: utcStartTime,
+        endTime: utcEndTime,
+        // Timezone info
+        departureTimezone: depTimezone,
+        arrivalTimezone: arrTimezone,
+        // Other fields
         cost: trainData.trains.length > 1 
           ? trainData.totalCost / trainData.trains.length 
           : trainData.totalCost,
