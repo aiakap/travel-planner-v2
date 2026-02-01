@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
 import { X, MapPin, Calendar, Plane, Hotel, Utensils, Compass, Car, MessageCircle } from "lucide-react"
 import { chatAboutReservation } from "../lib/chat-integration"
+import { formatDateLong, getTripDates } from "../lib/view-utils"
 
 interface DayDetailsPanelProps {
   itinerary: ViewItinerary
@@ -24,24 +25,17 @@ function getReservationIcon(type: ViewReservation['type']) {
 }
 
 export function DayDetailsPanel({ itinerary, selectedDate, onClose }: DayDetailsPanelProps) {
-  // Find segment for this date
+  // Find segment for this date (UTC-safe using date string comparison)
   const segment = itinerary.segments.find(seg => {
-    const start = new Date(seg.startDate)
-    const end = new Date(seg.endDate)
-    const date = new Date(selectedDate)
-    return date >= start && date <= end
+    const segmentDates = getTripDates(seg.startDate, seg.endDate)
+    return segmentDates.includes(selectedDate)
   })
 
   // Get reservations for this date
   const reservations = segment?.reservations.filter(r => r.date === selectedDate) || []
 
-  const dateObj = new Date(selectedDate)
-  const formattedDate = dateObj.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric'
-  })
+  // UTC-safe date formatting
+  const formattedDate = formatDateLong(selectedDate)
 
   const segmentColor = segment ? itinerary.segmentColors[segment.id] : undefined
 

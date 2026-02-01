@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
 import { Calendar, MapPin, Plane, Hotel, Utensils, Compass, Car } from "lucide-react"
-import { getTripDates } from "../lib/view-utils"
+import { getTripDates, formatDateFull, formatDateWithWeekday, getDateNumber } from "../lib/view-utils"
 import { chatAboutSegment, chatAboutReservation } from "../lib/chat-integration"
 
 interface GanttViewProps {
@@ -41,7 +41,7 @@ export function GanttView({ itinerary }: GanttViewProps) {
           <div className="flex items-center gap-2 mb-2">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">
-              {new Date(itinerary.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} - {new Date(itinerary.endDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              {formatDateFull(itinerary.startDate)} - {formatDateFull(itinerary.endDate)}
             </span>
           </div>
           
@@ -52,11 +52,11 @@ export function GanttView({ itinerary }: GanttViewProps) {
                 <div
                   key={date}
                   className="flex-1 border-r border-border/30 last:border-r-0 flex items-center justify-center"
-                  title={new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  title={formatDateWithWeekday(date)}
                 >
                   {allDates.length <= 14 && (
                     <span className="text-xs text-muted-foreground">
-                      {new Date(date).getDate()}
+                      {getDateNumber(date)}
                     </span>
                   )}
                 </div>

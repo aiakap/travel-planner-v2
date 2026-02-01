@@ -11,8 +11,11 @@ interface DatePopoverProps {
   onChange: (date: string) => void;
   label?: string;
   minDate?: Date;
+  maxDate?: Date;
   className?: string;
   disabled?: boolean;
+  /** If true, allows selecting dates in the past. Default: false */
+  allowPastDates?: boolean;
 }
 
 export function DatePopover({
@@ -20,8 +23,10 @@ export function DatePopover({
   onChange,
   label,
   minDate,
+  maxDate,
   className = "",
   disabled = false,
+  allowPastDates = false,
 }: DatePopoverProps) {
   const [open, setOpen] = useState(false);
 
@@ -64,10 +69,21 @@ export function DatePopover({
             selected={value ? new Date(value) : undefined}
             onSelect={handleSelect}
             disabledDates={(date) => {
-              if (minDate) {
-                return date < minDate;
+              // Check minDate constraint
+              if (minDate && date < minDate) {
+                return true;
               }
-              return date < new Date();
+              // Check maxDate constraint
+              if (maxDate && date > maxDate) {
+                return true;
+              }
+              // Only restrict past dates if allowPastDates is false
+              if (!allowPastDates && !minDate) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return date < today;
+              }
+              return false;
             }}
           />
         </Popover.Content>

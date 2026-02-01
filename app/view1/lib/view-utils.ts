@@ -1,6 +1,12 @@
 import type { ViewItinerary, ViewSegment, ViewReservation } from "@/lib/itinerary-view-types"
 import { Plane, Hotel, Utensils, Car, MapPin, Home, Snowflake, Map as MapIcon } from "lucide-react"
 
+// UTC-safe month/day names to avoid hydration mismatches
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
 // Icon mapping for reservation types
 export function getIconForType(type: ViewReservation['type']) {
   const iconMap = {
@@ -28,7 +34,7 @@ export function getChapterColor(segmentType: string) {
   return 'bg-slate-100 text-slate-700 border-slate-200'
 }
 
-// Generate months array from date range
+// Generate months array from date range (UTC-safe)
 export function generateMonths(startDate: string, endDate: string) {
   const start = new Date(startDate)
   const end = new Date(endDate)
@@ -36,16 +42,16 @@ export function generateMonths(startDate: string, endDate: string) {
   
   const current = new Date(start)
   while (current <= end) {
-    const monthName = current.toLocaleDateString('en-US', { month: 'long' })
-    const year = current.getFullYear()
-    const month = current.getMonth()
+    const monthName = MONTHS_LONG[current.getUTCMonth()]
+    const year = current.getUTCFullYear()
+    const month = current.getUTCMonth()
     
     // Get days for this month that are in the trip range
-    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
     const days: number[] = []
     
     for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day)
+      const date = new Date(Date.UTC(year, month, day))
       if (date >= start && date <= end) {
         days.push(day)
       }
@@ -56,14 +62,14 @@ export function generateMonths(startDate: string, endDate: string) {
     }
     
     // Move to next month
-    current.setMonth(current.getMonth() + 1)
-    current.setDate(1)
+    current.setUTCMonth(current.getUTCMonth() + 1)
+    current.setUTCDate(1)
   }
   
   return months
 }
 
-// Generate date range array for a segment
+// Generate date range array for a segment (UTC-safe)
 export function generateDateRange(startDate: string, endDate: string): string[] {
   const start = new Date(startDate)
   const end = new Date(endDate)
@@ -71,19 +77,148 @@ export function generateDateRange(startDate: string, endDate: string): string[] 
   
   const current = new Date(start)
   while (current <= end) {
-    const month = current.toLocaleDateString('en-US', { month: 'short' })
-    const day = current.getDate()
+    const month = MONTHS_SHORT[current.getUTCMonth()]
+    const day = current.getUTCDate()
     dates.push(`${month}-${day}`)
-    current.setDate(current.getDate() + 1)
+    current.setUTCDate(current.getUTCDate() + 1)
   }
   
   return dates
 }
 
-// Format date for display
+// Format date for display (UTC-safe) - "Jan 29"
 export function formatDate(dateString: string): string {
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return `${MONTHS_SHORT[date.getUTCMonth()]} ${date.getUTCDate()}`
+}
+
+// Alias for formatDate - "Jan 29"
+export const formatDateCompact = formatDate
+
+// Format date with full weekday, month, day, year (UTC-safe) - "Monday, January 29, 2026"
+export function formatDateLong(dateString: string): string {
+  const date = new Date(dateString)
+  const weekday = DAYS_LONG[date.getUTCDay()]
+  const month = MONTHS_LONG[date.getUTCMonth()]
+  const day = date.getUTCDate()
+  const year = date.getUTCFullYear()
+  return `${weekday}, ${month} ${day}, ${year}`
+}
+
+// Format date with short weekday (UTC-safe) - "Mon, Jan 29"
+export function formatDateWithWeekday(dateString: string): string {
+  const date = new Date(dateString)
+  const weekday = DAYS_SHORT[date.getUTCDay()]
+  const month = MONTHS_SHORT[date.getUTCMonth()]
+  const day = date.getUTCDate()
+  return `${weekday}, ${month} ${day}`
+}
+
+// Format date with long weekday and full month (UTC-safe) - "Monday, January 29"
+export function formatDateWithLongWeekday(dateString: string): string {
+  const date = new Date(dateString)
+  const weekday = DAYS_LONG[date.getUTCDay()]
+  const month = MONTHS_LONG[date.getUTCMonth()]
+  const day = date.getUTCDate()
+  return `${weekday}, ${month} ${day}`
+}
+
+// Format date with full month, day, year but no weekday (UTC-safe) - "January 29, 2026"
+export function formatDateFull(dateString: string): string {
+  const date = new Date(dateString)
+  const month = MONTHS_LONG[date.getUTCMonth()]
+  const day = date.getUTCDate()
+  const year = date.getUTCFullYear()
+  return `${month} ${day}, ${year}`
+}
+
+// Get day number from date string (UTC-safe) - 29
+export function getDateNumber(dateString: string): number {
+  const date = new Date(dateString)
+  return date.getUTCDate()
+}
+
+// Get short weekday from date string (UTC-safe) - "Mon"
+export function getWeekdayShort(dateString: string): string {
+  const date = new Date(dateString)
+  return DAYS_SHORT[date.getUTCDay()]
+}
+
+// Get long weekday from date string (UTC-safe) - "Monday"
+export function getWeekdayLong(dateString: string): string {
+  const date = new Date(dateString)
+  return DAYS_LONG[date.getUTCDay()]
+}
+
+// Get short month from date string (UTC-safe) - "Jan"
+export function getMonthShort(dateString: string): string {
+  const date = new Date(dateString)
+  return MONTHS_SHORT[date.getUTCMonth()]
+}
+
+// Get long month from date string (UTC-safe) - "January"
+export function getMonthLong(dateString: string): string {
+  const date = new Date(dateString)
+  return MONTHS_LONG[date.getUTCMonth()]
+}
+
+// Get year from date string (UTC-safe) - 2026
+export function getYear(dateString: string): number {
+  const date = new Date(dateString)
+  return date.getUTCFullYear()
+}
+
+// Format date range (UTC-safe) - "Jan 29 - Feb 5" or "Jan 29 - 31" if same month
+export function formatDateRangeUTC(startDate: string, endDate: string): string {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  
+  const startMonth = MONTHS_SHORT[start.getUTCMonth()]
+  const endMonth = MONTHS_SHORT[end.getUTCMonth()]
+  const startDay = start.getUTCDate()
+  const endDay = end.getUTCDate()
+  
+  if (startMonth === endMonth) {
+    return `${startMonth} ${startDay} - ${endDay}`
+  }
+  
+  return `${startMonth} ${startDay} - ${endMonth} ${endDay}`
+}
+
+// Get all trip dates as YYYY-MM-DD strings (UTC-safe)
+export function getTripDates(startDate: string, endDate: string): string[] {
+  const dates: string[] = []
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  
+  const current = new Date(start)
+  while (current <= end) {
+    // Format as YYYY-MM-DD using UTC methods
+    const year = current.getUTCFullYear()
+    const month = String(current.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(current.getUTCDate()).padStart(2, '0')
+    dates.push(`${year}-${month}-${day}`)
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+  
+  return dates
+}
+
+// Group reservations by date (uses reservation.date which is already YYYY-MM-DD)
+export function groupReservationsByDate(itinerary: ViewItinerary): Record<string, ViewSegment['reservations']> {
+  const grouped: Record<string, ViewSegment['reservations']> = {}
+  
+  itinerary.segments.forEach(segment => {
+    segment.reservations.forEach(reservation => {
+      const date = reservation.date
+      if (!grouped[date]) {
+        grouped[date] = []
+      }
+      grouped[date].push(reservation)
+    })
+  })
+  
+  return grouped
 }
 
 // Map itinerary to calendar data structure
@@ -108,9 +243,9 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
         const date = new Date(res.date)
         return {
           id: res.id,
-          date: date.getDate().toString(),
-          month: date.toLocaleDateString('en-US', { month: 'short' }),
-          day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+          date: date.getUTCDate().toString(),
+          month: MONTHS_SHORT[date.getUTCMonth()],
+          day: DAYS_SHORT[date.getUTCDay()],
           time: res.time,
           title: res.title,
           icon: getIconForType(res.type),
@@ -121,7 +256,7 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
   }
 }
 
-// Generate all days in trip for calendar grid
+// Generate all days in trip for calendar grid (UTC-safe)
 export function generateAllDays(startDate: string, endDate: string) {
   const start = new Date(startDate)
   const end = new Date(endDate)
@@ -137,9 +272,9 @@ export function generateAllDays(startDate: string, endDate: string) {
   let idx = 0
   
   while (current <= end) {
-    const month = current.toLocaleDateString('en-US', { month: 'long' })
-    const monthShort = current.toLocaleDateString('en-US', { month: 'short' })
-    const date = current.getDate()
+    const month = MONTHS_LONG[current.getUTCMonth()]
+    const monthShort = MONTHS_SHORT[current.getUTCMonth()]
+    const date = current.getUTCDate()
     
     days.push({
       date,
@@ -149,19 +284,19 @@ export function generateAllDays(startDate: string, endDate: string) {
       dateObj: new Date(current)
     })
     
-    current.setDate(current.getDate() + 1)
+    current.setUTCDate(current.getUTCDate() + 1)
     idx++
   }
   
   return days
 }
 
-// Get day of week for index
+// Get day of week for index (UTC-safe)
 export function getDayOfWeek(idx: number, startDate: string): string {
   const start = new Date(startDate)
   const date = new Date(start)
-  date.setDate(date.getDate() + idx)
-  return date.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 2)
+  date.setUTCDate(date.getUTCDate() + idx)
+  return DAYS_SHORT[date.getUTCDay()].slice(0, 2)
 }
 
 // Detect if trip is round-trip (returns to starting location)

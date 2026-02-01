@@ -436,6 +436,7 @@ export function SegmentEditClient({
                     }}
                     label="Select start date"
                     className="w-full justify-start text-sm"
+                    allowPastDates
                   />
                 </div>
                 <div>
@@ -456,6 +457,7 @@ export function SegmentEditClient({
                     label="Select end date"
                     minDate={startDate ? new Date(startDate) : undefined}
                     className="w-full justify-start text-sm"
+                    allowPastDates
                   />
                 </div>
               </div>

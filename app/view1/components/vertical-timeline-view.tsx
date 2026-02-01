@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
 import { ChevronDown, ChevronRight, MessageCircle, Calendar, MapPin, Plane, Hotel, Utensils, Compass, Car } from "lucide-react"
-import { getTripDates } from "../lib/view-utils"
+import { getTripDates, formatDateCompact, formatDateWithLongWeekday } from "../lib/view-utils"
 import { chatAboutSegment, chatAboutReservation } from "../lib/chat-integration"
 
 interface VerticalTimelineViewProps {
@@ -95,7 +95,7 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
-                      {new Date(segment.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(segment.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {formatDateCompact(segment.startDate)} - {formatDateCompact(segment.endDate)}
                     </span>
                     <span className="flex items-center gap-1">
                       <MapPin className="h-3.5 w-3.5" />
@@ -155,7 +155,7 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
                         {/* Day header */}
                         <div className="mb-3">
                           <div className="text-sm font-semibold">
-                            {new Date(day.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                            {formatDateWithLongWeekday(day.date)}
                           </div>
                         </div>
 

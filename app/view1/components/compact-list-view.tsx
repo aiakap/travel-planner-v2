@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
 import { ChevronDown, ChevronRight, Calendar, MapPin, MessageCircle } from "lucide-react"
 import { chatAboutSegment, chatAboutReservation } from "../lib/chat-integration"
+import { formatDateCompact } from "../lib/view-utils"
 
 interface CompactListViewProps {
   itinerary: ViewItinerary
@@ -75,7 +76,7 @@ export function CompactListView({ itinerary }: CompactListViewProps) {
                   <div className="text-xs text-muted-foreground space-y-0.5">
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      {new Date(segment.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(segment.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {formatDateCompact(segment.startDate)} - {formatDateCompact(segment.endDate)}
                     </div>
                     <div className="flex items-center gap-1">
                       <MapPin className="h-3 w-3" />
@@ -132,7 +133,7 @@ export function CompactListView({ itinerary }: CompactListViewProps) {
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          {reservation.date} • {reservation.time}
+                          {formatDateCompact(reservation.date)} • {reservation.time}
                           {reservation.location && ` • ${reservation.location}`}
                         </div>
                       </div>

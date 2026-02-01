@@ -8,6 +8,13 @@ import { MessageCircle, Edit2, MapPin, Clock, Plane, Hotel, Utensils, Car, Compa
 import { chatAboutSegment, chatAboutReservation, editReservation } from "../lib/chat-integration"
 import { useOptimisticDelete } from "@/hooks/use-optimistic-delete"
 import { deleteReservation } from "@/lib/actions/delete-reservation"
+import { 
+  generateAllDays, 
+  formatDateCompact, 
+  getDateNumber, 
+  getWeekdayShort,
+  getTripDates
+} from "../lib/view-utils"
 
 interface TripCalendarProps {
   itinerary: ViewItinerary
@@ -63,7 +70,7 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
     }))
   }
 
-  // Transform itinerary data into calendar structure
+  // Transform itinerary data into calendar structure (keeping dates as strings for UTC-safe handling)
   const calendarData = {
     segments: optimisticItinerary.segments.map(segment => {
       const segmentColor = itinerary.segmentColors[segment.id]
@@ -73,8 +80,10 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
       return {
         id: segment.id,
         title: segment.title,
-        startDate: new Date(segment.startDate),
-        endDate: new Date(segment.endDate),
+        startDate: segment.startDate,
+        endDate: segment.endDate,
+        // Pre-compute segment date range for efficient lookup
+        dateRange: getTripDates(segment.startDate, segment.endDate),
         location: segment.startTitle === segment.endTitle 
           ? segment.endTitle 
           : `${segment.startTitle} ➝ ${segment.endTitle}`,
@@ -93,30 +102,22 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
     })
   }
 
-  // Generate calendar days
-  const generateCalendarDays = () => {
+  // Generate calendar days using UTC-safe function
+  const calendarDays = useMemo(() => {
     if (calendarData.segments.length === 0) return []
     
-    const startDate = new Date(optimisticItinerary.startDate)
-    const endDate = new Date(optimisticItinerary.endDate)
-    const days = []
+    // Use UTC-safe generateAllDays and transform to the format we need
+    const allDays = generateAllDays(optimisticItinerary.startDate, optimisticItinerary.endDate)
+    const tripDates = getTripDates(optimisticItinerary.startDate, optimisticItinerary.endDate)
     
-    const current = new Date(startDate)
-    while (current <= endDate) {
-      days.push({
-        date: current.getDate(),
-        month: current.toLocaleDateString('en-US', { month: 'short' }),
-        day: current.toLocaleDateString('en-US', { weekday: 'short' }),
-        fullDate: current.toISOString().split('T')[0],
-        dateObj: new Date(current)
-      })
-      current.setDate(current.getDate() + 1)
-    }
-    
-    return days
-  }
-
-  const calendarDays = generateCalendarDays()
+    return allDays.map((day, idx) => ({
+      date: day.date,
+      month: day.month.slice(0, 3), // Convert "January" to "Jan"
+      day: getWeekdayShort(tripDates[idx]),
+      fullDate: tripDates[idx],
+      dateObj: day.dateObj
+    }))
+  }, [optimisticItinerary.startDate, optimisticItinerary.endDate, calendarData.segments.length])
 
   // Group days by month
   const daysByMonth = calendarDays.reduce((acc, day) => {
@@ -134,10 +135,10 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
     )
   }
 
-  // Get segment for a specific date
-  const getSegmentForDate = (dateObj: Date) => {
+  // Get segment for a specific date (UTC-safe using string comparison)
+  const getSegmentForDate = (fullDate: string) => {
     return calendarData.segments.find(segment => 
-      dateObj >= segment.startDate && dateObj <= segment.endDate
+      segment.dateRange.includes(fullDate)
     )
   }
 
@@ -192,7 +193,7 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
               {calendarDays.map((day, idx) => {
                 const hasMoment = hasMoments(day.fullDate)
                 const isSelected = selectedDate === day.fullDate
-                const segment = getSegmentForDate(day.dateObj)
+                const segment = getSegmentForDate(day.fullDate)
 
                 return (
                   <button 
@@ -258,7 +259,7 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 font-medium">
                       <span>
-                        {segment.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {segment.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {formatDateCompact(segment.startDate)} - {formatDateCompact(segment.endDate)}
                       </span>
                       <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                       <span className="flex items-center gap-1">
@@ -297,10 +298,10 @@ export function TripCalendar({ itinerary }: TripCalendarProps) {
                         {/* Time & Date Column */}
                         <div className="flex flex-col items-center min-w-[45px] text-center">
                           <span className="text-xs font-bold text-slate-900 leading-none">
-                            {dayInfo?.date || new Date(moment.date).getDate()}
+                            {dayInfo?.date || getDateNumber(moment.date)}
                           </span>
                           <span className="text-[9px] uppercase font-bold text-slate-400 mb-1">
-                            {dayInfo?.day || new Date(moment.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                            {dayInfo?.day || getWeekdayShort(moment.date)}
                           </span>
                           <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none">
                             {moment.time}

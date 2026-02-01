@@ -6,7 +6,10 @@ import { Badge } from "@/components/ui/badge"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useState, useMemo } from "react"
-import { groupReservationsByDate } from "../lib/view-utils"
+import { groupReservationsByDate, getTripDates, getMonthLong, getYear } from "../lib/view-utils"
+
+// Month names array for consistent UTC-safe display
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 interface CalendarGridProps {
   itinerary: ViewItinerary
@@ -15,72 +18,87 @@ interface CalendarGridProps {
 }
 
 export function CalendarGrid({ itinerary, selectedDate, onDateSelect }: CalendarGridProps) {
+  // Parse trip dates in UTC to avoid timezone issues
   const tripStart = new Date(itinerary.startDate)
   const tripEnd = new Date(itinerary.endDate)
   
-  const [currentMonth, setCurrentMonth] = useState(tripStart.getMonth())
-  const [currentYear, setCurrentYear] = useState(tripStart.getFullYear())
+  // Use UTC methods to get initial month/year to avoid timezone shifts
+  const [currentMonth, setCurrentMonth] = useState(tripStart.getUTCMonth())
+  const [currentYear, setCurrentYear] = useState(tripStart.getUTCFullYear())
+  
+  // Pre-compute trip date strings for efficient lookup
+  const tripDateStrings = useMemo(
+    () => new Set(getTripDates(itinerary.startDate, itinerary.endDate)),
+    [itinerary.startDate, itinerary.endDate]
+  )
 
   // Group reservations by date
   const reservationsByDate = useMemo(() => groupReservationsByDate(itinerary), [itinerary])
 
-  // Get segment for each date
+  // Get segment for each date (UTC-safe using getTripDates)
   const segmentsByDate = useMemo(() => {
     const map: Record<string, typeof itinerary.segments[0]> = {}
     itinerary.segments.forEach(segment => {
-      const start = new Date(segment.startDate)
-      const end = new Date(segment.endDate)
-      let current = new Date(start)
-      
-      while (current <= end) {
-        const dateStr = current.toISOString().split('T')[0]
+      const segmentDates = getTripDates(segment.startDate, segment.endDate)
+      segmentDates.forEach(dateStr => {
         if (!map[dateStr]) {
           map[dateStr] = segment
         }
-        current.setDate(current.getDate() + 1)
-      }
+      })
     })
     return map
   }, [itinerary])
 
-  // Generate calendar days for current month
+  // Helper to format date as YYYY-MM-DD using UTC
+  const formatDateStr = (year: number, month: number, day: number): string => {
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
+  // Generate calendar days for current month (UTC-safe)
   const calendarDays = useMemo(() => {
-    const firstDay = new Date(currentYear, currentMonth, 1)
-    const lastDay = new Date(currentYear, currentMonth + 1, 0)
-    const startingDayOfWeek = firstDay.getDay()
+    // Use Date.UTC for consistent UTC handling
+    const firstDayTimestamp = Date.UTC(currentYear, currentMonth, 1)
+    const firstDay = new Date(firstDayTimestamp)
+    const startingDayOfWeek = firstDay.getUTCDay()
     
-    const days: Array<{ date: Date; isCurrentMonth: boolean; dateStr: string }> = []
+    // Get number of days in current month
+    const daysInMonth = new Date(Date.UTC(currentYear, currentMonth + 1, 0)).getUTCDate()
+    
+    const days: Array<{ dayNumber: number; isCurrentMonth: boolean; dateStr: string }> = []
     
     // Add previous month days
+    const prevMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
+    const daysInPrevMonth = new Date(Date.UTC(prevMonthYear, prevMonth + 1, 0)).getUTCDate()
+    
     for (let i = 0; i < startingDayOfWeek; i++) {
-      const date = new Date(firstDay)
-      date.setDate(date.getDate() - (startingDayOfWeek - i))
+      const day = daysInPrevMonth - startingDayOfWeek + i + 1
       days.push({
-        date,
+        dayNumber: day,
         isCurrentMonth: false,
-        dateStr: date.toISOString().split('T')[0]
+        dateStr: formatDateStr(prevMonthYear, prevMonth, day)
       })
     }
     
     // Add current month days
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      const date = new Date(currentYear, currentMonth, i)
+    for (let i = 1; i <= daysInMonth; i++) {
       days.push({
-        date,
+        dayNumber: i,
         isCurrentMonth: true,
-        dateStr: date.toISOString().split('T')[0]
+        dateStr: formatDateStr(currentYear, currentMonth, i)
       })
     }
     
     // Add next month days to complete the grid
     const remainingDays = 42 - days.length // 6 weeks * 7 days
+    const nextMonthYear = currentMonth === 11 ? currentYear + 1 : currentYear
+    const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1
+    
     for (let i = 1; i <= remainingDays; i++) {
-      const date = new Date(lastDay)
-      date.setDate(date.getDate() + i)
       days.push({
-        date,
+        dayNumber: i,
         isCurrentMonth: false,
-        dateStr: date.toISOString().split('T')[0]
+        dateStr: formatDateStr(nextMonthYear, nextMonth, i)
       })
     }
     
@@ -105,7 +123,8 @@ export function CalendarGrid({ itinerary, selectedDate, onDateSelect }: Calendar
     }
   }
 
-  const monthName = new Date(currentYear, currentMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  // UTC-safe month name display
+  const monthName = `${MONTHS_LONG[currentMonth]} ${currentYear}`
 
   return (
     <Card className="p-4">
@@ -133,8 +152,9 @@ export function CalendarGrid({ itinerary, selectedDate, onDateSelect }: Calendar
 
       {/* Calendar Grid */}
       <div className="grid grid-cols-7 gap-2">
-        {calendarDays.map(({ date, isCurrentMonth, dateStr }, index) => {
-          const isInTrip = date >= tripStart && date <= tripEnd
+        {calendarDays.map(({ dayNumber, isCurrentMonth, dateStr }, index) => {
+          // Use string-based trip date checking (UTC-safe)
+          const isInTrip = tripDateStrings.has(dateStr)
           const segment = segmentsByDate[dateStr]
           const reservations = reservationsByDate[dateStr] || []
           const isSelected = selectedDate === dateStr
@@ -160,7 +180,7 @@ export function CalendarGrid({ itinerary, selectedDate, onDateSelect }: Calendar
             >
               <div className="flex flex-col items-center justify-center h-full">
                 <span className={`text-sm font-medium ${isInTrip ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {date.getDate()}
+                  {dayNumber}
                 </span>
                 {reservations.length > 0 && (
                   <Badge
