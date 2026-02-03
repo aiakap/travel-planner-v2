@@ -222,6 +222,14 @@ export async function POST(request: NextRequest) {
     console.log('📊 AI Response Type:', typeof result.object);
     console.log('📊 AI Response Keys:', Object.keys(result.object || {}).join(', '));
 
+    // Log extracted times prominently for debugging timezone issues
+    if (result.object.flights && Array.isArray(result.object.flights)) {
+      console.log('\n⏰ EXTRACTED TIMES (should match email verbatim):');
+      for (const f of result.object.flights) {
+        console.log(`   ${f.flightNumber}: DEP ${f.departureTime} (${f.departureAirport}) → ARR ${f.arrivalTime} (${f.arrivalAirport})`);
+      }
+    }
+
     // Validate the extracted data
     console.log('\n✅ Starting validation with validator:', validator.name);
     const validation = validator(result.object);

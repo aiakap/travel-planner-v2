@@ -196,10 +196,12 @@ async function runTests() {
 
     try {
       // Test stringToPgTime
+      // Note: stringToPgTime creates a Date using local time constructor,
+      // so we must use getHours()/getMinutes() to read back the values
       const time = stringToPgTime("14:30");
       assert(time !== null, "stringToPgTime should not return null");
-      assert(time!.getUTCHours() === 14, "Hours should be 14");
-      assert(time!.getUTCMinutes() === 30, "Minutes should be 30");
+      assert(time!.getHours() === 14, "Hours should be 14");
+      assert(time!.getMinutes() === 30, "Minutes should be 30");
       logTest("stringToPgTime() parses correctly", true);
     } catch (e: any) {
       logTest("stringToPgTime() parses correctly", false, e.message);

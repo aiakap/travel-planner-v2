@@ -9,6 +9,25 @@ import { flightExtractionSchema } from '@/lib/schemas/flight-extraction-schema';
 
 export const FLIGHT_EXTRACTION_PROMPT = `## Flight Booking Extraction
 
+### ⚠️ CRITICAL: DO NOT MODIFY TIMES OR DATES ⚠️
+
+**VERBATIM EXTRACTION ONLY** - Copy times AND dates EXACTLY as they appear in the email.
+
+**TIMES:**
+- If email shows "10:15 AM" → extract "10:15 AM" (NOT "6:15 PM" or "18:15")
+- If email shows "02:50 PM" → extract "02:50 PM" (NOT "5:50 AM" or "05:50")
+- Do NOT convert between timezones
+- Do NOT interpret times as UTC
+- Airlines ALWAYS show local airport times - just copy them verbatim
+
+**DATES:**
+- If email shows arrival on "Feb 7" → extract "2026-02-07" (NOT Feb 8)
+- Do NOT calculate arrival dates based on departure date + flight duration
+- Do NOT assume arrival is the "next day" just because arrival time < departure time
+- International flights crossing the date line often arrive on the SAME day or EARLIER
+- Example: Tokyo (HND) to San Francisco (SFO) departing Feb 7 at 4:25 PM arrives Feb 7 at 9:10 AM
+- ALWAYS use the date shown in the email, not a calculated date
+
 Extract flight booking information from the confirmation email.
 
 ### Required Information
@@ -50,7 +69,32 @@ For each flight in the itinerary, extract:
 - Departure/arrival times should include AM/PM
 - Airport codes are always 3 letters (IATA codes)
 - Passenger names may be in "LAST/FIRST" format
-- Some flights are operated by partner airlines (codeshare)`;
+- Some flights are operated by partner airlines (codeshare)
+
+### Critical Time & Date Rules
+
+- **IMPORTANT**: Departure and arrival times/dates are ALWAYS in LOCAL TIME at that airport
+- A "10:15 AM" departure from SFO means 10:15 AM Pacific Time, NOT UTC
+- A "02:50 PM" arrival in HND means 2:50 PM Japan Time, NOT UTC
+- Extract times EXACTLY as written in the email - do not convert to/from UTC
+- If the email shows "10:15 AM" - extract "10:15 AM" (not "6:15 PM" or any other time)
+- Times shown in airline confirmations are the wall clock times passengers see at the airport
+
+**DATE LINE CROSSINGS:**
+- For transpacific flights (e.g., Asia to US), arrival date may be the SAME as departure date
+- Do NOT add a day just because arrival time is earlier than departure time
+- Example: HND→SFO departs Feb 7 at 4:25 PM, arrives Feb 7 at 9:10 AM ← CORRECT (same day)
+- The email shows the actual calendar date at each location - copy it exactly
+
+### Common Format Examples
+
+| Email Shows | Extract As |
+|-------------|------------|
+| "10:15 AM" | "10:15 AM" |
+| "02:50 PM" | "02:50 PM" |
+| "2:50 PM" | "2:50 PM" |
+| "14:50" | "2:50 PM" |
+| "10:15" | "10:15 AM" (assume AM for times before noon without AM/PM) |`;
 
 export const flightExtractionPlugin: ExtractionPlugin = {
   id: 'flight-extraction',

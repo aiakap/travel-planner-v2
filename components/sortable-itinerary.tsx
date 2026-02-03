@@ -17,6 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useId, useState } from "react";
 import { formatDateTimeInTimeZone } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/utils/local-time";
 import Link from "next/link";
 import { Button } from "./ui/button";
 import { Plane, Hotel, UtensilsCrossed, Ticket, MapPin } from "lucide-react";
@@ -95,24 +96,18 @@ function SortableItem({
         </div>
         <p className="text-sm text-gray-500">
           Start: {item.startTitle}
-          {item.startTime
-            ? ` • ${formatDateTimeInTimeZone(
-                new Date(item.startTime),
-                timeZoneInfo?.startTimeZoneId
-              )}`
-            : " • No start time"}
+          {item.wall_start_date
+            ? ` • ${formatLocalDate(item.wall_start_date, 'long')}`
+            : " • No start date"}
           {timeZoneInfo?.startTimeZoneName
             ? ` • ${timeZoneInfo.startTimeZoneName}`
             : ""}
         </p>
         <p className="text-sm text-gray-500">
           End: {item.endTitle}
-          {item.endTime
-            ? ` • ${formatDateTimeInTimeZone(
-                new Date(item.endTime),
-                timeZoneInfo?.endTimeZoneId
-              )}`
-            : " • No end time"}
+          {item.wall_end_date
+            ? ` • ${formatLocalDate(item.wall_end_date, 'long')}`
+            : " • No end date"}
           {timeZoneInfo?.endTimeZoneName
             ? ` • ${timeZoneInfo.endTimeZoneName}`
             : ""}

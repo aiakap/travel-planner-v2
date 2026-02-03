@@ -392,6 +392,57 @@ export function getDayOfWeek(idx: number, startDate: string): string {
   return DAYS_SHORT[date.getUTCDay()].slice(0, 2)
 }
 
+// Segment day with grouped moments
+export interface SegmentDay {
+  date: number
+  month: string
+  monthShort: string
+  fullId: string
+  dateObj: Date
+  weekday: string
+  moments: CalendarMoment[]
+}
+
+// Generate all days in a segment with their moments grouped (UTC-safe)
+export function getSegmentDaysWithMoments(
+  segmentStartDate: string,
+  segmentEndDate: string,
+  moments: CalendarMoment[]
+): SegmentDay[] {
+  const start = new Date(segmentStartDate)
+  const end = new Date(segmentEndDate)
+  const days: SegmentDay[] = []
+  
+  const current = new Date(start)
+  
+  while (current <= end) {
+    const monthShort = MONTHS_SHORT[current.getUTCMonth()]
+    const month = MONTHS_LONG[current.getUTCMonth()]
+    const date = current.getUTCDate()
+    const fullId = `${monthShort}-${date}`
+    const weekday = DAYS_SHORT[current.getUTCDay()]
+    
+    // Filter moments that belong to this day
+    const dayMoments = moments.filter(m => 
+      m.month === monthShort && m.date === date.toString()
+    )
+    
+    days.push({
+      date,
+      month,
+      monthShort,
+      fullId,
+      dateObj: new Date(current),
+      weekday,
+      moments: dayMoments
+    })
+    
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+  
+  return days
+}
+
 // Detect if trip is round-trip (returns to starting location)
 export function detectRoundTrip(itinerary: ViewItinerary): { isRoundTrip: boolean, homeLocation: string } {
   if (itinerary.segments.length === 0) {

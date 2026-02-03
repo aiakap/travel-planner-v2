@@ -393,6 +393,12 @@ ${text}`;
     if (type === "flight" && result.object.flights) {
       console.log('[Extract] Validating flights:', JSON.stringify(result.object.flights, null, 2));
       
+      // Log extracted times prominently for debugging timezone issues
+      console.log('[Extract] ⏰ EXTRACTED TIMES (should match email verbatim):');
+      for (const f of result.object.flights) {
+        console.log(`[Extract]   ${f.flightNumber}: DEP ${f.departureTime} (${f.departureAirport}) → ARR ${f.arrivalTime} (${f.arrivalAirport})`);
+      }
+      
       for (let i = 0; i < result.object.flights.length; i++) {
         const flight = result.object.flights[i];
         const flightId = flight.flightNumber || `Flight ${i + 1}`;

@@ -24,6 +24,10 @@ export function formatDateTimeInTimeZone(
   }
 }
 
+/**
+ * @deprecated Use formatWallDateTime() instead for reading from wall_* database fields.
+ * This function uses browser local timezone which causes issues with UTC timestamps.
+ */
 export function formatForDateTimeLocal(value: Date): string {
   const pad = (input: number) => String(input).padStart(2, "0");
   return [
@@ -32,6 +36,68 @@ export function formatForDateTimeLocal(value: Date): string {
     )}`,
     `${pad(value.getHours())}:${pad(value.getMinutes())}`,
   ].join("T");
+}
+
+/**
+ * Format wall_* database fields for datetime-local input.
+ * wall_* fields store local time using Prisma's local time handling.
+ * 
+ * @param wallDate - Date from wall_start_date or wall_end_date (stored at UTC midnight)
+ * @param wallTime - Date from wall_start_time or wall_end_time (stored using local time)
+ * @returns String in YYYY-MM-DDTHH:mm format for datetime-local input
+ */
+export function formatWallDateTime(
+  wallDate: Date | null | undefined,
+  wallTime: Date | null | undefined
+): string {
+  if (!wallDate) return "";
+  
+  // Extract date using UTC methods (wall_date is stored at UTC midnight)
+  const year = wallDate.getUTCFullYear();
+  const month = String(wallDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(wallDate.getUTCDate()).padStart(2, "0");
+  
+  // Extract time using LOCAL methods (Prisma uses local time for TIME fields)
+  let hours = "00";
+  let minutes = "00";
+  if (wallTime) {
+    hours = String(wallTime.getHours()).padStart(2, "0");
+    minutes = String(wallTime.getMinutes()).padStart(2, "0");
+  }
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+/**
+ * Format wall_start_date/wall_end_date for date-only input (YYYY-MM-DD).
+ * 
+ * @param wallDate - Date from wall_start_date or wall_end_date
+ * @returns String in YYYY-MM-DD format
+ */
+export function formatWallDate(wallDate: Date | null | undefined): string {
+  if (!wallDate) return "";
+  
+  const year = wallDate.getUTCFullYear();
+  const month = String(wallDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(wallDate.getUTCDate()).padStart(2, "0");
+  
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Format wall_start_time/wall_end_time for time display (HH:mm).
+ * 
+ * @param wallTime - Date from wall_start_time or wall_end_time
+ * @returns String in HH:mm format
+ */
+export function formatWallTime(wallTime: Date | null | undefined): string {
+  if (!wallTime) return "";
+  
+  // Use LOCAL methods - Prisma uses local time for TIME fields
+  const hours = String(wallTime.getHours()).padStart(2, "0");
+  const minutes = String(wallTime.getMinutes()).padStart(2, "0");
+  
+  return `${hours}:${minutes}`;
 }
 
 /**

@@ -6,6 +6,36 @@
  * - Display directly from local time fields (no conversion needed)
  * - Auto-calculate UTC field for sorting/filtering across timezones
  * - This eliminates complex timezone conversions and makes dates "what you see is what you store"
+ * 
+ * ============================================================================
+ * CRITICAL: HOW TO READ wall_* FIELDS FROM THE DATABASE
+ * ============================================================================
+ * 
+ * Prisma returns Date objects for PostgreSQL DATE and TIME fields. The way
+ * these are stored and read depends on whether they represent dates or times:
+ * 
+ * DATES (wall_start_date, wall_end_date):
+ * - Stored at UTC midnight (e.g., "2026-02-07" -> "2026-02-07T00:00:00.000Z")
+ * - Use UTC methods to read: getUTCFullYear(), getUTCMonth(), getUTCDate()
+ * - Or use pgDateToString() from this file
+ * 
+ * TIMES (wall_start_time, wall_end_time):
+ * - Stored using LOCAL time constructor (new Date(1970, 0, 1, hours, minutes))
+ * - Use LOCAL methods to read: getHours(), getMinutes()
+ * - Do NOT use getUTCHours() or getUTCMinutes() - this gives wrong values!
+ * - Or use pgTimeToString() from this file
+ * 
+ * EXAMPLE - WRONG:
+ *   const hours = wallTime.getUTCHours();  // WRONG! Returns UTC offset hours
+ * 
+ * EXAMPLE - CORRECT:
+ *   const hours = wallTime.getHours();     // CORRECT! Returns stored hours
+ *   // Or better, use the utility function:
+ *   const timeStr = pgTimeToString(wallTime);  // Returns "HH:mm" string
+ * 
+ * WHY: Prisma uses local time methods internally when reading TIME fields from
+ * PostgreSQL. We match this by using local time constructors when writing.
+ * ============================================================================
  */
 
 // Month names for formatting
@@ -175,9 +205,9 @@ export function formatLocalTime(
     hours = parts[0] || 0;
     minutes = parts[1] || 0;
   } else {
-    // Date object - use UTC methods since time is stored as UTC midnight + time offset
-    hours = time.getUTCHours();
-    minutes = time.getUTCMinutes();
+    // Date object - use LOCAL methods since Prisma uses local time for TIME fields
+    hours = time.getHours();
+    minutes = time.getMinutes();
   }
   
   if (format === '12h') {
@@ -413,14 +443,18 @@ export function pgDateToString(date: Date | null | undefined): string {
  * Convert a PostgreSQL TIME field value to an HH:mm string.
  * PostgreSQL TIME fields come as Date objects with time set.
  * 
+ * IMPORTANT: Uses local time methods because Prisma creates Date objects using
+ * local time when reading from PostgreSQL TIME fields.
+ * 
  * @param time - Date object from PostgreSQL
  * @returns HH:mm string
  */
 export function pgTimeToString(time: Date | null | undefined): string {
   if (!time) return '';
   
-  const hours = String(time.getUTCHours()).padStart(2, '0');
-  const minutes = String(time.getUTCMinutes()).padStart(2, '0');
+  // Use LOCAL time methods - Prisma uses local time when reading TIME fields
+  const hours = String(time.getHours()).padStart(2, '0');
+  const minutes = String(time.getMinutes()).padStart(2, '0');
   
   return `${hours}:${minutes}`;
 }
@@ -441,6 +475,10 @@ export function stringToPgDate(dateStr: string | null | undefined): Date | null 
 /**
  * Convert an HH:mm string to a Date object suitable for PostgreSQL TIME field.
  * 
+ * IMPORTANT: Uses local time constructor because Prisma extracts time using
+ * getHours()/getMinutes() (local time methods) when storing to PostgreSQL TIME fields.
+ * This ensures the stored time matches the input regardless of server timezone.
+ * 
  * @param timeStr - HH:mm or HH:mm:ss string
  * @returns Date object with time set (date part is arbitrary)
  */
@@ -452,6 +490,6 @@ export function stringToPgTime(timeStr: string | null | undefined): Date | null 
   const minutes = parts[1] || 0;
   const seconds = parts[2] || 0;
   
-  // Use a fixed date (epoch) for the time
-  return new Date(Date.UTC(1970, 0, 1, hours, minutes, seconds, 0));
+  // Use LOCAL time constructor - Prisma uses getHours()/getMinutes() when storing
+  return new Date(1970, 0, 1, hours, minutes, seconds, 0);
 }

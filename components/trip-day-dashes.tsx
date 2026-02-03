@@ -37,10 +37,19 @@ const segmentTypeDashColors: Record<string, string> = {
   "Road Trip": "bg-orange-400",
 };
 
+// Helper to parse YYYY-MM-DD or ISO date string to Date (avoiding timezone issues)
+const parseLocalDate = (dateStr: string): Date => {
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return new Date(dateStr);
+};
+
 const calculateDays = (start: string | null, end: string | null): number => {
   if (!start || !end) return 1;
-  const startDt = new Date(start);
-  const endDt = new Date(end);
+  const startDt = parseLocalDate(start);
+  const endDt = parseLocalDate(end);
   const days = Math.ceil((endDt.getTime() - startDt.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(1, days);
 };
@@ -52,8 +61,8 @@ export function TripDayDashes({ totalDays, segments, startDate }: TripDayDashesP
   segments.forEach((segment) => {
     if (!segment.startTime || !segment.endTime) return;
     
-    const segmentStart = new Date(segment.startTime);
-    const tripStart = new Date(startDate);
+    const segmentStart = parseLocalDate(segment.startTime);
+    const tripStart = parseLocalDate(startDate);
     const segmentDays = calculateDays(segment.startTime, segment.endTime);
     
     // Calculate which day indices this segment occupies

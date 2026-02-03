@@ -9,6 +9,7 @@ import {
 } from "@react-google-maps/api";
 import { useEffect, useState } from "react";
 import type { GlobeTripData, GlobeReservation } from "@/lib/globe-types";
+import { formatLocalDate, formatLocalTime } from "@/lib/utils/local-time";
 
 interface TripReservationsMapProps {
   trip: GlobeTripData;
@@ -390,22 +391,11 @@ export function TripReservationsMap({
                           {marker.reservation.arrivalLocation}
                         </div>
                       )}
-                    {marker.reservation.startTime && (
+                    {marker.reservation.wall_start_date && (
                       <div className="text-xs">
                         <span className="font-medium">Time:</span>{" "}
-                        {new Date(marker.reservation.startTime).toLocaleString(
-                          "en-US",
-                          {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )}
-                        {" "}
-                        <span className="text-gray-400">
-                          ({getTimezoneAbbreviation(marker.lat, marker.lng, new Date(marker.reservation.startTime))})
-                        </span>
+                        {formatLocalDate(marker.reservation.wall_start_date, 'short')}
+                        {marker.reservation.wall_start_time && ` ${formatLocalTime(marker.reservation.wall_start_time, '12h')}`}
                       </div>
                     )}
                     {marker.reservation.confirmationNumber && (

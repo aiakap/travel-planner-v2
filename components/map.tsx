@@ -10,6 +10,7 @@ import {
 } from "@react-google-maps/api";
 import { useEffect, useState } from "react";
 import { formatDateTimeInTimeZone } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/utils/local-time";
 
 interface MapProps {
   segments: (Segment & { segmentType: SegmentType })[];
@@ -111,12 +112,9 @@ export default function Map({ segments, segmentTimeZones }: MapProps) {
                   {segmentTimeZones[segment.id]?.startTimeZoneName}
                 </div>
               )}
-              {segment.startTime && (
+              {segment.wall_start_date && (
                 <div>
-                  {formatDateTimeInTimeZone(
-                    new Date(segment.startTime),
-                    segmentTimeZones[segment.id]?.startTimeZoneId
-                  )}
+                  {formatLocalDate(segment.wall_start_date, 'long')}
                 </div>
               )}
               {segment.notes && <div className="text-xs mt-1">{segment.notes}</div>}
@@ -140,12 +138,9 @@ export default function Map({ segments, segmentTimeZones }: MapProps) {
                   {segmentTimeZones[segment.id]?.endTimeZoneName}
                 </div>
               )}
-              {segment.endTime && (
+              {segment.wall_end_date && (
                 <div>
-                  {formatDateTimeInTimeZone(
-                    new Date(segment.endTime),
-                    segmentTimeZones[segment.id]?.endTimeZoneId
-                  )}
+                  {formatLocalDate(segment.wall_end_date, 'long')}
                 </div>
               )}
               {segment.notes && <div className="text-xs mt-1">{segment.notes}</div>}

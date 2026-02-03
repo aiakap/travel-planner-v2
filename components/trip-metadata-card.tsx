@@ -62,10 +62,19 @@ const getDefaultEndDate = (start: string, days: number = 7) => {
   return endDate.toISOString().split("T")[0];
 };
 
+// Helper to parse YYYY-MM-DD or ISO date string to Date (avoiding timezone issues)
+const parseLocalDate = (dateStr: string): Date => {
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return new Date(dateStr);
+};
+
 const calculateDays = (start: string, end: string): number => {
   if (!start || !end) return 7;
-  const startDt = new Date(start);
-  const endDt = new Date(end);
+  const startDt = parseLocalDate(start);
+  const endDt = parseLocalDate(end);
   const days = Math.ceil((endDt.getTime() - startDt.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(1, days);
 };

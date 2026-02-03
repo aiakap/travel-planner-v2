@@ -12,6 +12,8 @@ import { getTimeZoneForLocation } from "@/lib/actions/timezone"
 import { checkTimeConflict, getAlternativeTimeSlots } from "@/lib/actions/check-conflicts"
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion"
 import { getDefaultTimeForType } from "@/lib/scheduling-utils"
+import { formatWallDateTime } from "@/lib/utils"
+import { localToUTC, parseToLocalComponents } from "@/lib/utils/local-time"
 import TimezoneSelect from "@/components/timezone-select"
 import FlightMap from "@/components/flight-map"
 import type {
@@ -100,8 +102,8 @@ interface TimeSuggestion {
   reason: string
 }
 
-// Helper to format datetime-local input value
-function formatForDateTimeLocal(date: Date | null): string {
+// Legacy helper for creating new dates (not reading from DB)
+function formatDateTimeLocal(date: Date | null): string {
   if (!date) return ""
   const d = new Date(date)
   const year = d.getFullYear()
@@ -136,10 +138,10 @@ export function ReservationEditClient({
   const [typeId, setTypeId] = useState(reservation.reservationTypeId)
   const [statusId, setStatusId] = useState(reservation.reservationStatusId)
   const [startTime, setStartTime] = useState(
-    formatForDateTimeLocal(reservation.startTime)
+    formatWallDateTime(reservation.wall_start_date, reservation.wall_start_time)
   )
   const [endTime, setEndTime] = useState(
-    formatForDateTimeLocal(reservation.endTime)
+    formatWallDateTime(reservation.wall_end_date, reservation.wall_end_time)
   )
   const [location, setLocation] = useState(reservation.location || "")
   const [cost, setCost] = useState(reservation.cost?.toString() || "")
@@ -199,9 +201,27 @@ export function ReservationEditClient({
   const isFlexibleActivity = displayGroup === "FLEXIBLE_ACTIVITY"
 
   // Calculate duration/nights
-  const duration = startTime && endTime
+  const wallDuration = startTime && endTime
     ? differenceInMinutes(new Date(endTime), new Date(startTime)) / 60
     : 0
+  const utcDuration = reservation.startTime && reservation.endTime
+    ? differenceInMinutes(new Date(reservation.endTime), new Date(reservation.startTime)) / 60
+    : 0
+  const pointToPointDuration = (() => {
+    if (!isDirty) {
+      return utcDuration > 0 ? utcDuration : 0
+    }
+    if (!startTime || !endTime) return 0
+    if (!departureTimezone || !arrivalTimezone) return 0
+    const { date: startDate, time: startClock } = parseToLocalComponents(startTime)
+    const { date: endDate, time: endClock } = parseToLocalComponents(endTime)
+    if (!startDate || !endDate) return 0
+    const startUtc = localToUTC(startDate, startClock || null, departureTimezone)
+    const endUtc = localToUTC(endDate, endClock || null, arrivalTimezone)
+    const minutes = differenceInMinutes(endUtc, startUtc)
+    return minutes > 0 ? minutes / 60 : 0
+  })()
+  const duration = isPointToPoint ? pointToPointDuration : wallDuration
   
   const nights = isMultiDayStay && startTime && endTime
     ? Math.max(1, differenceInDays(new Date(endTime), new Date(startTime)))
@@ -225,11 +245,11 @@ export function ReservationEditClient({
         const defaultStart = new Date(now)
         const [hours, minutes] = defaults.startTime.split(":")
         defaultStart.setHours(parseInt(hours), parseInt(minutes), 0, 0)
-        setStartTime(formatForDateTimeLocal(defaultStart))
+        setStartTime(formatDateTimeLocal(defaultStart))
         
         const defaultEnd = new Date(defaultStart)
         defaultEnd.setHours(defaultEnd.getHours() + defaults.duration)
-        setEndTime(formatForDateTimeLocal(defaultEnd))
+        setEndTime(formatDateTimeLocal(defaultEnd))
       }
     }
   }, [currentCategory, currentType, reservation.startTime, startTime])
@@ -407,12 +427,12 @@ export function ReservationEditClient({
     const start = new Date(startTime)
     const [startHours, startMinutes] = suggestion.startTime.split(":")
     start.setHours(parseInt(startHours), parseInt(startMinutes), 0, 0)
-    setStartTime(formatForDateTimeLocal(start))
+    setStartTime(formatDateTimeLocal(start))
     
     const end = new Date(start)
     const [endHours, endMinutes] = suggestion.endTime.split(":")
     end.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0)
-    setEndTime(formatForDateTimeLocal(end))
+    setEndTime(formatDateTimeLocal(end))
     
     setIsDirty(true)
     setShowSuggestions(false)
@@ -1069,7 +1089,7 @@ export function ReservationEditClient({
                           const start = new Date(startTime)
                           const end = new Date(start)
                           end.setHours(end.getHours() + hours)
-                          setEndTime(formatForDateTimeLocal(end))
+                          setEndTime(formatDateTimeLocal(end))
                           setIsDirty(true)
                         }
                       }}

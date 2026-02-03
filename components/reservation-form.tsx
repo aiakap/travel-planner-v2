@@ -9,7 +9,7 @@ import {
 import { createReservation } from "@/lib/actions/create-reservation";
 import { updateReservation } from "@/lib/actions/update-reservation";
 import { UploadButton } from "@/lib/upload-thing";
-import { formatForDateTimeLocal } from "@/lib/utils";
+import { formatWallDateTime } from "@/lib/utils";
 import Image from "next/image";
 import { useState, useTransition, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "./ui/button";
@@ -153,10 +153,10 @@ export default function ReservationForm({
     reservation?.arrivalTimezone ?? ""
   );
   const [departureTime, setDepartureTime] = useState<string>(
-    reservation?.startTime ? formatForDateTimeLocal(new Date(reservation.startTime)) : ""
+    reservation?.wall_start_date ? formatWallDateTime(reservation.wall_start_date, reservation.wall_start_time) : ""
   );
   const [arrivalTime, setArrivalTime] = useState<string>(
-    reservation?.endTime ? formatForDateTimeLocal(new Date(reservation.endTime)) : ""
+    reservation?.wall_end_date ? formatWallDateTime(reservation.wall_end_date, reservation.wall_end_time) : ""
   );
 
   // Location coordinates for map
@@ -244,11 +244,11 @@ export default function ReservationForm({
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const isFlightType = selectedCategory?.name === "Travel" && selectedType?.name === "Flight";
 
-  const startTimeValue = reservation?.startTime
-    ? formatForDateTimeLocal(new Date(reservation.startTime))
+  const startTimeValue = reservation?.wall_start_date
+    ? formatWallDateTime(reservation.wall_start_date, reservation.wall_start_time)
     : "";
-  const endTimeValue = reservation?.endTime
-    ? formatForDateTimeLocal(new Date(reservation.endTime))
+  const endTimeValue = reservation?.wall_end_date
+    ? formatWallDateTime(reservation.wall_end_date, reservation.wall_end_time)
     : "";
 
   // Calculate flight duration

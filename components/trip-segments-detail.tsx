@@ -32,19 +32,9 @@ export function TripSegmentsDetail({
                 : "border-border"
             }`}
             title={`${segment.startTitle} → ${segment.endTitle}\n${
-              segment.startTime
-                ? new Date(segment.startTime).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })
-                : ""
+              segment.wall_start_date || ""
             } - ${
-              segment.endTime
-                ? new Date(segment.endTime).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })
-                : ""
+              segment.wall_end_date || ""
             }\n${segment.notes || ""}`}
           >
             <div className="flex items-center gap-2">
@@ -82,13 +72,8 @@ export function TripSegmentsDetail({
                       ? `${reservation.departureLocation} → ${reservation.arrivalLocation}`
                       : ""
                   }\n${
-                    reservation.startTime
-                      ? new Date(reservation.startTime).toLocaleString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
+                    reservation.wall_start_date
+                      ? `${reservation.wall_start_date}${reservation.wall_start_time ? ` ${reservation.wall_start_time}` : ""}`
                       : ""
                   }\n${reservation.confirmationNumber ? `Conf: ${reservation.confirmationNumber}` : ""}\n${
                     reservation.notes || ""

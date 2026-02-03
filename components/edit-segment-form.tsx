@@ -3,7 +3,7 @@
 import { Segment, SegmentType } from "@/app/generated/prisma";
 import { updateSegment } from "@/lib/actions/update-segment";
 import { UploadButton } from "@/lib/upload-thing";
-import { formatForDateTimeLocal } from "@/lib/utils";
+import { formatWallDateTime } from "@/lib/utils";
 import Image from "next/image";
 import { useState, useTransition } from "react";
 import { Button } from "./ui/button";
@@ -23,11 +23,11 @@ export default function EditSegmentForm({
     segment.segmentTypeId ?? ""
   );
 
-  const startTimeValue = segment.startTime
-    ? formatForDateTimeLocal(new Date(segment.startTime))
+  const startTimeValue = segment.wall_start_date
+    ? formatWallDateTime(segment.wall_start_date, null)
     : "";
-  const endTimeValue = segment.endTime
-    ? formatForDateTimeLocal(new Date(segment.endTime))
+  const endTimeValue = segment.wall_end_date
+    ? formatWallDateTime(segment.wall_end_date, null)
     : "";
 
   return (

@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getAirportTimezone } from "./airport-timezone";
-import { dateTimeLocalToUTC } from "@/lib/utils/date-timezone";
+import { localToUTC, pgDateToString, pgTimeToString } from "@/lib/utils/local-time";
 
 /**
  * Enrich a reservation with timezone and location data
@@ -36,7 +36,7 @@ export async function enrichReservation(
     const updates: any = {};
 
     // Enrich timezone data for flights (point-to-point reservations)
-    if (airportCodes?.departure && reservation.startTime) {
+    if (airportCodes?.departure && (reservation.wall_start_date || reservation.startTime)) {
       console.log(`[Enrichment] Looking up departure timezone for ${airportCodes.departure}`);
       
       const departureTimezone = await getAirportTimezone(airportCodes.departure);
@@ -44,32 +44,32 @@ export async function enrichReservation(
       if (departureTimezone) {
         updates.departureTimezone = departureTimezone;
         
-        // Recalculate startTime with correct timezone
-        // The current time was stored assuming server timezone, but it should be airport timezone
-        // Extract the wall clock time (what the user sees: "10:15 AM")
-        const currentTime = new Date(reservation.startTime);
-        const wallClockTime = `${currentTime.getUTCFullYear()}-${String(currentTime.getUTCMonth() + 1).padStart(2, '0')}-${String(currentTime.getUTCDate()).padStart(2, '0')}T${String(currentTime.getUTCHours()).padStart(2, '0')}:${String(currentTime.getUTCMinutes()).padStart(2, '0')}`;
+        // Read wall clock time from the correct fields (wall_start_date, wall_start_time)
+        // These contain the local time as the user sees it (e.g., "10:15 AM")
+        const wallDate = pgDateToString(reservation.wall_start_date);
+        const wallTime = pgTimeToString(reservation.wall_start_time) || "00:00";
         
-        console.log(`[Enrichment] Recalculating startTime:`, {
-          original: reservation.startTime,
-          wallClock: wallClockTime,
-          timezone: departureTimezone
-        });
-        
-        // Convert wall clock time to correct UTC using proper timezone
-        const correctedUTC = dateTimeLocalToUTC(wallClockTime, departureTimezone);
-        updates.startTime = new Date(correctedUTC);
-        
-        console.log(`[Enrichment] Corrected startTime:`, {
-          from: reservation.startTime,
-          to: updates.startTime
-        });
+        if (wallDate) {
+          console.log(`[Enrichment] Recalculating startTime from wall clock:`, {
+            wallDate,
+            wallTime,
+            timezone: departureTimezone
+          });
+          
+          // Convert wall clock time to correct UTC using proper timezone
+          updates.startTime = localToUTC(wallDate, wallTime, departureTimezone);
+          
+          console.log(`[Enrichment] Corrected startTime:`, {
+            from: reservation.startTime,
+            to: updates.startTime
+          });
+        }
       } else {
         console.warn(`[Enrichment] Could not determine timezone for ${airportCodes.departure}`);
       }
     }
 
-    if (airportCodes?.arrival && reservation.endTime) {
+    if (airportCodes?.arrival && (reservation.wall_end_date || reservation.endTime)) {
       console.log(`[Enrichment] Looking up arrival timezone for ${airportCodes.arrival}`);
       
       const arrivalTimezone = await getAirportTimezone(airportCodes.arrival);
@@ -77,23 +77,24 @@ export async function enrichReservation(
       if (arrivalTimezone) {
         updates.arrivalTimezone = arrivalTimezone;
         
-        // Recalculate endTime with correct timezone
-        const currentTime = new Date(reservation.endTime);
-        const wallClockTime = `${currentTime.getUTCFullYear()}-${String(currentTime.getUTCMonth() + 1).padStart(2, '0')}-${String(currentTime.getUTCDate()).padStart(2, '0')}T${String(currentTime.getUTCHours()).padStart(2, '0')}:${String(currentTime.getUTCMinutes()).padStart(2, '0')}`;
+        // Read wall clock time from the correct fields (wall_end_date, wall_end_time)
+        const wallDate = pgDateToString(reservation.wall_end_date);
+        const wallTime = pgTimeToString(reservation.wall_end_time) || "00:00";
         
-        console.log(`[Enrichment] Recalculating endTime:`, {
-          original: reservation.endTime,
-          wallClock: wallClockTime,
-          timezone: arrivalTimezone
-        });
-        
-        const correctedUTC = dateTimeLocalToUTC(wallClockTime, arrivalTimezone);
-        updates.endTime = new Date(correctedUTC);
-        
-        console.log(`[Enrichment] Corrected endTime:`, {
-          from: reservation.endTime,
-          to: updates.endTime
-        });
+        if (wallDate) {
+          console.log(`[Enrichment] Recalculating endTime from wall clock:`, {
+            wallDate,
+            wallTime,
+            timezone: arrivalTimezone
+          });
+          
+          updates.endTime = localToUTC(wallDate, wallTime, arrivalTimezone);
+          
+          console.log(`[Enrichment] Corrected endTime:`, {
+            from: reservation.endTime,
+            to: updates.endTime
+          });
+        }
       } else {
         console.warn(`[Enrichment] Could not determine timezone for ${airportCodes.arrival}`);
       }

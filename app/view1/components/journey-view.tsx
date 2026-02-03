@@ -7,7 +7,7 @@ import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2,
 import { Card } from "./card"
 import { Badge } from "./badge"
 import { ActionIcon } from "./action-icon"
-import { generateAllDays, mapToCalendarData, getDayOfWeek } from "../lib/view-utils"
+import { generateAllDays, mapToCalendarData, getDayOfWeek, getSegmentDaysWithMoments } from "../lib/view-utils"
 import { editReservation } from "../lib/chat-integration"
 import { useOptimisticDelete } from "@/hooks/use-optimistic-delete"
 import { deleteReservation } from "@/lib/actions/delete-reservation"
@@ -242,7 +242,7 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
                       <ActionIcon icon={MessageCircle} label="Chat" />
                       <button
                         onClick={() => {
-                          const returnUrl = `/view1?tab=${currentTab}`
+                          const returnUrl = `/view1/${optimisticItinerary.id}?tab=${currentTab}`
                           router.push(`/segment/${chapter.id}/edit?returnTo=${encodeURIComponent(returnUrl)}`)
                         }}
                         className="p-1.5 hover:bg-slate-100 rounded-md transition-colors"
@@ -254,145 +254,160 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
                  </div>
               </div>
 
-              {/* Moments List */}
-              <div className="space-y-3 pl-3 md:pl-4 border-l-2 border-slate-200 ml-2">
-                {chapterMoments.map((moment, momentIdx) => {
-                  const momentId = `${moment.month}-${moment.date}`
-                  
-                  // Render continuation indicator for multi-day reservations (days 2+)
-                  if (moment.isContinuation) {
-                    const label = moment.nightNumber 
-                      ? `Night ${moment.nightNumber} of ${moment.totalNights}`
-                      : `Day ${moment.dayNumber} of ${moment.totalDays}`
-                    
-                    return (
-                      <div key={moment.id} className="relative">
-                        {/* Smaller timeline dot for continuation */}
-                        <div className="absolute -left-[18px] md:-left-[22px] top-2 w-2.5 h-2.5 rounded-full bg-slate-100 border-2 border-slate-300 z-10"></div>
-                        
-                        {/* Continuation indicator - subtle and compact */}
-                        <div 
-                          className="p-2 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors"
-                          onClick={() => {
-                            // Scroll to the parent reservation
-                            if (moment.parentReservationId) {
-                              const parentElement = document.getElementById(`reservation-${moment.parentReservationId}`)
-                              if (parentElement) {
-                                parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                              }
-                            }
-                          }}
-                          title={`View full ${moment.reservationType === 'hotel' ? 'hotel' : 'rental'} details`}
-                        >
-                          <moment.icon className="w-3 h-3 text-slate-400" />
-                          <span>{moment.title} — {label}</span>
-                        </div>
-                      </div>
-                    )
-                  }
-                  
-                  // Render full reservation card (day 1 or single-day reservations)
-                  return (
-                    <div key={moment.id}>
-                      <div 
-                        id={`reservation-${moment.id}`}
-                        data-date-id={`date-${momentId}`}
-                        className={`relative group transition-all duration-300 scroll-mt-[140px] ${
-                          highlightedId === `reservation-${moment.id}` ? 'animate-highlight-pulse' : ''
-                        }`}
-                      >
-                        {/* Timeline Dot */}
-                        <div className={`absolute -left-[19px] md:-left-[23px] top-4 w-3 h-3 rounded-full border-2 border-white shadow-sm transition-colors duration-300
-                          ${selectedDate === momentId ? 'bg-blue-600 scale-125' : 'bg-slate-300 group-hover:bg-blue-400'}
-                        `}></div>
-
-                        <Card className={`p-3 flex items-center gap-4 ${selectedDate === momentId ? 'ring-1 ring-blue-500 shadow-md bg-blue-50/30' : ''}`}>
-                            {/* Time & Date Column */}
-                            <div className="flex flex-col items-center min-w-[45px] text-center">
-                              <span className="text-xs font-bold text-slate-900 leading-none">{moment.date}</span>
-                              <span className="text-[9px] uppercase font-bold text-slate-400 mb-1">{moment.month.slice(0,3)}</span>
-                              <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none">
-                                {moment.time}
-                              </span>
-                            </div>
-
-                            {/* Content */}
-                            <div className="flex-grow min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <h4 className="font-bold text-sm text-slate-900 truncate">{moment.title}</h4>
-                                <moment.icon className="text-slate-400 flex-shrink-0" size={14} />
-                                {/* Multi-day badge for hotels */}
-                                {moment.isMultiDay && moment.totalNights && moment.totalNights > 1 && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-0.5">
-                                    <Moon className="w-2.5 h-2.5" />
-                                    {moment.totalNights} nights
-                                  </span>
-                                )}
-                                {/* Multi-day badge for transport/car rentals */}
-                                {moment.isMultiDay && moment.totalDays && moment.totalDays > 1 && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                                    {moment.totalDays} days
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-slate-500 truncate">Reservation confirmed</p>
-                            </div>
-                            
-                            {/* Action Icons */}
-                            <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
-                               <button
-                                 onClick={() => handleDelete(moment.id)}
-                                 className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 rounded-md transition-all"
-                                 title="Delete"
-                               >
-                                 <Trash2 size={14} className="text-red-600" />
-                               </button>
-                               <ActionIcon icon={MessageCircle} />
-                               <ActionIcon 
-                                 icon={Edit2} 
-                                 onClick={() => editReservation(optimisticItinerary.id, moment.id, moment.chapterId, 'timeline')}
-                               />
-                            </div>
-                        </Card>
-                      </div>
-                      
-                      {/* Add Reservation Button - Between reservations */}
-                      {momentIdx < chapterMoments.length - 1 && (
-                        <div className="relative my-2">
-                          <div className="absolute -left-[19px] md:-left-[23px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-dashed border-indigo-300 bg-white"></div>
-                          <button
-                            onClick={() => {
-                              const returnUrl = `/view1/${optimisticItinerary.id}?tab=${currentTab}`
-                              router.push(`/reservations/new/natural?segmentId=${chapter.id}&tripId=${optimisticItinerary.id}&returnTo=${encodeURIComponent(returnUrl)}`)
-                            }}
-                            className="w-full py-2 px-3 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors border border-dashed border-indigo-200 hover:border-indigo-400 flex items-center justify-center gap-1.5 opacity-0 hover:opacity-100 group-hover:opacity-60"
-                          >
-                            <Plus size={12} />
-                            <span>Add reservation</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+              {/* Days & Moments List */}
+              {(() => {
+                // Get the segment to access start/end dates
+                const segment = optimisticItinerary.segments.find(s => s.id === chapter.id)
+                if (!segment) return null
                 
-                {/* Add Reservation Button - After last reservation or if no reservations */}
-                <div className="relative mt-3">
-                  {chapterMoments.length > 0 && (
-                    <div className="absolute -left-[19px] md:-left-[23px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-dashed border-indigo-300 bg-white"></div>
-                  )}
-                  <button
-                    onClick={() => {
-                      const returnUrl = `/view1/${optimisticItinerary.id}?tab=${currentTab}`
-                      router.push(`/reservations/new/natural?segmentId=${chapter.id}&tripId=${optimisticItinerary.id}&returnTo=${encodeURIComponent(returnUrl)}`)
-                    }}
-                    className="w-full py-2.5 px-3 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors border border-dashed border-indigo-200 hover:border-indigo-400 flex items-center justify-center gap-1.5"
-                  >
-                    <Sparkles size={12} />
-                    <span>{chapterMoments.length === 0 ? 'Add your first reservation' : 'Add another reservation'}</span>
-                  </button>
-                </div>
-              </div>
+                // Generate all days with their moments grouped
+                const segmentDays = getSegmentDaysWithMoments(
+                  segment.startDate,
+                  segment.endDate,
+                  chapterMoments
+                )
+                
+                return (
+                  <div className="space-y-4 pl-3 md:pl-4 border-l-2 border-slate-200 ml-2">
+                    {segmentDays.map((dayObj, dayIdx) => {
+                      const dayFullId = dayObj.fullId
+                      const isSelected = selectedDate === dayFullId
+                      
+                      return (
+                        <div key={dayFullId} id={`date-${dayFullId}`} className="relative">
+                          {/* Day Header */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`absolute -left-[19px] md:-left-[23px] w-3 h-3 rounded-full border-2 border-white shadow-sm transition-colors duration-300 ${
+                              isSelected ? 'bg-blue-600' : dayObj.moments.length > 0 ? 'bg-slate-400' : 'bg-slate-200'
+                            }`}></div>
+                            <span className={`text-xs font-semibold ${isSelected ? 'text-blue-700' : 'text-slate-600'}`}>
+                              {dayObj.weekday}, {dayObj.monthShort} {dayObj.date}
+                            </span>
+                          </div>
+                          
+                          {/* Moments for this day */}
+                          {dayObj.moments.length > 0 ? (
+                            <div className="space-y-2 ml-1">
+                              {dayObj.moments.map((moment) => {
+                                const momentId = `${moment.month}-${moment.date}`
+                                
+                                // Render continuation indicator for multi-day reservations (days 2+)
+                                if (moment.isContinuation) {
+                                  const label = moment.nightNumber 
+                                    ? `Night ${moment.nightNumber} of ${moment.totalNights}`
+                                    : `Day ${moment.dayNumber} of ${moment.totalDays}`
+                                  
+                                  return (
+                                    <div key={moment.id} className="relative">
+                                      {/* Continuation indicator - subtle and compact */}
+                                      <div 
+                                        className="p-2 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors"
+                                        onClick={() => {
+                                          // Scroll to the parent reservation
+                                          if (moment.parentReservationId) {
+                                            const parentElement = document.getElementById(`reservation-${moment.parentReservationId}`)
+                                            if (parentElement) {
+                                              parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                            }
+                                          }
+                                        }}
+                                        title={`View full ${moment.reservationType === 'hotel' ? 'hotel' : 'rental'} details`}
+                                      >
+                                        <moment.icon className="w-3 h-3 text-slate-400" />
+                                        <span>{moment.title} — {label}</span>
+                                      </div>
+                                    </div>
+                                  )
+                                }
+                                
+                                // Render full reservation card (day 1 or single-day reservations)
+                                return (
+                                  <div key={moment.id}>
+                                    <div 
+                                      id={`reservation-${moment.id}`}
+                                      data-date-id={`date-${momentId}`}
+                                      className={`relative group transition-all duration-300 scroll-mt-[140px] ${
+                                        highlightedId === `reservation-${moment.id}` ? 'animate-highlight-pulse' : ''
+                                      }`}
+                                    >
+                                      <Card className={`p-3 flex items-center gap-4 ${selectedDate === momentId ? 'ring-1 ring-blue-500 shadow-md bg-blue-50/30' : ''}`}>
+                                          {/* Time Column */}
+                                          <div className="flex flex-col items-center min-w-[45px] text-center">
+                                            <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none">
+                                              {moment.time}
+                                            </span>
+                                          </div>
+
+                                          {/* Content */}
+                                          <div className="flex-grow min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                              <h4 className="font-bold text-sm text-slate-900 truncate">{moment.title}</h4>
+                                              <moment.icon className="text-slate-400 flex-shrink-0" size={14} />
+                                              {/* Multi-day badge for hotels */}
+                                              {moment.isMultiDay && moment.totalNights && moment.totalNights > 1 && (
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-0.5">
+                                                  <Moon className="w-2.5 h-2.5" />
+                                                  {moment.totalNights} nights
+                                                </span>
+                                              )}
+                                              {/* Multi-day badge for transport/car rentals */}
+                                              {moment.isMultiDay && moment.totalDays && moment.totalDays > 1 && (
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                                  {moment.totalDays} days
+                                                </span>
+                                              )}
+                                            </div>
+                                            <p className="text-xs text-slate-500 truncate">Reservation confirmed</p>
+                                          </div>
+                                          
+                                          {/* Action Icons */}
+                                          <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
+                                             <button
+                                               onClick={() => handleDelete(moment.id)}
+                                               className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 rounded-md transition-all"
+                                               title="Delete"
+                                             >
+                                               <Trash2 size={14} className="text-red-600" />
+                                             </button>
+                                             <ActionIcon icon={MessageCircle} />
+                                             <ActionIcon 
+                                               icon={Edit2} 
+                                               onClick={() => editReservation(optimisticItinerary.id, moment.id, moment.chapterId, 'timeline')}
+                                             />
+                                          </div>
+                                      </Card>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            /* Empty day placeholder */
+                            <div className="ml-1 py-2 px-3 rounded-lg bg-slate-50/50 border border-dashed border-slate-200 text-xs text-slate-400">
+                              No reservations
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    
+                    {/* Add Reservation Button - After all days */}
+                    <div className="relative mt-3">
+                      <div className="absolute -left-[19px] md:-left-[23px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-dashed border-indigo-300 bg-white"></div>
+                      <button
+                        onClick={() => {
+                          const returnUrl = `/view1/${optimisticItinerary.id}?tab=${currentTab}`
+                          router.push(`/reservations/new/natural?segmentId=${chapter.id}&tripId=${optimisticItinerary.id}&returnTo=${encodeURIComponent(returnUrl)}`)
+                        }}
+                        className="w-full py-2.5 px-3 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors border border-dashed border-indigo-200 hover:border-indigo-400 flex items-center justify-center gap-1.5"
+                      >
+                        <Sparkles size={12} />
+                        <span>Add reservation</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )
         })}

@@ -26,6 +26,8 @@ interface Segment {
   endLng: number;
   startTime: Date | null;
   endTime: Date | null;
+  wall_start_date: Date | null;
+  wall_end_date: Date | null;
   notes: string | null;
   imageUrl: string | null;
   startTimeZoneId: string | null;
@@ -111,11 +113,20 @@ export function EditSegmentModal({
   const [editStartLocation, setEditStartLocation] = useState(segment.startTitle);
   const [editEndLocation, setEditEndLocation] = useState(segment.endTitle);
   const [editNotes, setEditNotes] = useState(segment.notes || "");
+  // Format wall_* dates for DatePopover (YYYY-MM-DD format)
+  const formatWallDate = (date: Date | null | undefined): string => {
+    if (!date) return "";
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  
   const [editStartDate, setEditStartDate] = useState(
-    segment.startTime ? segment.startTime.toISOString() : ""
+    formatWallDate(segment.wall_start_date)
   );
   const [editEndDate, setEditEndDate] = useState(
-    segment.endTime ? segment.endTime.toISOString() : ""
+    formatWallDate(segment.wall_end_date)
   );
   const [editSegmentType, setEditSegmentType] = useState(segment.segmentType.name);
   const [useDifferentEndLocation, setUseDifferentEndLocation] = useState(
@@ -169,8 +180,8 @@ export function EditSegmentModal({
     setEditStartLocation(segment.startTitle);
     setEditEndLocation(segment.endTitle);
     setEditNotes(segment.notes || "");
-    setEditStartDate(segment.startTime ? segment.startTime.toISOString() : "");
-    setEditEndDate(segment.endTime ? segment.endTime.toISOString() : "");
+    setEditStartDate(formatWallDate(segment.wall_start_date));
+    setEditEndDate(formatWallDate(segment.wall_end_date));
     setEditSegmentType(segment.segmentType.name);
     setUseDifferentEndLocation(segment.startTitle !== segment.endTitle);
     setHasUnsavedChanges(false);

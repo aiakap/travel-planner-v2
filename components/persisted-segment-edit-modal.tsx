@@ -59,8 +59,17 @@ export function PersistedSegmentEditModal({
   const [editStartLocation, setEditStartLocation] = useState(segment.startTitle);
   const [editEndLocation, setEditEndLocation] = useState(segment.endTitle);
   const [editNotes, setEditNotes] = useState(segment.notes || "");
-  const [editStartDate, setEditStartDate] = useState(segment.startTime ? segment.startTime.toISOString() : "");
-  const [editEndDate, setEditEndDate] = useState(segment.endTime ? segment.endTime.toISOString() : "");
+  // Format wall_* dates for DatePopover (YYYY-MM-DD format)
+  const formatWallDate = (date: Date | null | undefined): string => {
+    if (!date) return "";
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  
+  const [editStartDate, setEditStartDate] = useState(formatWallDate(segment.wall_start_date));
+  const [editEndDate, setEditEndDate] = useState(formatWallDate(segment.wall_end_date));
   const [editSegmentType, setEditSegmentType] = useState(segment.segmentType.name);
   const [useDifferentEndLocation, setUseDifferentEndLocation] = useState(
     segment.startTitle !== segment.endTitle
@@ -90,8 +99,8 @@ export function PersistedSegmentEditModal({
     setEditStartLocation(segment.startTitle);
     setEditEndLocation(segment.endTitle);
     setEditNotes(segment.notes || "");
-    setEditStartDate(segment.startTime ? segment.startTime.toISOString() : "");
-    setEditEndDate(segment.endTime ? segment.endTime.toISOString() : "");
+    setEditStartDate(formatWallDate(segment.wall_start_date));
+    setEditEndDate(formatWallDate(segment.wall_end_date));
     setEditSegmentType(segment.segmentType.name);
     setUseDifferentEndLocation(segment.startTitle !== segment.endTitle);
   }, [segment]);

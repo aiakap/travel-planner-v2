@@ -100,7 +100,7 @@ export function editReservation(
   source: ChatContext['source']
 ) {
   // Navigate to the new dedicated edit reservation page
-  const returnTo = `/view1?tab=${source === 'timeline' ? 'journey' : source}`
+  const returnTo = `/view1/${tripId}?tab=${source === 'timeline' ? 'journey' : source}`
   window.location.href = `/reservation/${reservationId}/edit?returnTo=${encodeURIComponent(returnTo)}`
 }
 

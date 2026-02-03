@@ -27,6 +27,7 @@ import { useState } from "react";
 import Map from "@/components/map";
 import SortableItinerary from "./sortable-itinerary";
 import { formatDateTimeInTimeZone } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/utils/local-time";
 
 type ReservationWithRelations = Reservation & {
   reservationType: ReservationType & { category: ReservationCategory };
@@ -200,24 +201,18 @@ export default function TripDetailClient({
                               </div>
                               <p className="text-sm text-gray-500">
                                 Start: {segment.startTitle}
-                                {segment.startTime
-                                  ? ` • ${formatDateTimeInTimeZone(
-                                      new Date(segment.startTime),
-                                      tz?.startTimeZoneId
-                                    )}`
-                                  : " • No start time"}
+                                {segment.wall_start_date
+                                  ? ` • ${formatLocalDate(segment.wall_start_date, 'long')}`
+                                  : " • No start date"}
                                 {tz?.startTimeZoneName
                                   ? ` • ${tz.startTimeZoneName}`
                                   : ""}
                               </p>
                               <p className="text-sm text-gray-500">
                                 End: {segment.endTitle}
-                                {segment.endTime
-                                  ? ` • ${formatDateTimeInTimeZone(
-                                      new Date(segment.endTime),
-                                      tz?.endTimeZoneId
-                                    )}`
-                                  : " • No end time"}
+                                {segment.wall_end_date
+                                  ? ` • ${formatLocalDate(segment.wall_end_date, 'long')}`
+                                  : " • No end date"}
                                 {tz?.endTimeZoneName
                                   ? ` • ${tz.endTimeZoneName}`
                                   : ""}

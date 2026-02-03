@@ -59,18 +59,29 @@ const segmentTypeMapColors: Record<string, string> = {
   "Road Trip": "#f97316", // orange-500
 };
 
+// Helper to parse YYYY-MM-DD or ISO date string to Date (avoiding timezone issues)
+const parseLocalDate = (dateStr: string): Date => {
+  // If it's a YYYY-MM-DD format, parse as local date
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  // Otherwise parse as-is (ISO string)
+  return new Date(dateStr);
+};
+
 const calculateDays = (start: string | null, end: string | null): number => {
   if (!start || !end) return 1;
-  const startDt = new Date(start);
-  const endDt = new Date(end);
+  const startDt = parseLocalDate(start);
+  const endDt = parseLocalDate(end);
   const days = Math.ceil((endDt.getTime() - startDt.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(1, days);
 };
 
 const formatDateRange = (start: string | null, end: string | null): string => {
   if (!start || !end) return "";
-  const startDate = new Date(start);
-  const endDate = new Date(end);
+  const startDate = parseLocalDate(start);
+  const endDate = parseLocalDate(end);
   return `${format(startDate, "MMM d")} - ${format(endDate, "MMM d")}`;
 };
 

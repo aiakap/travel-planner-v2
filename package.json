@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "prisma db seed",
+    "test:e2e": "playwright test",
     "check-orphaned": "ts-node --project tsconfig.json scripts/check-orphaned-records.ts",
     "cleanup-orphaned": "ts-node --project tsconfig.json scripts/cleanup-orphaned-records.ts",
     "process-queue": "node scripts/process-queue-loop.ts",
@@ -90,6 +91,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.58.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

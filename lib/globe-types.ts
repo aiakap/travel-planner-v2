@@ -6,6 +6,11 @@ export interface GlobeReservation {
   arrivalLocation: string | null;
   startTime: string | null;
   endTime: string | null;
+  // Wall clock fields (local time)
+  wall_start_date: string | null;
+  wall_start_time: string | null;
+  wall_end_date: string | null;
+  wall_end_time: string | null;
   confirmationNumber: string | null;
   notes: string | null;
   cost: number | null;
@@ -30,6 +35,9 @@ export interface GlobeSegment {
   endLng: number;
   startTime: string | null;
   endTime: string | null;
+  // Wall clock fields (local time)
+  wall_start_date: string | null;
+  wall_end_date: string | null;
   notes: string | null;
   imageUrl: string | null;
   segmentType: {

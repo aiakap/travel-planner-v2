@@ -30,6 +30,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "../ui/button";
 import { formatDateTimeInTimeZone } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/utils/local-time";
 import { deleteTrip } from "@/lib/actions/delete-trip";
 import { deleteSegment } from "@/lib/actions/delete-segment";
 import { deleteReservation } from "@/lib/actions/delete-reservation";
@@ -339,11 +340,8 @@ export function UpcomingTripsSection({
                         </h4>
                         <p className="text-sm text-slate-500 truncate">
                           {segment.startTitle}
-                          {segment.startTime &&
-                            ` • ${formatDateTimeInTimeZone(
-                              new Date(segment.startTime),
-                              tz?.startTimeZoneId
-                            )}`}
+                          {segment.wall_start_date &&
+                            ` • ${formatLocalDate(segment.wall_start_date, 'short')}`}
                         </p>
                       </div>
 

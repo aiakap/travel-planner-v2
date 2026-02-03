@@ -44,33 +44,21 @@ export function SegmentDetailSection({ segments }: SegmentDetailSectionProps) {
           <CardContent className="space-y-4">
             {/* Segment Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              {segment.startTime && (
+              {segment.wall_start_date && (
                 <div className="flex items-center gap-2">
                   <Calendar className="h-3 w-3 text-muted-foreground" />
                   <span className="text-muted-foreground">Start:</span>
                   <span className="font-medium">
-                    {new Date(segment.startTime).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {segment.wall_start_date}
                   </span>
                 </div>
               )}
-              {segment.endTime && (
+              {segment.wall_end_date && (
                 <div className="flex items-center gap-2">
                   <Calendar className="h-3 w-3 text-muted-foreground" />
                   <span className="text-muted-foreground">End:</span>
                   <span className="font-medium">
-                    {new Date(segment.endTime).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {segment.wall_end_date}
                   </span>
                 </div>
               )}

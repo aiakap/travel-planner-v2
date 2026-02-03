@@ -315,8 +315,9 @@ export async function updateHotelReservation(
         
         let newTime24 = data.checkInTime ? convertTo24Hour(data.checkInTime) : "15:00:00";
         if (!data.checkInTime && currentWallTime) {
-          const h = currentWallTime.getUTCHours().toString().padStart(2, '0');
-          const m = currentWallTime.getUTCMinutes().toString().padStart(2, '0');
+          // Use local time methods - Prisma uses local time for TIME fields
+          const h = currentWallTime.getHours().toString().padStart(2, '0');
+          const m = currentWallTime.getMinutes().toString().padStart(2, '0');
           newTime24 = `${h}:${m}:00`;
         }
         
@@ -346,8 +347,9 @@ export async function updateHotelReservation(
         
         let newTime24 = data.checkOutTime ? convertTo24Hour(data.checkOutTime) : "11:00:00";
         if (!data.checkOutTime && currentWallTime) {
-          const h = currentWallTime.getUTCHours().toString().padStart(2, '0');
-          const m = currentWallTime.getUTCMinutes().toString().padStart(2, '0');
+          // Use local time methods - Prisma uses local time for TIME fields
+          const h = currentWallTime.getHours().toString().padStart(2, '0');
+          const m = currentWallTime.getMinutes().toString().padStart(2, '0');
           newTime24 = `${h}:${m}:00`;
         }
         
