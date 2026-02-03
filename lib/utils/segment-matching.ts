@@ -34,6 +34,13 @@ export interface SegmentMatch {
   };
 }
 
+export interface TravelMatchInput {
+  startTime: Date;
+  endTime: Date;
+  startLocation: string;
+  endLocation: string;
+}
+
 /**
  * Normalize location string for matching
  * Handles variations like "San Francisco, CA, US" vs "San Francisco"
@@ -154,6 +161,110 @@ function calculateSegmentTypeScore(segment: Segment): number {
   }
 
   return 10; // Generic segment
+}
+
+function isTravelSegment(segment: Segment): boolean {
+  const segmentTypeName = segment.segmentType?.name?.toLowerCase() || '';
+  const travelTypes = ['flight', 'drive', 'train', 'ferry', 'travel'];
+  return travelTypes.some(type => segmentTypeName.includes(type));
+}
+
+/**
+ * Calculate time proximity score for travel segment matching (0-60 points)
+ */
+function calculateTimeProximityScore(
+  input: TravelMatchInput,
+  segment: Segment
+): number {
+  if (!segment.startTime || !segment.endTime) {
+    return 0;
+  }
+
+  const segmentStart = new Date(segment.startTime);
+  const segmentEnd = new Date(segment.endTime);
+
+  const overlaps = input.startTime <= segmentEnd && input.endTime >= segmentStart;
+  if (overlaps) {
+    return 60;
+  }
+
+  const gapMs = Math.min(
+    Math.abs(input.startTime.getTime() - segmentEnd.getTime()),
+    Math.abs(segmentStart.getTime() - input.endTime.getTime())
+  );
+  const gapHours = gapMs / (1000 * 60 * 60);
+
+  if (gapHours <= 6) return 55;
+  if (gapHours <= 24) return 45;
+  if (gapHours <= 48) return 35;
+  if (gapHours <= 72) return 25;
+  if (gapHours <= 120) return 15;
+  return 5;
+}
+
+/**
+ * Calculate location match score for travel segment matching (0-40 points)
+ */
+function calculateTravelLocationScore(
+  input: TravelMatchInput,
+  segment: Segment
+): number {
+  let score = 0;
+
+  if (input.startLocation && locationsMatch(input.startLocation, segment.startTitle)) {
+    score += 20;
+  }
+
+  if (input.endLocation && locationsMatch(input.endLocation, segment.endTitle)) {
+    score += 20;
+  }
+
+  return score;
+}
+
+/**
+ * Find the closest Travel segment based on time proximity + location match.
+ * Returns null when there are no Travel segments.
+ */
+export function findClosestTravelSegment(
+  input: TravelMatchInput,
+  segments: Segment[]
+): SegmentMatch | null {
+  const travelSegments = segments.filter(isTravelSegment);
+  if (travelSegments.length === 0) {
+    return null;
+  }
+
+  let bestMatch: SegmentMatch | null = null;
+
+  for (const segment of travelSegments) {
+    const timeScore = calculateTimeProximityScore(input, segment);
+    const locationScore = calculateTravelLocationScore(input, segment);
+    const totalScore = timeScore + locationScore;
+
+    const reasons: string[] = [];
+    if (timeScore >= 45) reasons.push('close in time');
+    if (locationScore >= 30) reasons.push('locations match well');
+    if (locationScore >= 20 && locationScore < 30) reasons.push('partial location match');
+
+    const match: SegmentMatch = {
+      segmentId: segment.id,
+      segmentName: segment.name,
+      score: totalScore,
+      reason: reasons.length > 0 ? reasons.join(', ') : 'closest travel segment',
+      breakdown: {
+        dateOverlap: timeScore,
+        locationMatch: locationScore,
+        segmentType: 20,
+      },
+    };
+
+    if (!bestMatch || totalScore > bestMatch.score) {
+      bestMatch = match;
+    }
+  }
+
+  return bestMatch;
 }
 
 /**

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { GenericReservation } from "@/lib/schemas/generic-reservation-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { getSegmentTimeZones } from "./timezone";
+import { enrichReservation } from "./enrich-reservation";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -267,6 +268,17 @@ export async function addGenericReservationToTrip(params: {
       contactEmail: reservationData.contactEmail || undefined,
       cancellationPolicy: reservationData.cancellationPolicy || undefined,
     },
+  });
+
+  // Trigger async enrichment for image
+  const locationQuery = reservationData.address 
+    ? `${reservationData.name} ${reservationData.address}`
+    : `${reservationData.name} ${reservationData.location}`;
+  
+  enrichReservation(reservation.id, {
+    locationQuery,
+  }).catch((error) => {
+    console.error(`[AddGenericReservation] Enrichment failed for reservation ${reservation.id}:`, error);
   });
 
   console.log(`✅ Created generic reservation: ${reservationData.name}`);

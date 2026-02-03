@@ -159,8 +159,25 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
           ? pgTimeToString(res.wall_start_time)
           : "00:00"
         
+        // Format end time for display
+        const endTimeFormatted = res.wall_end_time 
+          ? pgTimeToString(res.wall_end_time)
+          : undefined
+        
+        // Calculate date difference between start and end
+        let endDateDiff: number | undefined
+        if (res.wall_start_date && res.wall_end_date) {
+          const startDateObj = new Date(res.wall_start_date)
+          const endDateObj = new Date(res.wall_end_date)
+          // Use UTC dates to avoid timezone issues
+          const startDay = Date.UTC(startDateObj.getUTCFullYear(), startDateObj.getUTCMonth(), startDateObj.getUTCDate())
+          const endDay = Date.UTC(endDateObj.getUTCFullYear(), endDateObj.getUTCMonth(), endDateObj.getUTCDate())
+          endDateDiff = Math.round((endDay - startDay) / (1000 * 60 * 60 * 24))
+        }
+        
         // Calculate multi-day fields
-        const resType = mapCategoryToType(res.reservationType.category.name)
+        // Pass both category and type name for more accurate mapping
+        const resType = mapCategoryToType(res.reservationType.category.name, res.reservationType.name)
         const startDate = res.wall_start_date || res.startTime
         const endDate = res.wall_end_date || res.endTime
         let nights: number | undefined
@@ -180,6 +197,37 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
           } else if (resType === 'transport' && daysDiff > 0) {
             // Car rentals span multiple days
             durationDays = daysDiff + 1 // Include both start and end days
+          }
+          
+          // DEBUG: Log multi-day calculation
+          if (resType === 'hotel' || resType === 'transport') {
+            console.log('🏨 Multi-day check:', res.name, {
+              categoryName: res.reservationType.category.name,
+              resType,
+              startDate: startDate?.toString(),
+              endDate: endDate?.toString(),
+              daysDiff,
+              nights,
+              durationDays,
+              wall_start_date: res.wall_start_date?.toString(),
+              wall_end_date: res.wall_end_date?.toString(),
+              startTime: res.startTime?.toISOString(),
+              endTime: res.endTime?.toISOString(),
+            })
+          }
+        } else {
+          // DEBUG: Log when dates are missing
+          if (resType === 'hotel' || resType === 'transport') {
+            console.log('🏨 Missing dates for:', res.name, {
+              categoryName: res.reservationType.category.name,
+              resType,
+              hasStartDate: !!startDate,
+              hasEndDate: !!endDate,
+              wall_start_date: res.wall_start_date?.toString(),
+              wall_end_date: res.wall_end_date?.toString(),
+              startTime: res.startTime?.toISOString(),
+              endTime: res.endTime?.toISOString(),
+            })
           }
         }
         
@@ -202,6 +250,8 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
           categoryName: res.reservationType.category.name,
           startTime: res.startTime?.toISOString(),
           endTime: res.endTime?.toISOString(),
+          endTimeFormatted,
+          endDateDiff,
           status: mapReservationStatus(res.reservationStatus.name),
           statusName: res.reservationStatus.name,
           reservationStatusId: res.reservationStatusId,

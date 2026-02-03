@@ -21,6 +21,10 @@ export interface ViewReservation {
   categoryName: string
   startTime?: string
   endTime?: string
+  // Formatted end time for display (HH:mm)
+  endTimeFormatted?: string
+  // Days difference between start and end (0 = same day, 1 = next day, etc.)
+  endDateDiff?: number
   // Status fields for to-do list
   status: "pending" | "confirmed" | "cancelled" | "completed" | "waitlisted"
   statusName: string
@@ -88,11 +92,48 @@ export const reservationTypeLabels: Record<ViewReservation["type"], string> = {
 }
 
 // Helper to map our Prisma category names to view types
-export function mapCategoryToType(categoryName: string): ViewReservation["type"] {
-  const mapping: Record<string, ViewReservation["type"]> = {
+// Can optionally pass the reservation type name for more specific mapping
+export function mapCategoryToType(categoryName: string, typeName?: string): ViewReservation["type"] {
+  // First, check if the type name gives us a more specific mapping
+  if (typeName) {
+    const typeMapping: Record<string, ViewReservation["type"]> = {
+      // Flights
+      "Flight": "flight",
+      // Ground transport / rentals
+      "Car Rental": "transport",
+      "Private Driver": "transport",
+      "Ride Share": "transport",
+      "Taxi": "transport",
+      "Bus": "transport",
+      "Train": "transport",
+      "Ferry": "transport",
+      "Cruise": "transport",
+      "Parking": "transport",
+      // Hotels
+      "Hotel": "hotel",
+      "Airbnb": "hotel",
+      "Hostel": "hotel",
+      "Resort": "hotel",
+      "Vacation Rental": "hotel",
+      "Ski Resort": "hotel",
+      // Restaurants
+      "Restaurant": "restaurant",
+      "Cafe": "restaurant",
+      "Bar": "restaurant",
+      "Food Tour": "restaurant",
+    }
+    if (typeMapping[typeName]) {
+      return typeMapping[typeName]
+    }
+  }
+  
+  // Fall back to category-based mapping
+  const categoryMapping: Record<string, ViewReservation["type"]> = {
     "Flight": "flight",
     "Hotel": "hotel",
+    "Stay": "hotel",           // Database uses "Stay" as the category for hotels
     "Accommodation": "hotel",
+    "Travel": "transport",     // Default for Travel category (includes car rentals, trains, etc.)
     "Activity": "activity",
     "Transportation": "transport",
     "Transport": "transport",
@@ -100,7 +141,7 @@ export function mapCategoryToType(categoryName: string): ViewReservation["type"]
     "Dining": "restaurant",
     "Food": "restaurant",
   }
-  return mapping[categoryName] || "activity"
+  return categoryMapping[categoryName] || "activity"
 }
 
 // Helper to map reservation status from DB to view type

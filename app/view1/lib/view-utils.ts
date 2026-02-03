@@ -231,6 +231,9 @@ export interface CalendarMoment {
   title: string
   icon: typeof Plane  // LucideIcon type
   chapterId: string
+  // End time display support
+  endTime?: string           // Formatted end time (HH:mm)
+  endDateDiff?: number       // Days difference (0 = same day, 1 = next day, etc.)
   // Multi-day reservation support
   isMultiDay: boolean
   isContinuation: boolean
@@ -240,21 +243,67 @@ export interface CalendarMoment {
   totalDays?: number        // e.g., 5
   parentReservationId?: string
   reservationType?: ViewReservation['type']
+  // Out-of-range display support (when reservation date is outside segment dates)
+  displayedOnDifferentDay?: boolean
+  actualDateDisplay?: string  // e.g., "Jan 30" - the actual date
 }
 
 // Map itinerary to calendar data structure
 export function mapToCalendarData(itinerary: ViewItinerary) {
   const moments: CalendarMoment[] = []
   
+  // Build date-to-segment lookup for cross-segment continuations
+  // This allows multi-day reservations to show continuations in subsequent segments
+  const dateToSegmentId: Map<string, string> = new Map()
+  itinerary.segments.forEach(seg => {
+    const start = new Date(seg.startDate)
+    const end = new Date(seg.endDate)
+    const current = new Date(start)
+    console.log('📅 Building segment date map:', seg.title, {
+      startDate: seg.startDate,
+      endDate: seg.endDate,
+      parsedStart: start.toISOString(),
+      parsedEnd: end.toISOString(),
+    })
+    while (current <= end) {
+      const key = `${MONTHS_SHORT[current.getUTCMonth()]}-${current.getUTCDate()}`
+      dateToSegmentId.set(key, seg.id)
+      current.setUTCDate(current.getUTCDate() + 1)
+    }
+  })
+  console.log('📅 Date-to-segment map entries:', Array.from(dateToSegmentId.entries()))
+  
+  // Helper to find segment ID for a date
+  const getSegmentIdForDate = (date: Date): string | undefined => {
+    const key = `${MONTHS_SHORT[date.getUTCMonth()]}-${date.getUTCDate()}`
+    const result = dateToSegmentId.get(key)
+    console.log('📅 Looking up segment for date:', date.toISOString(), 'key:', key, 'result:', result)
+    return result
+  }
+  
   // Generate moments including continuations for multi-day reservations
   itinerary.segments.forEach(seg => {
+    // Get segment date range to check if reservation is displayed out-of-range
+    const segStart = new Date(seg.startDate)
+    const segEnd = new Date(seg.endDate)
+    
     seg.reservations.forEach(res => {
       const date = new Date(res.date)
       const isMultiDayHotel = res.type === 'hotel' && res.nights && res.nights > 1
       const isMultiDayTransport = res.type === 'transport' && res.durationDays && res.durationDays > 1
       const isMultiDay = isMultiDayHotel || isMultiDayTransport
       
-      // Add the primary moment (day 1)
+      // Determine where the full reservation card will actually be displayed
+      // If reservation date is outside segment range, it shows on the segment's first day
+      const resDateKey = `${MONTHS_SHORT[date.getUTCMonth()]}-${date.getUTCDate()}`
+      const segStartKey = `${MONTHS_SHORT[segStart.getUTCMonth()]}-${segStart.getUTCDate()}`
+      
+      // Check if reservation date is within segment range
+      const isDateInSegmentRange = date >= segStart && date <= segEnd
+      // The display date is either the reservation date (if in range) or segment start (if out of range)
+      const displayDateKey = isDateInSegmentRange ? resDateKey : segStartKey
+      
+      // Add the primary moment (day 1) - shows full reservation card, no "Night 1 of X"
       moments.push({
         id: res.id,
         date: date.getUTCDate().toString(),
@@ -264,6 +313,8 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
         title: res.title,
         icon: getIconForType(res.type),
         chapterId: seg.id,
+        endTime: res.endTimeFormatted,
+        endDateDiff: res.endDateDiff,
         isMultiDay,
         isContinuation: false,
         totalNights: res.nights,
@@ -273,9 +324,44 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
       
       // Generate continuation moments for multi-day hotel reservations
       if (isMultiDayHotel && res.nights) {
+        // Check if the actual check-in date is in a different segment
+        // If so, we need to show "Night 1 of X" in that segment
+        const checkInSegmentId = getSegmentIdForDate(date)
+        const isCheckInInDifferentSegment = checkInSegmentId && checkInSegmentId !== seg.id
+        
+        if (isCheckInInDifferentSegment) {
+          // Add Night 1 continuation to the check-in segment
+          moments.push({
+            id: `${res.id}-night-1`,
+            date: date.getUTCDate().toString(),
+            month: MONTHS_SHORT[date.getUTCMonth()],
+            day: DAYS_SHORT[date.getUTCDay()],
+            time: '',
+            title: res.title,
+            icon: getIconForType(res.type),
+            chapterId: checkInSegmentId,
+            isMultiDay: true,
+            isContinuation: true,
+            nightNumber: 1,
+            totalNights: res.nights,
+            parentReservationId: res.id,
+            reservationType: res.type
+          })
+        }
+        
+        // Generate continuations for nights 2+
         for (let night = 2; night <= res.nights; night++) {
           const contDate = new Date(date)
           contDate.setUTCDate(contDate.getUTCDate() + night - 1)
+          const contDateKey = `${MONTHS_SHORT[contDate.getUTCMonth()]}-${contDate.getUTCDate()}`
+          
+          // Skip this continuation if it falls on the same day as the full card display
+          if (contDateKey === displayDateKey) {
+            continue
+          }
+          
+          // Find which segment this continuation date belongs to
+          const contSegmentId = getSegmentIdForDate(contDate) || seg.id
           
           moments.push({
             id: `${res.id}-night-${night}`,
@@ -285,7 +371,7 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
             time: '',
             title: res.title,
             icon: getIconForType(res.type),
-            chapterId: seg.id,
+            chapterId: contSegmentId,
             isMultiDay: true,
             isContinuation: true,
             nightNumber: night,
@@ -298,9 +384,43 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
       
       // Generate continuation moments for multi-day transport (car rentals)
       if (isMultiDayTransport && res.durationDays) {
+        // Check if the pickup date is in a different segment
+        const pickupSegmentId = getSegmentIdForDate(date)
+        const isPickupInDifferentSegment = pickupSegmentId && pickupSegmentId !== seg.id
+        
+        if (isPickupInDifferentSegment) {
+          // Add Day 1 continuation to the pickup segment
+          moments.push({
+            id: `${res.id}-day-1`,
+            date: date.getUTCDate().toString(),
+            month: MONTHS_SHORT[date.getUTCMonth()],
+            day: DAYS_SHORT[date.getUTCDay()],
+            time: '',
+            title: res.title,
+            icon: getIconForType(res.type),
+            chapterId: pickupSegmentId,
+            isMultiDay: true,
+            isContinuation: true,
+            dayNumber: 1,
+            totalDays: res.durationDays,
+            parentReservationId: res.id,
+            reservationType: res.type
+          })
+        }
+        
+        // Generate continuations for days 2+
         for (let day = 2; day <= res.durationDays; day++) {
           const contDate = new Date(date)
           contDate.setUTCDate(contDate.getUTCDate() + day - 1)
+          const contDateKey = `${MONTHS_SHORT[contDate.getUTCMonth()]}-${contDate.getUTCDate()}`
+          
+          // Skip this continuation if it falls on the same day as the full card display
+          if (contDateKey === displayDateKey) {
+            continue
+          }
+          
+          // Find which segment this continuation date belongs to
+          const contSegmentId = getSegmentIdForDate(contDate) || seg.id
           
           moments.push({
             id: `${res.id}-day-${day}`,
@@ -310,7 +430,7 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
             time: '',
             title: res.title,
             icon: getIconForType(res.type),
-            chapterId: seg.id,
+            chapterId: contSegmentId,
             isMultiDay: true,
             isContinuation: true,
             dayNumber: day,
@@ -404,6 +524,7 @@ export interface SegmentDay {
 }
 
 // Generate all days in a segment with their moments grouped (UTC-safe)
+// Includes out-of-range moments on the first day to ensure all reservations are visible
 export function getSegmentDaysWithMoments(
   segmentStartDate: string,
   segmentEndDate: string,
@@ -413,7 +534,24 @@ export function getSegmentDaysWithMoments(
   const end = new Date(segmentEndDate)
   const days: SegmentDay[] = []
   
+  // Collect all valid dates in segment range for later check
+  const validDates: Set<string> = new Set()
+  const tempCurrent = new Date(start)
+  while (tempCurrent <= end) {
+    const monthShort = MONTHS_SHORT[tempCurrent.getUTCMonth()]
+    const date = tempCurrent.getUTCDate()
+    validDates.add(`${monthShort}-${date}`)
+    tempCurrent.setUTCDate(tempCurrent.getUTCDate() + 1)
+  }
+  
+  // Find moments outside segment date range (to place on first day)
+  const outOfRangeMoments = moments.filter(m => {
+    const momentKey = `${m.month}-${m.date}`
+    return !validDates.has(momentKey)
+  })
+  
   const current = new Date(start)
+  let isFirstDay = true
   
   while (current <= end) {
     const monthShort = MONTHS_SHORT[current.getUTCMonth()]
@@ -423,9 +561,20 @@ export function getSegmentDaysWithMoments(
     const weekday = DAYS_SHORT[current.getUTCDay()]
     
     // Filter moments that belong to this day
-    const dayMoments = moments.filter(m => 
+    let dayMoments = moments.filter(m => 
       m.month === monthShort && m.date === date.toString()
     )
+    
+    // On the first day, also include out-of-range moments
+    if (isFirstDay && outOfRangeMoments.length > 0) {
+      // Add metadata to indicate these are displayed on a different day
+      const outOfRangeWithMeta = outOfRangeMoments.map(m => ({
+        ...m,
+        displayedOnDifferentDay: true,
+        actualDateDisplay: `${m.month} ${m.date}`
+      }))
+      dayMoments = [...outOfRangeWithMeta, ...dayMoments]
+    }
     
     days.push({
       date,
@@ -437,6 +586,7 @@ export function getSegmentDaysWithMoments(
       moments: dayMoments
     })
     
+    isFirstDay = false
     current.setUTCDate(current.getUTCDate() + 1)
   }
   

@@ -56,7 +56,7 @@ export default async function NewReservationPage({
   });
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
+    <div className="pt-20 container mx-auto px-4 py-8 max-w-2xl">
       <div className="mb-6">
         <Link href={`/trips/${tripId}`}>
           <Button variant="outline">← Back to Trip</Button>

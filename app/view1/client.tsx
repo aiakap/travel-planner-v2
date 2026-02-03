@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
 import { 
@@ -49,6 +49,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
   const [scrolled, setScrolled] = useState(false)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
   const [isExportingCalendar, setIsExportingCalendar] = useState(false)
+  const quickAddToastIdRef = useRef<string | number | null>(null)
   
   // Update URL when tab changes
   const handleTabChange = (newTab: string) => {
@@ -124,6 +125,91 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const rawJob = sessionStorage.getItem("quickAddJob")
+    if (!rawJob) return
+
+    let job: { jobId: string; tripId: string; count?: number; timestamp?: number } | null = null
+    try {
+      job = JSON.parse(rawJob)
+    } catch {
+      sessionStorage.removeItem("quickAddJob")
+      return
+    }
+
+    if (!job?.jobId || job.tripId !== itinerary.id) return
+
+    const createdAt = job.timestamp || 0
+    const maxAgeMs = 30 * 60 * 1000
+    if (createdAt && Date.now() - createdAt > maxAgeMs) {
+      sessionStorage.removeItem("quickAddJob")
+      return
+    }
+
+    let isCancelled = false
+    let timeoutId: NodeJS.Timeout | null = null
+    const maxAttempts = 90
+    const baseIntervalMs = 2000
+    let attempts = 0
+
+    if (!quickAddToastIdRef.current) {
+      quickAddToastIdRef.current = toast.loading("Adding reservations to your trip...")
+    }
+
+    const pollStatus = async () => {
+      if (isCancelled) return
+      attempts += 1
+
+      try {
+        const response = await fetch(`/api/quick-add/status/${job?.jobId}`)
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Failed to check quick add status")
+        }
+
+        if (data.status === "complete") {
+          sessionStorage.removeItem("quickAddJob")
+          router.refresh()
+
+          if (quickAddToastIdRef.current) {
+            toast.success("Reservations added!", { id: quickAddToastIdRef.current })
+            quickAddToastIdRef.current = null
+          }
+          return
+        }
+      } catch (error) {
+        if (quickAddToastIdRef.current) {
+          const message = error instanceof Error ? error.message : "Failed to update quick add status"
+          toast.error(message, { id: quickAddToastIdRef.current })
+          quickAddToastIdRef.current = null
+        }
+        sessionStorage.removeItem("quickAddJob")
+        return
+      }
+
+      if (attempts >= maxAttempts) {
+        sessionStorage.removeItem("quickAddJob")
+        if (quickAddToastIdRef.current) {
+          toast.error("Quick add is taking longer than expected.", { id: quickAddToastIdRef.current })
+          quickAddToastIdRef.current = null
+        }
+        return
+      }
+
+      timeoutId = setTimeout(pollStatus, baseIntervalMs)
+    }
+
+    pollStatus()
+
+    return () => {
+      isCancelled = true
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }, [itinerary.id, router])
+
   const renderContent = () => {
     switch (activeTab) {
       case 'journey': return <JourneyView itinerary={itinerary} scrollToId={scrollToId} />
@@ -163,7 +249,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
   const heading = getSectionHeading()
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 pb-20">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 pb-20 pt-20">
 
       {/* Hero Section Wrapper */}
       <div className="relative">
@@ -209,7 +295,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
       </div>
 
       {/* Sticky Tab Bar & Toolbar */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300">
+      <div className="sticky top-20 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-3">
           <div className="flex items-center justify-between gap-6">
             

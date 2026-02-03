@@ -34,6 +34,16 @@ export default async function ReservationEditPage({ params, searchParams }: Page
       reservationStatus: true,
       segment: {
         include: {
+          reservations: {
+            include: {
+              reservationType: {
+                include: {
+                  category: true
+                }
+              }
+            },
+            orderBy: { startTime: "asc" }
+          },
           trip: {
             include: {
               segments: {

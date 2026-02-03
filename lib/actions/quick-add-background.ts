@@ -9,7 +9,7 @@ import { addRestaurantsToTrip } from "./add-restaurants-to-trip";
 import { addEventsToTrip } from "./add-events-to-trip";
 import { addCruisesToTrip } from "./add-cruises-to-trip";
 import { addGenericReservationToTrip } from "./add-generic-reservation-to-trip";
-import { addPrivateDriversToTrip } from "./travel/add-private-drivers-to-trip";
+import { addPrivateDriverToTrip } from "./travel/add-private-drivers-to-trip";
 import type { FlightExtraction } from "@/lib/schemas/flight-extraction-schema";
 import type { HotelExtraction } from "@/lib/schemas/hotel-extraction-schema";
 import type { CarRentalExtraction } from "@/lib/schemas/car-rental-extraction-schema";
@@ -311,15 +311,10 @@ async function processSingleReservation(
         break;
         
       case "private-driver":
-        result = await addPrivateDriversToTrip({
+        result = await addPrivateDriverToTrip({
           tripId,
           segmentId: assignment?.segmentId || null,
-          privateDriverData: extractedData as PrivateDriverExtraction,
-          options: {
-            autoMatch: !assignment?.segmentId,
-            minScore: 70,
-            createSuggestedSegments: !assignment?.segmentId
-          }
+          driverData: extractedData as PrivateDriverExtraction,
         });
         break;
         

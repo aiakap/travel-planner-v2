@@ -55,7 +55,7 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
 
   if (itineraries.length === 0) {
     return (
-      <main className="min-h-screen pb-8">
+      <main className="min-h-screen pb-8 pt-20">
         <div className="max-w-4xl mx-auto px-4 py-8 md:py-16">
           <div className="text-center py-16 bg-card rounded-xl border border-dashed">
             <Plane className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
@@ -79,7 +79,7 @@ export function ItineraryViewClient({ itineraries, profileValues }: ItineraryVie
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-8">
+    <main className="min-h-screen bg-slate-50 pb-8 pt-20">
       {/* Trip Selector - Fixed below main nav */}
       <div className="sticky top-20 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 py-3">

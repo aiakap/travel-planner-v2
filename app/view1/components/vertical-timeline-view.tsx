@@ -37,12 +37,27 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
   }
 
   // Group reservations by date for each segment
+  // Always includes all reservations - those with dates outside segment range appear on first day
   const getSegmentDays = (segment: typeof itinerary.segments[0]) => {
     const dates = getTripDates(segment.startDate, segment.endDate)
+    const firstDay = dates[0]
+    
     const days = dates.map(date => ({
       date,
-      reservations: segment.reservations.filter(r => r.date === date)
+      reservations: segment.reservations.filter(r => {
+        // If date matches, show on that day
+        if (r.date === date) return true
+        // If date is outside segment range and this is the first day, show here
+        if (date === firstDay && !dates.includes(r.date)) return true
+        return false
+      }).map(r => ({
+        ...r,
+        // Mark if this reservation is displayed on a different day than its actual date
+        displayedOnDifferentDay: r.date !== date && !dates.includes(r.date),
+        actualDate: r.date
+      }))
     }))
+    
     return days.filter(day => day.reservations.length > 0)
   }
 
@@ -180,11 +195,16 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
 
                                 {/* Reservation Details */}
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                                     <span className="font-medium text-sm">{reservation.title}</span>
                                     {reservation.confirmationNumber && (
                                       <Badge variant="secondary" className="text-xs">
                                         {reservation.confirmationNumber}
+                                      </Badge>
+                                    )}
+                                    {reservation.displayedOnDifferentDay && (
+                                      <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                                        {reservation.type === 'hotel' ? 'Check-in' : 'Starts'}: {formatDateCompact(reservation.actualDate)}
                                       </Badge>
                                     )}
                                   </div>

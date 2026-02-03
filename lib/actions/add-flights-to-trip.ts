@@ -4,12 +4,13 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { FlightExtraction } from "@/lib/schemas/flight-extraction-schema";
 import { clusterFlightsByTime, FlightCluster, getClusterSummary } from "@/lib/utils/flight-clustering";
-import { findBestSegmentForCluster, SegmentMatch, Segment as SegmentWithType } from "@/lib/utils/segment-matching";
+import { findBestSegmentForCluster, findClosestTravelSegment, SegmentMatch, Segment as SegmentWithType } from "@/lib/utils/segment-matching";
 import { suggestSegmentForCluster, SegmentSuggestion } from "@/lib/utils/segment-suggestions";
 import { createSegment } from "./create-segment";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { getAirportTimezones } from "./airport-timezone";
 import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
+import { enrichReservation } from "./enrich-reservation";
 
 export interface AddFlightsOptions {
   autoCluster?: boolean; // Default: false (changed to process flights individually)
@@ -91,9 +92,19 @@ export async function addFlightsToTrip(
     console.log(`✂️ Created ${clusters.length} cluster(s)`);
 
     // Match each cluster to segments
-    const matches = clusters.map(cluster => 
-      findBestSegmentForCluster(cluster, trip.segments as any)
-    );
+    const matches = clusters.map(cluster => {
+      const travelMatch = findClosestTravelSegment(
+        {
+          startTime: cluster.startTime,
+          endTime: cluster.endTime,
+          startLocation: cluster.startLocation,
+          endLocation: cluster.endLocation,
+        },
+        trip.segments as any
+      );
+
+      return travelMatch ?? findBestSegmentForCluster(cluster, trip.segments as any);
+    });
 
     // Process each cluster
     const clusterResults: ClusterResult[] = [];
@@ -207,7 +218,16 @@ export async function addFlightsToTrip(
       console.log(`\n✈️ Flight ${i + 1}: ${flight.flightNumber} (${flight.departureAirport} → ${flight.arrivalAirport})`);
 
       // Match this single flight to best segment
-      const match = findBestSegmentForCluster(singleFlightCluster, trip.segments as any);
+      const travelMatch = findClosestTravelSegment(
+        {
+          startTime: singleFlightCluster.startTime,
+          endTime: singleFlightCluster.endTime,
+          startLocation: singleFlightCluster.startLocation,
+          endLocation: singleFlightCluster.endLocation,
+        },
+        trip.segments as any
+      );
+      const match = travelMatch ?? findBestSegmentForCluster(singleFlightCluster, trip.segments as any);
 
       let targetSegmentId: string;
 
@@ -373,6 +393,14 @@ async function addFlightsToSegment(
           flightData.eTicketNumber && flightData.eTicketNumber !== "" ? `E-ticket: ${flightData.eTicketNumber}` : null,
         ].filter(Boolean).join('\n'),
       },
+    });
+
+    // Trigger async enrichment for image (uses arrival airport as destination)
+    enrichReservation(reservation.id, {
+      departureAirport: flight.departureAirport,
+      arrivalAirport: flight.arrivalAirport,
+    }).catch((error) => {
+      console.error(`[AddFlights] Enrichment failed for reservation ${reservation.id}:`, error);
     });
 
     createdReservations.push(reservation);

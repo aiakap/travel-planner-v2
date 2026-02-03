@@ -3,6 +3,14 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { assignFlights } from "@/lib/utils/flight-assignment";
 import type { FlightExtraction } from "@/lib/schemas/flight-extraction-schema";
+import type { HotelExtraction } from "@/lib/schemas/hotel-extraction-schema";
+import type { CarRentalExtraction } from "@/lib/schemas/car-rental-extraction-schema";
+import type { TrainExtraction } from "@/lib/schemas/train-extraction-schema";
+import type { RestaurantExtraction } from "@/lib/schemas/restaurant-extraction-schema";
+import type { EventExtraction } from "@/lib/schemas/event-extraction-schema";
+import { createHotelCluster } from "@/lib/utils/hotel-clustering";
+import { createCarRentalCluster } from "@/lib/utils/car-rental-clustering";
+import { findBestSegmentForHotel, findBestSegmentForCarRental, Segment } from "@/lib/utils/segment-matching";
 
 /**
  * POST /api/quick-add/preview
@@ -30,11 +38,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (type !== "flight") {
-      // For now, only support flight preview (hotels/cars are simpler)
-      return NextResponse.json({ type, count: 1 });
-    }
-
     // Get trip data
     const trip = await prisma.trip.findFirst({
       where: {
@@ -56,20 +59,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[Preview] Trip fetched:', {
-      id: trip.id,
-      startDate: trip.startDate,
-      startDateType: typeof trip.startDate,
-      startDateIsDate: trip.startDate instanceof Date,
-      endDate: trip.endDate,
-      endDateType: typeof trip.endDate,
-      endDateIsDate: trip.endDate instanceof Date,
-    });
+    // Get ALL segments for user selection (includes type info)
+    const allSegments = trip.segments.map((s) => ({
+      id: s.id,
+      name: s.name,
+      type: s.segmentType.name,
+      startTime: s.startTime || new Date(),
+      endTime: s.endTime || new Date(),
+    }));
 
-    const flightData = extractedData as FlightExtraction;
+    // Convert segments for matching utilities
+    const segmentsForMatching: Segment[] = trip.segments.map((s) => ({
+      id: s.id,
+      name: s.name,
+      startTitle: s.startTitle,
+      endTitle: s.endTitle,
+      startTime: s.startTime?.toISOString() || null,
+      endTime: s.endTime?.toISOString() || null,
+      order: s.order,
+      segmentType: { name: s.segmentType.name },
+    }));
 
     // Helper function to convert 12-hour time to 24-hour format
     const convertTo24Hour = (time: string): string => {
+      if (!time || time === "") return "12:00";
       const match = time.match(/(\d+):(\d+)\s*(AM|PM)/i);
       if (!match) return "12:00";
 
@@ -84,6 +97,316 @@ export async function POST(request: NextRequest) {
 
       return `${hour.toString().padStart(2, "0")}:${minutes}`;
     };
+
+    // Handle HOTEL preview
+    if (type === "hotel") {
+      const hotelData = extractedData as HotelExtraction;
+      const cluster = createHotelCluster(hotelData);
+      const match = findBestSegmentForHotel(cluster, segmentsForMatching, 50); // Lower threshold
+      
+      let segmentInfo: { action: "create" | "match"; segmentName: string; segmentId?: string };
+      if (match) {
+        segmentInfo = {
+          action: "match",
+          segmentId: match.segmentId,
+          segmentName: match.segmentName,
+        };
+      } else {
+        segmentInfo = {
+          action: "create",
+          segmentName: `Stay in ${hotelData.hotelName.split(' ').slice(0, 3).join(' ')}`,
+        };
+      }
+
+      const hotelPreview = {
+        hotelName: hotelData.hotelName,
+        address: hotelData.address,
+        checkInDate: hotelData.checkInDate,
+        checkInTime: hotelData.checkInTime || "3:00 PM",
+        checkOutDate: hotelData.checkOutDate,
+        checkOutTime: hotelData.checkOutTime || "11:00 AM",
+        roomType: hotelData.roomType,
+        numberOfRooms: hotelData.numberOfRooms,
+        numberOfGuests: hotelData.numberOfGuests,
+        totalCost: hotelData.totalCost,
+        currency: hotelData.currency,
+        segment: segmentInfo,
+      };
+
+      return NextResponse.json({
+        type: "hotel",
+        count: 1,
+        hotels: [hotelPreview],
+        confirmationNumber: hotelData.confirmationNumber,
+        totalCost: hotelData.totalCost || undefined,
+        currency: hotelData.currency || undefined,
+        availableSegments: allSegments,
+      });
+    }
+
+    // Handle CAR RENTAL preview
+    if (type === "car-rental") {
+      const carData = extractedData as CarRentalExtraction;
+      const cluster = createCarRentalCluster(carData);
+      const match = findBestSegmentForCarRental(cluster, segmentsForMatching, 50);
+      
+      let segmentInfo: { action: "create" | "match"; segmentName: string; segmentId?: string };
+      if (match) {
+        segmentInfo = {
+          action: "match",
+          segmentId: match.segmentId,
+          segmentName: match.segmentName,
+        };
+      } else {
+        const isOneWay = carData.pickupLocation !== carData.returnLocation;
+        segmentInfo = {
+          action: "create",
+          segmentName: isOneWay 
+            ? `Drive: ${carData.pickupLocation} to ${carData.returnLocation}`
+            : `Car Rental in ${carData.pickupLocation}`,
+        };
+      }
+
+      const carPreview = {
+        company: carData.company,
+        vehicleClass: carData.vehicleClass,
+        vehicleModel: carData.vehicleModel,
+        pickupLocation: carData.pickupLocation,
+        pickupAddress: carData.pickupAddress,
+        pickupDate: carData.pickupDate,
+        pickupTime: carData.pickupTime || "12:00 PM",
+        returnLocation: carData.returnLocation,
+        returnAddress: carData.returnAddress,
+        returnDate: carData.returnDate,
+        returnTime: carData.returnTime || "12:00 PM",
+        isOneWay: carData.pickupLocation !== carData.returnLocation,
+        options: carData.options,
+        totalCost: carData.totalCost,
+        currency: carData.currency,
+        segment: segmentInfo,
+      };
+
+      return NextResponse.json({
+        type: "car-rental",
+        count: 1,
+        carRentals: [carPreview],
+        confirmationNumber: carData.confirmationNumber,
+        totalCost: carData.totalCost || undefined,
+        currency: carData.currency || undefined,
+        availableSegments: allSegments,
+      });
+    }
+
+    // Handle TRAIN preview
+    if (type === "train") {
+      const trainData = extractedData as TrainExtraction;
+      
+      const trainPreviews = trainData.trains.map((train, index) => {
+        // Find best matching segment based on dates
+        let segmentInfo: { action: "create" | "match"; segmentName: string; segmentId?: string } = {
+          action: "create",
+          segmentName: `Train to ${train.arrivalCity.split(',')[0]}`,
+        };
+
+        // Try to match by date overlap
+        const trainStart = new Date(`${train.departureDate}T${convertTo24Hour(train.departureTime)}`);
+        const trainEnd = new Date(`${train.arrivalDate}T${convertTo24Hour(train.arrivalTime)}`);
+        
+        for (const segment of segmentsForMatching) {
+          if (segment.startTime && segment.endTime) {
+            const segStart = new Date(segment.startTime);
+            const segEnd = new Date(segment.endTime);
+            if (trainStart >= segStart && trainEnd <= segEnd) {
+              segmentInfo = {
+                action: "match",
+                segmentId: segment.id,
+                segmentName: segment.name,
+              };
+              break;
+            }
+          }
+        }
+
+        return {
+          trainNumber: train.trainNumber,
+          operator: train.operator,
+          departureStation: train.departureStation,
+          departureCity: train.departureCity,
+          departureDate: train.departureDate,
+          departureTime: train.departureTime,
+          departurePlatform: train.departurePlatform,
+          arrivalStation: train.arrivalStation,
+          arrivalCity: train.arrivalCity,
+          arrivalDate: train.arrivalDate,
+          arrivalTime: train.arrivalTime,
+          class: train.class,
+          coach: train.coach,
+          seat: train.seat,
+          segment: segmentInfo,
+        };
+      });
+
+      return NextResponse.json({
+        type: "train",
+        count: trainData.trains.length,
+        trains: trainPreviews,
+        confirmationNumber: trainData.confirmationNumber,
+        totalCost: trainData.totalCost || undefined,
+        currency: trainData.currency || undefined,
+        availableSegments: allSegments,
+      });
+    }
+
+    // Handle RESTAURANT preview
+    if (type === "restaurant") {
+      const restaurantData = extractedData as RestaurantExtraction;
+      
+      // Try to match by date
+      let segmentInfo: { action: "create" | "match"; segmentName: string; segmentId?: string } = {
+        action: "create",
+        segmentName: `Dining at ${restaurantData.restaurantName}`,
+      };
+
+      const reservationDateTime = new Date(`${restaurantData.reservationDate}T${convertTo24Hour(restaurantData.reservationTime)}`);
+      
+      for (const segment of segmentsForMatching) {
+        if (segment.startTime && segment.endTime) {
+          const segStart = new Date(segment.startTime);
+          const segEnd = new Date(segment.endTime);
+          if (reservationDateTime >= segStart && reservationDateTime <= segEnd) {
+            segmentInfo = {
+              action: "match",
+              segmentId: segment.id,
+              segmentName: segment.name,
+            };
+            break;
+          }
+        }
+      }
+
+      const restaurantPreview = {
+        restaurantName: restaurantData.restaurantName,
+        address: restaurantData.address,
+        phone: restaurantData.phone,
+        reservationDate: restaurantData.reservationDate,
+        reservationTime: restaurantData.reservationTime,
+        partySize: restaurantData.partySize,
+        specialRequests: restaurantData.specialRequests,
+        platform: restaurantData.platform,
+        totalCost: restaurantData.cost,
+        currency: restaurantData.currency,
+        segment: segmentInfo,
+      };
+
+      return NextResponse.json({
+        type: "restaurant",
+        count: 1,
+        restaurants: [restaurantPreview],
+        confirmationNumber: restaurantData.confirmationNumber,
+        totalCost: restaurantData.cost || undefined,
+        currency: restaurantData.currency || undefined,
+        availableSegments: allSegments,
+      });
+    }
+
+    // Handle EVENT preview
+    if (type === "event") {
+      const eventData = extractedData as EventExtraction;
+      
+      // Try to match by date
+      let segmentInfo: { action: "create" | "match"; segmentName: string; segmentId?: string } = {
+        action: "create",
+        segmentName: eventData.eventName.length > 30 
+          ? eventData.eventName.substring(0, 30) + "..."
+          : eventData.eventName,
+      };
+
+      const eventDateTime = new Date(`${eventData.eventDate}T${convertTo24Hour(eventData.eventTime || "12:00 PM")}`);
+      
+      for (const segment of segmentsForMatching) {
+        if (segment.startTime && segment.endTime) {
+          const segStart = new Date(segment.startTime);
+          const segEnd = new Date(segment.endTime);
+          if (eventDateTime >= segStart && eventDateTime <= segEnd) {
+            segmentInfo = {
+              action: "match",
+              segmentId: segment.id,
+              segmentName: segment.name,
+            };
+            break;
+          }
+        }
+      }
+
+      const eventPreview = {
+        eventName: eventData.eventName,
+        venueName: eventData.venueName,
+        address: eventData.address,
+        eventDate: eventData.eventDate,
+        eventTime: eventData.eventTime,
+        doorsOpenTime: eventData.doorsOpenTime,
+        eventType: eventData.eventType,
+        tickets: eventData.tickets,
+        totalCost: eventData.totalCost,
+        currency: eventData.currency,
+        platform: eventData.platform,
+        specialInstructions: eventData.specialInstructions,
+        segment: segmentInfo,
+      };
+
+      return NextResponse.json({
+        type: "event",
+        count: 1,
+        events: [eventPreview],
+        confirmationNumber: eventData.confirmationNumber,
+        totalCost: eventData.totalCost || undefined,
+        currency: eventData.currency || undefined,
+        availableSegments: allSegments,
+      });
+    }
+
+    // Handle CRUISE, PRIVATE-DRIVER, GENERIC - simple preview with segment assignment
+    if (type === "cruise" || type === "private-driver" || type === "generic") {
+      // For these types, show basic preview with segment dropdown
+      const genericPreview = {
+        type,
+        data: extractedData,
+        segment: {
+          action: "create" as const,
+          segmentName: type === "cruise" ? "Cruise" : type === "private-driver" ? "Private Transfer" : "Activity",
+        },
+      };
+
+      return NextResponse.json({
+        type,
+        count: 1,
+        generic: [genericPreview],
+        confirmationNumber: extractedData.confirmationNumber || undefined,
+        availableSegments: allSegments,
+      });
+    }
+
+    // Handle FLIGHT preview (existing logic)
+    if (type !== "flight") {
+      // Fallback for any unhandled type
+      return NextResponse.json({ 
+        type, 
+        count: 1,
+        availableSegments: allSegments,
+      });
+    }
+
+    console.log('[Preview] Trip fetched:', {
+      id: trip.id,
+      startDate: trip.startDate,
+      startDateType: typeof trip.startDate,
+      startDateIsDate: trip.startDate instanceof Date,
+      endDate: trip.endDate,
+      endDateType: typeof trip.endDate,
+      endDateIsDate: trip.endDate instanceof Date,
+    });
+
+    const flightData = extractedData as FlightExtraction;
 
     // Parse flight dates with validation
     const flightsWithDates = flightData.flights.map((flight, index) => {
@@ -119,21 +442,15 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Get ALL segments for automatic assignment
+    // Get ALL segments for automatic assignment (flight-specific format)
     const allSegmentsForAssignment = trip.segments.map((s) => ({
       id: s.id,
       name: s.name,
       startTime: s.startTime || new Date(),
       endTime: s.endTime || new Date(),
-    }));
-
-    // Get ALL segments for user selection (includes type info)
-    const allSegments = trip.segments.map((s) => ({
-      id: s.id,
-      name: s.name,
-      type: s.segmentType.name,
-      startTime: s.startTime || new Date(),
-      endTime: s.endTime || new Date(),
+      startTitle: s.startTitle,
+      endTitle: s.endTitle,
+      segmentTypeName: s.segmentType?.name,
     }));
 
     console.log('[Preview] Calling assignFlights with:', {
@@ -149,6 +466,8 @@ export async function POST(request: NextRequest) {
       flightsWithDates.map((f) => ({
         departureDate: f.departureDateTime,
         arrivalDate: f.arrivalDateTime,
+        departureLocation: f.departureCity,
+        arrivalLocation: f.arrivalCity,
       })),
       {
         startDate: trip.startDate,

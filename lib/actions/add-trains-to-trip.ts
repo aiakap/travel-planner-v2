@@ -7,6 +7,7 @@ import { getReservationType, getReservationStatus } from "@/lib/db/reservation-l
 import { findBestSegmentForCluster } from "@/lib/utils/segment-matching";
 import { getTimeZoneForLocation } from "./timezone";
 import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
+import { enrichReservation } from "./enrich-reservation";
 
 // Geocoding helper for train stations
 async function geocodeStation(stationName: string, city: string): Promise<{
@@ -271,6 +272,13 @@ export async function addTrainsToTrip(
         arrivalLocation: `${train.arrivalStation} (${train.arrivalCity})`,
         vendor: train.operator,
       },
+    });
+
+    // Trigger async enrichment for image (use arrival station as destination)
+    enrichReservation(reservation.id, {
+      locationQuery: `${train.arrivalStation} train station ${train.arrivalCity}`,
+    }).catch((error) => {
+      console.error(`[AddTrains] Enrichment failed for reservation ${reservation.id}:`, error);
     });
 
     createdReservations.push(reservation);

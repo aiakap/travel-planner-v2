@@ -959,7 +959,7 @@ export function TripBuilderClient({
   // Validate segment types are loaded
   if (!segmentTypeMap || Object.keys(segmentTypeMap).length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-20">
         <div className="text-center p-8">
           <div className="text-xl font-bold text-gray-700 mb-4">Loading Trip Builder...</div>
           <div className="text-gray-500 mb-2">Segment types are being loaded from the database.</div>
@@ -971,7 +971,7 @@ export function TripBuilderClient({
 
   // Main UI - always show, timeline appears progressively
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="min-h-screen pt-20 flex flex-col">
       <div className="flex-1 overflow-y-auto">
         <div className="bg-gray-50 text-slate-800 font-sans selection:bg-indigo-100 min-h-full">
           {/* HEADER */}

@@ -91,6 +91,11 @@ interface CarRentalPreview {
   isOneWay: boolean;
 }
 
+interface SampleOption {
+  id: string;
+  label: string;
+}
+
 type ExtractionType = "flight" | "hotel" | "car-rental" | "train" | "restaurant" | "event" | "cruise" | "generic" | "private-driver";
 type Step = 'input' | 'approval' | 'extracting' | 'complete';
 
@@ -108,6 +113,10 @@ export default function EmailExtractionPage() {
   
   // Existing state
   const [emailText, setEmailText] = useState("");
+  const [selectedSampleId, setSelectedSampleId] = useState("");
+  const [sampleOptions, setSampleOptions] = useState<SampleOption[]>([]);
+  const [isLoadingSamples, setIsLoadingSamples] = useState(false);
+  const [sampleError, setSampleError] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
   const [extractionType, setExtractionType] = useState<ExtractionType | null>(null);
   const [loading, setLoading] = useState(false);
@@ -130,6 +139,28 @@ export default function EmailExtractionPage() {
     fetchTrips();
   }, []);
 
+  useEffect(() => {
+    const fetchSamples = async () => {
+      setIsLoadingSamples(true);
+      setSampleError(null);
+      try {
+        const response = await fetch("/api/sample-emails");
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "Failed to load sample emails");
+        }
+        setSampleOptions(data.samples || []);
+      } catch (err) {
+        setSampleOptions([]);
+        setSampleError(err instanceof Error ? err.message : "Failed to load sample emails");
+      } finally {
+        setIsLoadingSamples(false);
+      }
+    };
+
+    fetchSamples();
+  }, []);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -140,6 +171,24 @@ export default function EmailExtractionPage() {
       setEmailText(text);
     } catch (err) {
       setError("Failed to parse file");
+    }
+  };
+
+  const handleSampleSelect = async (value: string) => {
+    setSelectedSampleId(value);
+    if (!value) return;
+
+    setSampleError(null);
+    try {
+      const response = await fetch(`/api/sample-emails?id=${encodeURIComponent(value)}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to load sample email");
+      }
+      setEmailText(data.text || "");
+      setError(null);
+    } catch (err) {
+      setSampleError(err instanceof Error ? err.message : "Failed to load sample email");
     }
   };
 
@@ -587,6 +636,33 @@ export default function EmailExtractionPage() {
                   accept=".eml,.txt,message/rfc822"
                   onChange={handleFileUpload}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sampleImport">Quick Import</Label>
+                <Select
+                  value={selectedSampleId}
+                  onValueChange={handleSampleSelect}
+                  disabled={isLoadingSamples || loading || sampleOptions.length === 0}
+                >
+                  <SelectTrigger id="sampleImport" className="w-full">
+                    <SelectValue
+                      placeholder={isLoadingSamples ? "Loading sample emails..." : "Choose a sample email"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sampleOptions.map((sample) => (
+                      <SelectItem key={sample.id} value={sample.id}>
+                        {sample.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {sampleError && (
+                  <p className="text-xs text-rose-600">{sampleError}</p>
+                )}
+                {!isLoadingSamples && sampleOptions.length === 0 && !sampleError && (
+                  <p className="text-xs text-muted-foreground">No sample emails found.</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="emailText">Or paste email content</Label>

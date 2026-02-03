@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Loader2, AlertCircle, Trash2, Lightbulb, X } from "lucide-react"
+import { ArrowLeft, Loader2, AlertCircle, Trash2, Lightbulb, X, Plane, Hotel, Utensils, Train, Car, Ticket, MapPin, Clock } from "lucide-react"
 import { format, differenceInDays, differenceInMinutes } from "date-fns"
 import { LocationAutocompleteInput } from "@/components/ui/location-autocomplete-input"
 import { DatePopover } from "@/components/ui/date-popover"
+import { ClickToSelect, ClickToSelectStatus } from "@/components/ui/click-to-select"
+import { CurrencySelect } from "@/components/ui/currency-select"
+import { SegmentEditMap } from "@/components/segment-edit-map"
 import { updateReservation } from "@/lib/actions/update-reservation"
 import { deleteReservation } from "@/lib/actions/delete-reservation"
 import { getTimeZoneForLocation } from "@/lib/actions/timezone"
@@ -14,6 +17,7 @@ import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion"
 import { getDefaultTimeForType } from "@/lib/scheduling-utils"
 import { formatWallDateTime } from "@/lib/utils"
 import { localToUTC, parseToLocalComponents } from "@/lib/utils/local-time"
+import { getCurrencyByCode } from "@/lib/currencies"
 import TimezoneSelect from "@/components/timezone-select"
 import FlightMap from "@/components/flight-map"
 import type {
@@ -51,18 +55,22 @@ type CategoryWithTypes = ReservationCategory & {
   }>
 }
 
+type SegmentReservation = Reservation & {
+  reservationType: ReservationType & {
+    category: ReservationCategory
+  }
+}
+
 interface ReservationEditClientProps {
   reservation: ReservationWithRelations
   trip: Trip & {
     segments: Array<Segment & {
-      reservations: Array<Reservation & {
-        reservationType: ReservationType & {
-          category: ReservationCategory
-        }
-      }>
+      reservations: Array<SegmentReservation>
     }>
   }
-  segment: Segment
+  segment: Segment & {
+    reservations: Array<SegmentReservation>
+  }
   categories: CategoryWithTypes[]
   statuses: ReservationStatus[]
   returnTo: string
@@ -118,6 +126,33 @@ function formatDateTimeLocal(date: Date | null): string {
 function calculateTripDay(tripStartDate: Date, targetDate: Date): number {
   const daysDiff = differenceInDays(targetDate, tripStartDate)
   return Math.max(1, daysDiff + 1)
+}
+
+// Get category icon for display
+function getCategoryIcon(categoryName: string) {
+  switch (categoryName.toLowerCase()) {
+    case "travel":
+      return <Plane className="h-4 w-4" />
+    case "stay":
+      return <Hotel className="h-4 w-4" />
+    case "activity":
+      return <Ticket className="h-4 w-4" />
+    case "dining":
+      return <Utensils className="h-4 w-4" />
+    default:
+      return <MapPin className="h-4 w-4" />
+  }
+}
+
+// Get type icon for display
+function getTypeIcon(typeName: string) {
+  const name = typeName.toLowerCase()
+  if (name.includes("flight")) return <Plane className="h-4 w-4" />
+  if (name.includes("hotel") || name.includes("airbnb") || name.includes("hostel")) return <Hotel className="h-4 w-4" />
+  if (name.includes("train") || name.includes("rail")) return <Train className="h-4 w-4" />
+  if (name.includes("car") || name.includes("taxi") || name.includes("uber") || name.includes("lyft")) return <Car className="h-4 w-4" />
+  if (name.includes("restaurant") || name.includes("dining") || name.includes("cafe")) return <Utensils className="h-4 w-4" />
+  return <Ticket className="h-4 w-4" />
 }
 
 export function ReservationEditClient({
@@ -526,9 +561,9 @@ export function ReservationEditClient({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 pt-20">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-slate-200 sticky top-20 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <button
@@ -581,25 +616,26 @@ export function ReservationEditClient({
         )}
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {/* Hero Image */}
-          {reservation.imageUrl && (
-            <div className="relative h-48 bg-gradient-to-br from-blue-500 to-purple-600">
-              <img
-                src={reservation.imageUrl}
-                alt={reservation.name}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-slate-900/20 to-transparent" />
-            </div>
-          )}
-
-          {/* Form */}
-          <div className="p-6 space-y-4">
-            {/* Name */}
-            <div>
-              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
-                Reservation Name
-              </label>
+          {/* Hero Image Section */}
+          <div className="relative h-48">
+            {reservation.imageUrl ? (
+              <>
+                <img
+                  src={reservation.imageUrl}
+                  alt={reservation.name}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/30 to-transparent" />
+              </>
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                <div className="text-slate-300">
+                  {getCategoryIcon(currentCategory?.name || "default")}
+                </div>
+              </div>
+            )}
+            {/* Overlay content */}
+            <div className="absolute bottom-0 left-0 right-0 p-4">
               <input
                 type="text"
                 value={name}
@@ -607,73 +643,61 @@ export function ReservationEditClient({
                   setName(e.target.value)
                   setIsDirty(true)
                 }}
-                className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                className="w-full text-xl font-semibold bg-transparent border-0 text-white placeholder-white/60 
+                  focus:outline-none focus:ring-0 p-0"
                 placeholder="Enter reservation name..."
               />
             </div>
+          </div>
 
-            {/* Category & Type */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
-                  Category
-                </label>
-                <select
-                  value={categoryId}
-                  onChange={(e) => {
-                    setCategoryId(e.target.value)
-                    setIsDirty(true)
-                  }}
-                  className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  {categories.map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
-                  Type
-                </label>
-                <select
-                  value={typeId}
-                  onChange={(e) => {
-                    setTypeId(e.target.value)
-                    setIsDirty(true)
-                  }}
-                  className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  {availableTypes.map(type => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
-                Status
-              </label>
-              <select
-                value={statusId}
-                onChange={(e) => {
-                  setStatusId(e.target.value)
+          {/* Form */}
+          <div className="p-6 space-y-4">
+            {/* Category, Type & Status Row - Click to Edit */}
+            <div className="flex items-center gap-2 flex-wrap pb-4 border-b border-slate-100">
+              <ClickToSelect
+                value={categoryId}
+                options={categories.map(cat => ({
+                  value: cat.id,
+                  label: cat.name,
+                  icon: getCategoryIcon(cat.name)
+                }))}
+                onChange={(value) => {
+                  setCategoryId(value)
                   setIsDirty(true)
                 }}
-                className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              >
-                {statuses.map(status => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
-                  </option>
-                ))}
-              </select>
+                icon={getCategoryIcon(currentCategory?.name || "")}
+              />
+              
+              <span className="text-slate-300">|</span>
+              
+              <ClickToSelect
+                value={typeId}
+                options={availableTypes.map(type => ({
+                  value: type.id,
+                  label: type.name,
+                  icon: getTypeIcon(type.name)
+                }))}
+                onChange={(value) => {
+                  setTypeId(value)
+                  setIsDirty(true)
+                }}
+                icon={getTypeIcon(currentType?.name || "")}
+              />
+              
+              <span className="text-slate-300">|</span>
+              
+              <ClickToSelectStatus
+                value={statusId}
+                options={statuses.map(status => ({
+                  value: status.id,
+                  label: status.name,
+                  color: status.name
+                }))}
+                onChange={(value) => {
+                  setStatusId(value)
+                  setIsDirty(true)
+                }}
+              />
             </div>
 
             {/* POINT_TO_POINT_TRANSPORT: Flight Map + Departure/Arrival */}
@@ -1187,40 +1211,48 @@ export function ReservationEditClient({
             )}
 
             {/* Universal Fields */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
-                  Cost
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={cost}
-                  onChange={(e) => {
-                    setCost(e.target.value)
-                    setIsDirty(true)
-                  }}
-                  className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  placeholder="0.00"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
-                  Currency
-                </label>
-                <input
-                  type="text"
+            {/* Cost with inline currency selector */}
+            <div>
+              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
+                Cost
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                    {getCurrencyByCode(currency)?.symbol || "$"}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={cost}
+                    onChange={(e) => {
+                      setCost(e.target.value)
+                      setIsDirty(true)
+                    }}
+                    className="w-full text-sm border border-slate-300 rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="0.00"
+                  />
+                </div>
+                <CurrencySelect
                   value={currency}
-                  onChange={(e) => {
-                    setCurrency(e.target.value)
+                  onChange={(value) => {
+                    setCurrency(value)
                     setIsDirty(true)
                   }}
-                  className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  placeholder="USD"
-                  maxLength={3}
                 />
               </div>
             </div>
+
+            {/* Timezone (read-only, auto-populated from location) */}
+            {locationCache.timeZoneId && (
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Clock className="h-3.5 w-3.5" />
+                <span>Timezone: {locationCache.timeZoneId}</span>
+                {locationCache.timeZoneName && (
+                  <span className="text-slate-400">({locationCache.timeZoneName})</span>
+                )}
+              </div>
+            )}
 
             <div suppressHydrationWarning>
               <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
@@ -1320,6 +1352,32 @@ export function ReservationEditClient({
                 placeholder="Free cancellation until..."
               />
             </div>
+
+            {/* Segment Reservations Map */}
+            {segment.reservations && segment.reservations.length > 0 && (
+              <div className="pt-4 border-t border-slate-100">
+                <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-3">
+                  Segment Map - All Reservations
+                </label>
+                <SegmentEditMap
+                  reservations={segment.reservations.map(res => ({
+                    id: res.id,
+                    name: res.name,
+                    location: res.location,
+                    latitude: res.latitude,
+                    longitude: res.longitude,
+                    departureLocation: res.departureLocation,
+                    arrivalLocation: res.arrivalLocation,
+                    wall_start_date: res.wall_start_date,
+                    wall_start_time: res.wall_start_time,
+                    reservationType: res.reservationType
+                  }))}
+                  currentReservationId={reservation.id}
+                  segmentName={segment.name}
+                  height="280px"
+                />
+              </div>
+            )}
           </div>
 
           {/* Footer */}

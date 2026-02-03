@@ -5,6 +5,8 @@
  * and determines segment creation/matching strategy
  */
 
+import { findClosestTravelSegment } from "./segment-matching";
+
 export type FlightCategory = 'outbound' | 'in-trip' | 'return';
 
 export interface FlightAssignment {
@@ -17,11 +19,23 @@ export interface FlightAssignment {
 export interface FlightDateInfo {
   departureDate: Date;
   arrivalDate: Date;
+  departureLocation?: string;
+  arrivalLocation?: string;
 }
 
 export interface TripDateInfo {
   startDate: Date;
   endDate: Date;
+}
+
+export interface SegmentForAssignment {
+  id: string;
+  name: string;
+  startTime: Date;
+  endTime: Date;
+  startTitle?: string | null;
+  endTitle?: string | null;
+  segmentTypeName?: string | null;
 }
 
 /**
@@ -99,10 +113,38 @@ export function categorizeFlightByDate(
  */
 export function determineSegmentStrategy(
   category: FlightCategory,
-  allSegments: { id: string; name: string; startTime: Date; endTime: Date }[],
+  allSegments: SegmentForAssignment[],
   flightDeparture: Date,
-  flightArrival: Date
+  flightArrival: Date,
+  flightLocations?: { startLocation?: string; endLocation?: string }
 ): Pick<FlightAssignment, 'shouldCreateSegment' | 'segmentId' | 'reason'> {
+  const travelMatch = findClosestTravelSegment(
+    {
+      startTime: flightDeparture,
+      endTime: flightArrival,
+      startLocation: flightLocations?.startLocation || '',
+      endLocation: flightLocations?.endLocation || '',
+    },
+    allSegments.map((segment) => ({
+      id: segment.id,
+      name: segment.name,
+      startTitle: segment.startTitle || '',
+      endTitle: segment.endTitle || '',
+      startTime: segment.startTime ? segment.startTime.toISOString() : null,
+      endTime: segment.endTime ? segment.endTime.toISOString() : null,
+      segmentType: { name: segment.segmentTypeName || '' },
+      order: 0,
+    }))
+  );
+
+  if (travelMatch) {
+    return {
+      shouldCreateSegment: false,
+      segmentId: travelMatch.segmentId,
+      reason: `Assigned to closest Travel segment "${travelMatch.segmentName}"`,
+    };
+  }
+
   // Outbound and return flights always get new segments
   if (category === 'outbound') {
     return {
@@ -145,14 +187,18 @@ export function determineSegmentStrategy(
 export function assignFlight(
   flight: FlightDateInfo,
   trip: TripDateInfo,
-  allSegments: { id: string; name: string; startTime: Date; endTime: Date }[]
+  allSegments: SegmentForAssignment[]
 ): FlightAssignment {
   const category = categorizeFlightByDate(flight, trip);
   const segmentStrategy = determineSegmentStrategy(
     category,
     allSegments,
     flight.departureDate,
-    flight.arrivalDate
+    flight.arrivalDate,
+    {
+      startLocation: flight.departureLocation,
+      endLocation: flight.arrivalLocation,
+    }
   );
 
   return {
@@ -201,7 +247,7 @@ export function calculateTripExtension(
 export function assignFlights(
   flights: FlightDateInfo[],
   trip: TripDateInfo,
-  allSegments: { id: string; name: string; startTime: Date; endTime: Date }[]
+  allSegments: SegmentForAssignment[]
 ): {
   assignments: FlightAssignment[];
   tripExtension: { newStartDate: Date; newEndDate: Date } | null;

@@ -839,6 +839,23 @@ model AirportTimezone {
   @@index([timeZoneId])
 }
 
+model ImageEnrichmentLog {
+  id              String   @id @default(cuid())
+  reservationId   String
+  reservationName String
+  searchQuery     String?
+  source          String   // "google_places" | "ai_generation"
+  status          String   // "success" | "no_results" | "api_error" | "timeout"
+  errorMessage    String?
+  errorCode       String?
+  photoUrl        String?
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+  @@index([reservationId])
+  @@index([createdAt])
+}
+
 model PerformanceLog {
   id                String   @id
   userId            String?

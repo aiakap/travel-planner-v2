@@ -8,6 +8,7 @@ import { createHotelCluster } from "@/lib/utils/hotel-clustering";
 import { findBestSegmentForHotel } from "@/lib/utils/segment-matching";
 import { getSegmentTimeZones, getTimeZoneForLocation } from "./timezone";
 import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
+import { enrichReservation } from "./enrich-reservation";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -263,6 +264,17 @@ export async function addHotelsToTrip(params: {
       currency: hotelData.currency && hotelData.currency !== "" ? hotelData.currency : undefined,
       notes: notes || undefined,
     },
+  });
+
+  // Trigger async enrichment for image
+  const locationQuery = hotelData.address 
+    ? `${hotelData.hotelName} ${hotelData.address}`
+    : hotelData.hotelName;
+  
+  enrichReservation(reservation.id, {
+    locationQuery,
+  }).catch((error) => {
+    console.error(`[AddHotels] Enrichment failed for reservation ${reservation.id}:`, error);
   });
 
   return {

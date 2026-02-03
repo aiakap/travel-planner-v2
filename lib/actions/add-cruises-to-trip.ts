@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { CruiseExtraction } from "@/lib/schemas/cruise-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
+import { enrichReservation } from "./enrich-reservation";
 
 interface AddCruisesOptions {
   autoMatch?: boolean;
@@ -173,6 +174,13 @@ export async function addCruisesToTrip(params: {
       arrivalLocation: `${cruiseData.disembarkationPort} (${cruiseData.disembarkationLocation})`,
       vendor: cruiseData.cruiseLine,
     },
+  });
+
+  // Trigger async enrichment for image (use cruise ship name)
+  enrichReservation(reservation.id, {
+    locationQuery: `${cruiseData.cruiseLine} ${cruiseData.shipName} cruise ship`,
+  }).catch((error) => {
+    console.error(`[AddCruises] Enrichment failed for reservation ${reservation.id}:`, error);
   });
 
   console.log(`✅ Created cruise reservation: ${cruiseData.shipName}`);

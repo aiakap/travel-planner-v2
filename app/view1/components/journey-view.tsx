@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
-import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2, Sparkles, Plus, Moon } from "lucide-react"
+import { MapPin, Clock, MessageCircle, Edit2, ChevronLeft, ChevronRight, Trash2, Sparkles, Plus, Moon, ArrowDown } from "lucide-react"
 import { Card } from "./card"
 import { Badge } from "./badge"
 import { ActionIcon } from "./action-icon"
@@ -333,9 +333,28 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
                                       <Card className={`p-3 flex items-center gap-4 ${selectedDate === momentId ? 'ring-1 ring-blue-500 shadow-md bg-blue-50/30' : ''}`}>
                                           {/* Time Column */}
                                           <div className="flex flex-col items-center min-w-[45px] text-center">
-                                            <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none">
-                                              {moment.time}
-                                            </span>
+                                            {moment.endTime ? (
+                                              // Two-line layout with arrow for reservations with end time
+                                              <div className="flex flex-col items-center gap-0.5">
+                                                <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none whitespace-nowrap">
+                                                  {moment.time}
+                                                </span>
+                                                <div className="flex items-center gap-0.5 text-slate-400">
+                                                  <ArrowDown className="w-2.5 h-2.5" />
+                                                  {moment.endDateDiff != null && moment.endDateDiff > 0 && (
+                                                    <span className="text-[8px] font-medium">+{moment.endDateDiff}d</span>
+                                                  )}
+                                                </div>
+                                                <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none whitespace-nowrap">
+                                                  {moment.endTime}
+                                                </span>
+                                              </div>
+                                            ) : (
+                                              // Single time display
+                                              <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md leading-none whitespace-nowrap">
+                                                {moment.time}
+                                              </span>
+                                            )}
                                           </div>
 
                                           {/* Content */}
@@ -354,6 +373,12 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
                                               {moment.isMultiDay && moment.totalDays && moment.totalDays > 1 && (
                                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                                                   {moment.totalDays} days
+                                                </span>
+                                              )}
+                                              {/* Badge for reservations displayed on different day than actual date */}
+                                              {moment.displayedOnDifferentDay && moment.actualDateDisplay && (
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                                  {moment.reservationType === 'hotel' ? 'Check-in' : 'Actual'}: {moment.actualDateDisplay}
                                                 </span>
                                               )}
                                             </div>

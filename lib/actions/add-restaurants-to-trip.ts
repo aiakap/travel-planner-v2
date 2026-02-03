@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { RestaurantExtraction } from "@/lib/schemas/restaurant-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { getSegmentTimeZones } from "./timezone";
+import { enrichReservation } from "./enrich-reservation";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -216,6 +217,17 @@ export async function addRestaurantsToTrip(params: {
       longitude: geocoded?.lng,
       contactPhone: restaurantData.phone || undefined,
     },
+  });
+
+  // Trigger async enrichment for image
+  const locationQuery = restaurantData.address 
+    ? `${restaurantData.restaurantName} ${restaurantData.address}`
+    : restaurantData.restaurantName;
+  
+  enrichReservation(reservation.id, {
+    locationQuery,
+  }).catch((error) => {
+    console.error(`[AddRestaurants] Enrichment failed for reservation ${reservation.id}:`, error);
   });
 
   console.log(`✅ Created restaurant reservation: ${restaurantData.restaurantName}`);

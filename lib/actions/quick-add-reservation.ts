@@ -149,6 +149,9 @@ async function processFlightReservations(
       name: s.name,
       startTime: s.startTime || new Date(),
       endTime: s.endTime || new Date(),
+      startTitle: s.startTitle,
+      endTitle: s.endTitle,
+      segmentTypeName: s.segmentType?.name,
     }));
 
     // Ensure trip dates are Date objects (handle both Prisma Date and serialized strings)
@@ -176,6 +179,8 @@ async function processFlightReservations(
       flightsWithDates.map((f) => ({
         departureDate: f.departureDateTime,
         arrivalDate: f.arrivalDateTime,
+        departureLocation: f.departureCity,
+        arrivalLocation: f.arrivalCity,
       })),
       {
         startDate: ensureDate(trip.startDate, 'trip.startDate'),
@@ -357,10 +362,10 @@ async function processFlightReservations(
       },
     });
 
-    // Trigger async enrichment for any additional data (geocoding, etc.)
+    // Trigger async enrichment for timezone, geocoding, and image
     enrichReservation(reservation.id, {
-      departure: flight.departureAirport,
-      arrival: flight.arrivalAirport
+      departureAirport: flight.departureAirport,
+      arrivalAirport: flight.arrivalAirport,  // Used for image (arrival destination)
     }).catch((error) => {
       console.error(`[QuickAdd] Enrichment failed for reservation ${reservation.id}:`, error);
     });
@@ -443,6 +448,17 @@ async function processHotelReservations(
     },
   });
 
+  // Trigger async enrichment for image
+  const locationQuery = extractedData.address 
+    ? `${extractedData.hotelName} ${extractedData.address}`
+    : extractedData.hotelName;
+  
+  enrichReservation(reservation.id, {
+    locationQuery,
+  }).catch((error) => {
+    console.error(`[QuickAdd] Hotel enrichment failed for reservation ${reservation.id}:`, error);
+  });
+
   return [reservation.id];
 }
 
@@ -522,6 +538,13 @@ async function processCarRentalReservations(
       reservationStatusId: confirmedStatus.id,
       metadata: metadata as any,
     },
+  });
+
+  // Trigger async enrichment for image (use pickup location)
+  enrichReservation(reservation.id, {
+    locationQuery: extractedData.pickupLocation,
+  }).catch((error) => {
+    console.error(`[QuickAdd] Car rental enrichment failed for reservation ${reservation.id}:`, error);
   });
 
   return [reservation.id];
@@ -736,11 +759,11 @@ export async function createDraftReservation(
     }
   });
 
-  // Enrich even draft reservations with timezone data
+  // Enrich even draft reservations with timezone data and image
   if (flightData.departureAirport || flightData.arrivalAirport) {
     enrichReservation(reservation.id, {
-      departure: flightData.departureAirport,
-      arrival: flightData.arrivalAirport
+      departureAirport: flightData.departureAirport,
+      arrivalAirport: flightData.arrivalAirport,
     }).catch((error) => {
       console.error(`[QuickAdd] Draft enrichment failed for ${reservation.id}:`, error);
     });
@@ -923,10 +946,10 @@ export async function createSingleFlight(
     },
   });
 
-  // Trigger async enrichment for any additional data
+  // Trigger async enrichment for timezone, geocoding, and image
   enrichReservation(reservation.id, {
-    departure: flightData.departureAirport,
-    arrival: flightData.arrivalAirport
+    departureAirport: flightData.departureAirport,
+    arrivalAirport: flightData.arrivalAirport,
   }).catch((error) => {
     console.error(`[QuickAdd] Enrichment failed for reservation ${reservation.id}:`, error);
   });

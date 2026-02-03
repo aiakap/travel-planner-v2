@@ -40,6 +40,12 @@ const CREATION_MESSAGES = [
 
 type ReservationType = "flight" | "hotel" | "car-rental" | "train" | "restaurant" | "event" | "cruise" | "private-driver" | "generic"
 
+interface SegmentAssignmentInfo {
+  action: 'create' | 'match'
+  segmentName: string
+  segmentId?: string
+}
+
 interface FlightPreview {
   flightNumber: string
   carrier: string
@@ -49,13 +55,104 @@ interface FlightPreview {
   departureDateTime: string
   arrivalDateTime: string
   category: 'outbound' | 'in-trip' | 'return'
-  segment: {
-    action: 'create' | 'match'
-    segmentName: string
-    segmentId?: string
-  }
+  segment: SegmentAssignmentInfo
   cabin?: string
   seatNumber?: string
+}
+
+interface HotelPreview {
+  hotelName: string
+  address: string
+  checkInDate: string
+  checkInTime: string
+  checkOutDate: string
+  checkOutTime: string
+  roomType: string
+  numberOfRooms: number
+  numberOfGuests: number
+  totalCost: number
+  currency: string
+  segment: SegmentAssignmentInfo
+}
+
+interface CarRentalPreview {
+  company: string
+  vehicleClass: string
+  vehicleModel: string
+  pickupLocation: string
+  pickupAddress: string
+  pickupDate: string
+  pickupTime: string
+  returnLocation: string
+  returnAddress: string
+  returnDate: string
+  returnTime: string
+  isOneWay: boolean
+  options: string[]
+  totalCost: number
+  currency: string
+  segment: SegmentAssignmentInfo
+}
+
+interface TrainPreview {
+  trainNumber: string
+  operator: string
+  departureStation: string
+  departureCity: string
+  departureDate: string
+  departureTime: string
+  departurePlatform: string
+  arrivalStation: string
+  arrivalCity: string
+  arrivalDate: string
+  arrivalTime: string
+  class: string
+  coach: string
+  seat: string
+  segment: SegmentAssignmentInfo
+}
+
+interface RestaurantPreview {
+  restaurantName: string
+  address: string
+  phone: string
+  reservationDate: string
+  reservationTime: string
+  partySize: number
+  specialRequests: string
+  platform: string
+  totalCost: number
+  currency: string
+  segment: SegmentAssignmentInfo
+}
+
+interface EventTicket {
+  ticketType: string
+  quantity: number
+  price: number
+  seatInfo: string
+}
+
+interface EventPreview {
+  eventName: string
+  venueName: string
+  address: string
+  eventDate: string
+  eventTime: string
+  doorsOpenTime: string
+  eventType: string
+  tickets: EventTicket[]
+  totalCost: number
+  currency: string
+  platform: string
+  specialInstructions: string
+  segment: SegmentAssignmentInfo
+}
+
+interface GenericPreview {
+  type: string
+  data: any
+  segment: SegmentAssignmentInfo
 }
 
 interface AvailableSegment {
@@ -82,6 +179,12 @@ interface ExtractionResult {
     return: number
   }
   flights?: FlightPreview[]
+  hotels?: HotelPreview[]
+  carRentals?: CarRentalPreview[]
+  trains?: TrainPreview[]
+  restaurants?: RestaurantPreview[]
+  events?: EventPreview[]
+  generic?: GenericPreview[]
   tripExtension?: {
     originalStart: string
     originalEnd: string
@@ -94,6 +197,11 @@ interface ExtractionResult {
   availableSegments?: AvailableSegment[]
 }
 
+interface SampleOption {
+  id: string
+  label: string
+}
+
 interface QuickAddClientProps {
   trip: Trip
 }
@@ -102,6 +210,10 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
   const router = useRouter()
   const [reservationType, setReservationType] = useState<ReservationType>("flight")
   const [confirmationText, setConfirmationText] = useState("")
+  const [selectedSampleId, setSelectedSampleId] = useState("")
+  const [sampleOptions, setSampleOptions] = useState<SampleOption[]>([])
+  const [isLoadingSamples, setIsLoadingSamples] = useState(false)
+  const [sampleError, setSampleError] = useState<string | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null)
@@ -130,8 +242,12 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
 
   // Initialize segment assignments when extraction completes
   useEffect(() => {
-    if (extractionResult?.flights) {
-      const initialAssignments: Record<number, SegmentAssignment> = {}
+    if (!extractionResult) return
+
+    const initialAssignments: Record<number, SegmentAssignment> = {}
+
+    // Handle flights
+    if (extractionResult.flights) {
       extractionResult.flights.forEach((flight, index) => {
         initialAssignments[index] = {
           action: flight.segment.action,
@@ -139,9 +255,100 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
           segmentName: flight.segment.segmentName,
         }
       })
+    }
+
+    // Handle hotels
+    if (extractionResult.hotels) {
+      extractionResult.hotels.forEach((hotel, index) => {
+        initialAssignments[index] = {
+          action: hotel.segment.action,
+          segmentId: hotel.segment.segmentId,
+          segmentName: hotel.segment.segmentName,
+        }
+      })
+    }
+
+    // Handle car rentals
+    if (extractionResult.carRentals) {
+      extractionResult.carRentals.forEach((rental, index) => {
+        initialAssignments[index] = {
+          action: rental.segment.action,
+          segmentId: rental.segment.segmentId,
+          segmentName: rental.segment.segmentName,
+        }
+      })
+    }
+
+    // Handle trains
+    if (extractionResult.trains) {
+      extractionResult.trains.forEach((train, index) => {
+        initialAssignments[index] = {
+          action: train.segment.action,
+          segmentId: train.segment.segmentId,
+          segmentName: train.segment.segmentName,
+        }
+      })
+    }
+
+    // Handle restaurants
+    if (extractionResult.restaurants) {
+      extractionResult.restaurants.forEach((restaurant, index) => {
+        initialAssignments[index] = {
+          action: restaurant.segment.action,
+          segmentId: restaurant.segment.segmentId,
+          segmentName: restaurant.segment.segmentName,
+        }
+      })
+    }
+
+    // Handle events
+    if (extractionResult.events) {
+      extractionResult.events.forEach((event, index) => {
+        initialAssignments[index] = {
+          action: event.segment.action,
+          segmentId: event.segment.segmentId,
+          segmentName: event.segment.segmentName,
+        }
+      })
+    }
+
+    // Handle generic (cruise, private-driver, generic)
+    if (extractionResult.generic) {
+      extractionResult.generic.forEach((item, index) => {
+        initialAssignments[index] = {
+          action: item.segment.action,
+          segmentId: item.segment.segmentId,
+          segmentName: item.segment.segmentName,
+        }
+      })
+    }
+
+    if (Object.keys(initialAssignments).length > 0) {
       setSegmentAssignments(initialAssignments)
     }
   }, [extractionResult])
+
+  useEffect(() => {
+    const fetchSamples = async () => {
+      setIsLoadingSamples(true)
+      setSampleError(null)
+      try {
+        const response = await fetch("/api/sample-emails")
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data?.error || "Failed to load sample emails")
+        }
+        setSampleOptions(data.samples || [])
+      } catch (err) {
+        setSampleOptions([])
+        setSampleError(err instanceof Error ? err.message : "Failed to load sample emails")
+      } finally {
+        setIsLoadingSamples(false)
+      }
+    }
+
+    fetchSamples()
+  }, [])
 
   const handleSegmentChange = (
     flightIndex: number,
@@ -188,6 +395,51 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
         segmentName: newName,
       }
     }))
+  }
+
+  const handleGenericSegmentChange = (
+    itemIndex: number,
+    value: string,
+    defaultName: string,
+    typePrefix: string
+  ) => {
+    if (value === 'new') {
+      setSegmentAssignments(prev => ({
+        ...prev,
+        [itemIndex]: {
+          action: 'create',
+          segmentName: `${typePrefix} - ${defaultName}`.substring(0, 50),
+        }
+      }))
+    } else {
+      const segment = extractionResult?.availableSegments?.find(s => s.id === value)
+      setSegmentAssignments(prev => ({
+        ...prev,
+        [itemIndex]: {
+          action: 'match',
+          segmentId: value,
+          segmentName: segment?.name || 'Unknown',
+        }
+      }))
+    }
+  }
+
+  const handleSampleSelect = async (value: string) => {
+    setSelectedSampleId(value)
+    if (!value) return
+
+    setSampleError(null)
+    try {
+      const response = await fetch(`/api/sample-emails?id=${encodeURIComponent(value)}`)
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to load sample email")
+      }
+      setConfirmationText(data.text || "")
+      setError(null)
+    } catch (err) {
+      setSampleError(err instanceof Error ? err.message : "Failed to load sample email")
+    }
   }
 
   const handleExtract = async () => {
@@ -424,6 +676,565 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
     )
   }
 
+  const getHotelDetails = () => {
+    if (reservationType !== "hotel" || !extractionResult?.hotels) return null
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Hotel Details</div>
+        {extractionResult.hotels.map((hotel, index) => {
+          const checkInDate = new Date(hotel.checkInDate)
+          const checkOutDate = new Date(hotel.checkOutDate)
+          const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24))
+
+          return (
+            <div key={index} className="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-semibold text-sm text-slate-900">
+                    {hotel.hotelName}
+                  </div>
+                  {hotel.address && (
+                    <div className="text-sm text-slate-600 mt-0.5">{hotel.address}</div>
+                  )}
+                </div>
+                <span className="px-2 py-1 text-xs font-semibold rounded-md border bg-amber-50 text-amber-800 border-amber-200">
+                  {nights} night{nights !== 1 ? 's' : ''}
+                </span>
+              </div>
+              
+              <div className="text-xs text-slate-600 space-y-1.5">
+                <div>
+                  <span className="font-medium">Check-in:</span> {checkInDate.toLocaleDateString()} at {hotel.checkInTime}
+                </div>
+                <div>
+                  <span className="font-medium">Check-out:</span> {checkOutDate.toLocaleDateString()} at {hotel.checkOutTime}
+                </div>
+                {hotel.roomType && (
+                  <div>
+                    <span className="font-medium">Room:</span> {hotel.roomType}
+                    {hotel.numberOfRooms > 1 && ` (x${hotel.numberOfRooms})`}
+                  </div>
+                )}
+                {hotel.totalCost > 0 && (
+                  <div>
+                    <span className="font-medium">Total:</span> {hotel.currency} {hotel.totalCost.toLocaleString()}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Assign to Chapter
+                </label>
+                
+                <Select
+                  value={segmentAssignments[index]?.action === 'create' 
+                    ? 'new' 
+                    : segmentAssignments[index]?.segmentId || ''}
+                  onValueChange={(value) => handleGenericSegmentChange(index, value, hotel.hotelName, 'Stay')}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {extractionResult.availableSegments?.map((segment) => (
+                      <SelectItem key={segment.id} value={segment.id}>
+                        {segment.name} ({segment.type})
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="new">
+                      ➕ New Chapter
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                {segmentAssignments[index]?.action === 'create' && (
+                  <input
+                    type="text"
+                    value={segmentAssignments[index]?.segmentName || ''}
+                    onChange={(e) => handleSegmentNameChange(index, e.target.value)}
+                    placeholder="Chapter name"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+        
+        <div className="text-xs text-slate-500 italic pt-1">
+          💡 You can move reservations to different segments later from the trip view.
+        </div>
+      </div>
+    )
+  }
+
+  const getCarRentalDetails = () => {
+    if (reservationType !== "car-rental" || !extractionResult?.carRentals) return null
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Car Rental Details</div>
+        {extractionResult.carRentals.map((rental, index) => {
+          const pickupDate = new Date(rental.pickupDate)
+          const returnDate = new Date(rental.returnDate)
+          const days = Math.ceil((returnDate.getTime() - pickupDate.getTime()) / (1000 * 60 * 60 * 24))
+
+          return (
+            <div key={index} className="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-semibold text-sm text-slate-900">
+                    {rental.company}
+                  </div>
+                  <div className="text-sm text-slate-600 mt-0.5">
+                    {rental.vehicleClass}{rental.vehicleModel && ` - ${rental.vehicleModel}`}
+                  </div>
+                </div>
+                <span className={`px-2 py-1 text-xs font-semibold rounded-md border ${
+                  rental.isOneWay 
+                    ? 'bg-purple-50 text-purple-800 border-purple-200' 
+                    : 'bg-teal-50 text-teal-800 border-teal-200'
+                }`}>
+                  {rental.isOneWay ? 'One-way' : `${days} day${days !== 1 ? 's' : ''}`}
+                </span>
+              </div>
+              
+              <div className="text-xs text-slate-600 space-y-1.5">
+                <div>
+                  <span className="font-medium">Pick-up:</span> {rental.pickupLocation}
+                  <br />
+                  <span className="text-slate-500">{pickupDate.toLocaleDateString()} at {rental.pickupTime}</span>
+                </div>
+                <div>
+                  <span className="font-medium">Return:</span> {rental.returnLocation}
+                  <br />
+                  <span className="text-slate-500">{returnDate.toLocaleDateString()} at {rental.returnTime}</span>
+                </div>
+                {rental.options && rental.options.length > 0 && (
+                  <div>
+                    <span className="font-medium">Options:</span> {rental.options.join(', ')}
+                  </div>
+                )}
+                {rental.totalCost > 0 && (
+                  <div>
+                    <span className="font-medium">Total:</span> {rental.currency} {rental.totalCost.toLocaleString()}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Assign to Chapter
+                </label>
+                
+                <Select
+                  value={segmentAssignments[index]?.action === 'create' 
+                    ? 'new' 
+                    : segmentAssignments[index]?.segmentId || ''}
+                  onValueChange={(value) => handleGenericSegmentChange(index, value, rental.pickupLocation, 'Drive')}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {extractionResult.availableSegments?.map((segment) => (
+                      <SelectItem key={segment.id} value={segment.id}>
+                        {segment.name} ({segment.type})
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="new">
+                      ➕ New Chapter
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                {segmentAssignments[index]?.action === 'create' && (
+                  <input
+                    type="text"
+                    value={segmentAssignments[index]?.segmentName || ''}
+                    onChange={(e) => handleSegmentNameChange(index, e.target.value)}
+                    placeholder="Chapter name"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+        
+        <div className="text-xs text-slate-500 italic pt-1">
+          💡 You can move reservations to different segments later from the trip view.
+        </div>
+      </div>
+    )
+  }
+
+  const getTrainDetails = () => {
+    if (reservationType !== "train" || !extractionResult?.trains) return null
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Train Details</div>
+        {extractionResult.trains.map((train, index) => {
+          const departureDate = new Date(`${train.departureDate}T12:00:00`)
+          const arrivalDate = new Date(`${train.arrivalDate}T12:00:00`)
+
+          return (
+            <div key={index} className="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-semibold text-sm text-slate-900">
+                    {train.operator} {train.trainNumber}
+                  </div>
+                  <div className="text-sm text-slate-600 mt-0.5">
+                    {train.departureStation} → {train.arrivalStation}
+                  </div>
+                </div>
+                <span className="px-2 py-1 text-xs font-semibold rounded-md border bg-sky-50 text-sky-800 border-sky-200">
+                  Train
+                </span>
+              </div>
+              
+              <div className="text-xs text-slate-600 space-y-1.5">
+                <div>
+                  <span className="font-medium">Depart:</span> {departureDate.toLocaleDateString()} at {train.departureTime}
+                  {train.departurePlatform && ` (${train.departurePlatform})`}
+                </div>
+                <div>
+                  <span className="font-medium">Arrive:</span> {arrivalDate.toLocaleDateString()} at {train.arrivalTime}
+                </div>
+                {(train.class || train.coach || train.seat) && (
+                  <div className="flex gap-4 pt-1">
+                    {train.class && <span><span className="font-medium">Class:</span> {train.class}</span>}
+                    {train.coach && <span><span className="font-medium">Coach:</span> {train.coach}</span>}
+                    {train.seat && <span><span className="font-medium">Seat:</span> {train.seat}</span>}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Assign to Chapter
+                </label>
+                
+                <Select
+                  value={segmentAssignments[index]?.action === 'create' 
+                    ? 'new' 
+                    : segmentAssignments[index]?.segmentId || ''}
+                  onValueChange={(value) => handleGenericSegmentChange(index, value, train.arrivalCity.split(',')[0], 'Train')}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {extractionResult.availableSegments?.map((segment) => (
+                      <SelectItem key={segment.id} value={segment.id}>
+                        {segment.name} ({segment.type})
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="new">
+                      ➕ New Chapter
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                {segmentAssignments[index]?.action === 'create' && (
+                  <input
+                    type="text"
+                    value={segmentAssignments[index]?.segmentName || ''}
+                    onChange={(e) => handleSegmentNameChange(index, e.target.value)}
+                    placeholder="Chapter name"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+        
+        <div className="text-xs text-slate-500 italic pt-1">
+          💡 You can move reservations to different segments later from the trip view.
+        </div>
+      </div>
+    )
+  }
+
+  const getRestaurantDetails = () => {
+    if (reservationType !== "restaurant" || !extractionResult?.restaurants) return null
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Restaurant Details</div>
+        {extractionResult.restaurants.map((restaurant, index) => {
+          const reservationDate = new Date(restaurant.reservationDate)
+
+          return (
+            <div key={index} className="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-semibold text-sm text-slate-900">
+                    {restaurant.restaurantName}
+                  </div>
+                  {restaurant.address && (
+                    <div className="text-sm text-slate-600 mt-0.5">{restaurant.address}</div>
+                  )}
+                </div>
+                <span className="px-2 py-1 text-xs font-semibold rounded-md border bg-rose-50 text-rose-800 border-rose-200">
+                  {restaurant.partySize} guest{restaurant.partySize !== 1 ? 's' : ''}
+                </span>
+              </div>
+              
+              <div className="text-xs text-slate-600 space-y-1.5">
+                <div>
+                  <span className="font-medium">Date:</span> {reservationDate.toLocaleDateString()} at {restaurant.reservationTime}
+                </div>
+                {restaurant.platform && (
+                  <div>
+                    <span className="font-medium">Booked via:</span> {restaurant.platform}
+                  </div>
+                )}
+                {restaurant.specialRequests && (
+                  <div>
+                    <span className="font-medium">Notes:</span> {restaurant.specialRequests}
+                  </div>
+                )}
+                {restaurant.totalCost > 0 && (
+                  <div>
+                    <span className="font-medium">Deposit:</span> {restaurant.currency} {restaurant.totalCost.toLocaleString()}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Assign to Chapter
+                </label>
+                
+                <Select
+                  value={segmentAssignments[index]?.action === 'create' 
+                    ? 'new' 
+                    : segmentAssignments[index]?.segmentId || ''}
+                  onValueChange={(value) => handleGenericSegmentChange(index, value, restaurant.restaurantName, 'Dining')}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {extractionResult.availableSegments?.map((segment) => (
+                      <SelectItem key={segment.id} value={segment.id}>
+                        {segment.name} ({segment.type})
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="new">
+                      ➕ New Chapter
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                {segmentAssignments[index]?.action === 'create' && (
+                  <input
+                    type="text"
+                    value={segmentAssignments[index]?.segmentName || ''}
+                    onChange={(e) => handleSegmentNameChange(index, e.target.value)}
+                    placeholder="Chapter name"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+        
+        <div className="text-xs text-slate-500 italic pt-1">
+          💡 You can move reservations to different segments later from the trip view.
+        </div>
+      </div>
+    )
+  }
+
+  const getEventDetails = () => {
+    if (reservationType !== "event" || !extractionResult?.events) return null
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Event Details</div>
+        {extractionResult.events.map((event, index) => {
+          const eventDate = new Date(event.eventDate)
+          const totalTickets = event.tickets.reduce((sum, t) => sum + t.quantity, 0)
+
+          return (
+            <div key={index} className="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-semibold text-sm text-slate-900">
+                    {event.eventName}
+                  </div>
+                  <div className="text-sm text-slate-600 mt-0.5">{event.venueName}</div>
+                  {event.address && (
+                    <div className="text-xs text-slate-500">{event.address}</div>
+                  )}
+                </div>
+                <span className="px-2 py-1 text-xs font-semibold rounded-md border bg-violet-50 text-violet-800 border-violet-200">
+                  {event.eventType || 'Event'}
+                </span>
+              </div>
+              
+              <div className="text-xs text-slate-600 space-y-1.5">
+                <div>
+                  <span className="font-medium">Date:</span> {eventDate.toLocaleDateString()}
+                  {event.eventTime && ` at ${event.eventTime}`}
+                </div>
+                {event.doorsOpenTime && (
+                  <div>
+                    <span className="font-medium">Doors:</span> {event.doorsOpenTime}
+                  </div>
+                )}
+                <div>
+                  <span className="font-medium">Tickets:</span> {totalTickets} ticket{totalTickets !== 1 ? 's' : ''}
+                  {event.tickets.length > 0 && (
+                    <span className="text-slate-500">
+                      {' '}({event.tickets.map(t => `${t.quantity}x ${t.ticketType}`).join(', ')})
+                    </span>
+                  )}
+                </div>
+                {event.totalCost > 0 && (
+                  <div>
+                    <span className="font-medium">Total:</span> {event.currency} {event.totalCost.toLocaleString()}
+                  </div>
+                )}
+                {event.specialInstructions && (
+                  <div className="pt-1 text-slate-500 italic">
+                    {event.specialInstructions}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Assign to Chapter
+                </label>
+                
+                <Select
+                  value={segmentAssignments[index]?.action === 'create' 
+                    ? 'new' 
+                    : segmentAssignments[index]?.segmentId || ''}
+                  onValueChange={(value) => handleGenericSegmentChange(index, value, event.eventName, 'Activity')}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {extractionResult.availableSegments?.map((segment) => (
+                      <SelectItem key={segment.id} value={segment.id}>
+                        {segment.name} ({segment.type})
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="new">
+                      ➕ New Chapter
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                {segmentAssignments[index]?.action === 'create' && (
+                  <input
+                    type="text"
+                    value={segmentAssignments[index]?.segmentName || ''}
+                    onChange={(e) => handleSegmentNameChange(index, e.target.value)}
+                    placeholder="Chapter name"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+        
+        <div className="text-xs text-slate-500 italic pt-1">
+          💡 You can move reservations to different segments later from the trip view.
+        </div>
+      </div>
+    )
+  }
+
+  const getGenericDetails = () => {
+    if (!extractionResult?.generic) return null
+    if (!['cruise', 'private-driver', 'generic'].includes(reservationType)) return null
+
+    const typeLabels: Record<string, string> = {
+      'cruise': 'Cruise',
+      'private-driver': 'Private Driver',
+      'generic': 'Reservation'
+    }
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{typeLabels[reservationType] || 'Reservation'} Details</div>
+        {extractionResult.generic.map((item, index) => (
+          <div key={index} className="p-4 bg-white rounded-lg border border-slate-200 space-y-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="font-semibold text-sm text-slate-900">
+                  {typeLabels[reservationType] || 'Reservation'}
+                </div>
+                {item.data?.confirmationNumber && (
+                  <div className="text-sm text-slate-600 mt-0.5">
+                    Confirmation: {item.data.confirmationNumber}
+                  </div>
+                )}
+              </div>
+              <span className="px-2 py-1 text-xs font-semibold rounded-md border bg-slate-50 text-slate-800 border-slate-200">
+                {typeLabels[reservationType]}
+              </span>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Assign to Chapter
+              </label>
+              
+              <Select
+                value={segmentAssignments[index]?.action === 'create' 
+                  ? 'new' 
+                  : segmentAssignments[index]?.segmentId || ''}
+                onValueChange={(value) => handleGenericSegmentChange(index, value, typeLabels[reservationType], reservationType)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {extractionResult.availableSegments?.map((segment) => (
+                    <SelectItem key={segment.id} value={segment.id}>
+                      {segment.name} ({segment.type})
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="new">
+                    ➕ New Chapter
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {segmentAssignments[index]?.action === 'create' && (
+                <input
+                  type="text"
+                  value={segmentAssignments[index]?.segmentName || ''}
+                  onChange={(e) => handleSegmentNameChange(index, e.target.value)}
+                  placeholder="Chapter name"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                />
+              )}
+            </div>
+          </div>
+        ))}
+        
+        <div className="text-xs text-slate-500 italic pt-1">
+          💡 You can move reservations to different segments later from the trip view.
+        </div>
+      </div>
+    )
+  }
+
   const getTripExtensionMessage = () => {
     if (!extractionResult?.tripExtension) return null
 
@@ -539,6 +1350,35 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
         {/* Text Input or Loading State */}
         {!extractionResult && (
           <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="sampleImport" className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Quick Import
+              </Label>
+              <Select
+                value={selectedSampleId}
+                onValueChange={handleSampleSelect}
+                disabled={isLoadingSamples || isExtracting || isCreating || sampleOptions.length === 0}
+              >
+                <SelectTrigger id="sampleImport" className="w-full">
+                  <SelectValue
+                    placeholder={isLoadingSamples ? "Loading sample emails..." : "Choose a sample email"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {sampleOptions.map((sample) => (
+                    <SelectItem key={sample.id} value={sample.id}>
+                      {sample.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {sampleError && (
+                <p className="text-xs text-rose-600">{sampleError}</p>
+              )}
+              {!isLoadingSamples && sampleOptions.length === 0 && !sampleError && (
+                <p className="text-xs text-slate-500">No sample emails found.</p>
+              )}
+            </div>
             <Label htmlFor="confirmation" className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Confirmation Text
             </Label>
@@ -595,6 +1435,12 @@ export function QuickAddClient({ trip }: QuickAddClientProps) {
                   {getFlightSummary()}
                   {getTripExtensionMessage()}
                   {getFlightDetails()}
+                  {getHotelDetails()}
+                  {getCarRentalDetails()}
+                  {getTrainDetails()}
+                  {getRestaurantDetails()}
+                  {getEventDetails()}
+                  {getGenericDetails()}
                 </div>
               </div>
             </div>

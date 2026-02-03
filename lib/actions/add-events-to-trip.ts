@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { EventExtraction } from "@/lib/schemas/event-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { getSegmentTimeZones } from "./timezone";
+import { enrichReservation } from "./enrich-reservation";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -248,6 +249,17 @@ export async function addEventsToTrip(params: {
       longitude: geocoded?.lng,
       vendor: eventData.platform || undefined,
     },
+  });
+
+  // Trigger async enrichment for image
+  const locationQuery = eventData.address 
+    ? `${eventData.eventName} ${eventData.venueName} ${eventData.address}`
+    : `${eventData.eventName} ${eventData.venueName}`;
+  
+  enrichReservation(reservation.id, {
+    locationQuery,
+  }).catch((error) => {
+    console.error(`[AddEvents] Enrichment failed for reservation ${reservation.id}:`, error);
   });
 
   console.log(`✅ Created event reservation: ${eventData.eventName}`);

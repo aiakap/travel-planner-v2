@@ -27,7 +27,7 @@ export default async function EditSegmentPage({
   });
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+    <div className="pt-20 max-w-2xl mx-auto px-4 py-8 space-y-6">
       <h1 className="text-3xl font-bold">Edit Segment</h1>
       <EditSegmentForm segment={segment} segmentTypes={segmentTypes} />
     </div>

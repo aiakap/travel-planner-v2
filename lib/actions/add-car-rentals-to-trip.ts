@@ -8,6 +8,7 @@ import { createCarRentalCluster } from "@/lib/utils/car-rental-clustering";
 import { findBestSegmentForCarRental } from "@/lib/utils/segment-matching";
 import { getSegmentTimeZones, getTimeZoneForLocation } from "./timezone";
 import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
+import { enrichReservation } from "./enrich-reservation";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -356,6 +357,13 @@ export async function addCarRentalToTrip(params: {
         cost: carRentalData.totalCost > 0 ? carRentalData.totalCost : null,
         currency: carRentalData.currency || null,
       },
+    });
+
+    // Trigger async enrichment for image (use pickup location)
+    enrichReservation(reservation.id, {
+      locationQuery: carRentalData.pickupAddress || carRentalData.pickupLocation,
+    }).catch((error) => {
+      console.error(`[AddCarRental] Enrichment failed for reservation ${reservation.id}:`, error);
     });
 
     console.log(`✅ Car rental reservation created: ${reservation.id}`);
