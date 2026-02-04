@@ -130,8 +130,16 @@ export async function POST(request: Request) {
       `${acc.name} (${acc.location})`
     ).join('\n')
 
+    // Convert citizenship to full country name and embassy prefix
+    const citizenshipInfo = getFullCountryName(citizenship)
+    const residenceInfo = getFullCountryName(residence)
+
     // Generate AI advice
     const prompt = `You are an expert travel safety advisor. Generate comprehensive emergency information for this trip.
+
+CRITICAL INSTRUCTION: The traveler is a ${citizenshipInfo.country} citizen. 
+All embassy and consulate information MUST be for ${citizenshipInfo.embassyPrefix} embassies/consulates in each destination country.
+Do NOT provide embassy information for any other country's embassies. Only ${citizenshipInfo.embassyPrefix} embassies.
 
 TRIP OVERVIEW:
 - Title: ${trip.title}
@@ -139,8 +147,8 @@ TRIP OVERVIEW:
 - Countries: ${countriesList}
 
 TRAVELER PROFILE:
-- Citizenship: ${citizenship}
-- Residence: ${residence}
+- Citizenship: ${citizenshipInfo.country}
+- Residence: ${residenceInfo.country}
 - Medical Conditions: ${medicalConditions || 'None specified'}
 - Travel Companions: ${travelCompanions.length > 0 ? travelCompanions.join(', ') : 'Not specified'}
 - Traveling with family: ${hasFamilyMembers ? 'Yes' : 'No'}
@@ -150,7 +158,7 @@ ACCOMMODATIONS:
 ${accommodationsList || 'No accommodations booked yet'}
 
 For EACH country, provide:
-1. ${citizenship} Embassy/Consulate information (name, address, phone, email)
+1. ${citizenshipInfo.embassyPrefix} Embassy/Consulate information (name, address, phone, email) - THIS MUST BE THE ${citizenshipInfo.country.toUpperCase()} EMBASSY
 2. Emergency numbers (police, ambulance, fire, tourist police)
 3. 2-3 nearest hospitals to the accommodations (name, address, phone, specialties)
 4. Pharmacy information (how to find pharmacies, prescription requirements)
@@ -170,7 +178,7 @@ OUTPUT FORMAT (JSON):
     {
       "destination": "City, Country",
       "country": "Country",
-      "embassyName": "${citizenship} Embassy in Country",
+      "embassyName": "${citizenshipInfo.embassyPrefix} Embassy in [Country]",
       "embassyAddress": "Full address",
       "embassyPhone": "+XX XXX XXX XXXX",
       "embassyEmail": "email@embassy.gov",
@@ -208,6 +216,7 @@ OUTPUT FORMAT (JSON):
   ]
 }
 
+REMINDER: Embassy information must be for ${citizenshipInfo.embassyPrefix} embassies only. The traveler is a ${citizenshipInfo.country} citizen.
 Be specific and actionable. Reference actual medical conditions if provided.`
 
     const { text } = await generateText({
@@ -342,4 +351,78 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
+}
+
+/**
+ * DELETE /api/trip-intelligence/emergency?tripId=xxx
+ * 
+ * Clear existing emergency info for a trip
+ */
+export async function DELETE(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tripId = searchParams.get('tripId')
+
+    if (!tripId) {
+      return NextResponse.json({ error: 'Missing tripId' }, { status: 400 })
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId, userId: session.user.id }
+    })
+
+    if (!trip) {
+      return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    }
+
+    const intelligence = await prisma.tripIntelligence.findUnique({
+      where: { tripId }
+    })
+
+    if (intelligence) {
+      await prisma.emergencyInfo.deleteMany({
+        where: { intelligenceId: intelligence.id }
+      })
+
+      await prisma.tripIntelligence.update({
+        where: { id: intelligence.id },
+        data: {
+          hasEmergencyInfo: false,
+          emergencyGeneratedAt: null
+        }
+      })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error clearing emergency info:', error)
+    return NextResponse.json(
+      { error: 'Failed to clear emergency info' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * Helper function to map abbreviated country codes to full names and embassy prefixes
+ */
+function getFullCountryName(code: string): { country: string; embassyPrefix: string } {
+  const mapping: Record<string, { country: string; embassyPrefix: string }> = {
+    'USA': { country: 'United States', embassyPrefix: 'U.S.' },
+    'Canada': { country: 'Canada', embassyPrefix: 'Canadian' },
+    'UK': { country: 'United Kingdom', embassyPrefix: 'British' },
+    'Australia': { country: 'Australia', embassyPrefix: 'Australian' },
+    'Germany': { country: 'Germany', embassyPrefix: 'German' },
+    'France': { country: 'France', embassyPrefix: 'French' },
+    'Japan': { country: 'Japan', embassyPrefix: 'Japanese' },
+    'China': { country: 'China', embassyPrefix: 'Chinese' },
+    'India': { country: 'India', embassyPrefix: 'Indian' },
+    'Other': { country: code, embassyPrefix: code }
+  }
+  return mapping[code] || { country: code, embassyPrefix: code }
 }

@@ -323,3 +323,57 @@ Be thorough and accurate. Include lesser-known requirements that travelers often
     )
   }
 }
+
+/**
+ * DELETE /api/visa/check?tripId=xxx
+ * Clear existing visa requirements for a trip
+ */
+export async function DELETE(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tripId = searchParams.get('tripId')
+
+    if (!tripId) {
+      return NextResponse.json({ error: 'Missing tripId' }, { status: 400 })
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId, userId: session.user.id }
+    })
+
+    if (!trip) {
+      return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    }
+
+    const intelligence = await prisma.tripIntelligence.findUnique({
+      where: { tripId }
+    })
+
+    if (intelligence) {
+      await prisma.tripVisaRequirement.deleteMany({
+        where: { intelligenceId: intelligence.id }
+      })
+
+      await prisma.tripIntelligence.update({
+        where: { id: intelligence.id },
+        data: {
+          hasVisaRequirements: false,
+          visaGeneratedAt: null
+        }
+      })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error clearing visa requirements:', error)
+    return NextResponse.json(
+      { error: 'Failed to clear visa requirements' },
+      { status: 500 }
+    )
+  }
+}

@@ -77,29 +77,36 @@ model VerificationToken {
 }
 
 model Trip {
-  id                  String             @id @default(cuid())
-  title               String
-  description         String
-  imageUrl            String?
-  startDate           DateTime
-  endDate             DateTime
-  userId              String
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  imageIsCustom       Boolean            @default(false)
-  imagePromptId       String?
-  permissions         TripPermission     @default(PRIVATE)
-  status              TripStatus         @default(DRAFT)
-  imagePromptStyleId  String?
-  descriptionIsCustom Boolean            @default(false)
-  conversations       ChatConversation[]
-  segments            Segment[]
-  imagePrompt         ImagePrompt?       @relation(fields: [imagePromptId], references: [id])
-  ImagePromptStyle    ImagePromptStyle?  @relation(fields: [imagePromptStyleId], references: [id])
-  user                User               @relation(fields: [userId], references: [id])
-  intelligence        TripIntelligence?
-  TripPDF             TripPDF[]
-  weatherCache        TripWeatherCache[]
+  id                    String             @id @default(cuid())
+  title                 String
+  description           String
+  imageUrl              String?
+  startDate             DateTime
+  endDate               DateTime
+  userId                String
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  imageIsCustom         Boolean            @default(false)
+  imagePromptId         String?
+  permissions           TripPermission     @default(PRIVATE)
+  status                TripStatus         @default(DRAFT)
+  imagePromptStyleId    String?
+  descriptionIsCustom   Boolean            @default(false)
+  // AI Sample Trip fields
+  isSample              Boolean            @default(false)
+  suggestionSummary     String?
+  suggestionParameters  Json?
+  profileReferences     String[]
+  generationProgress    Json?
+  generationError       String?
+  conversations         ChatConversation[]
+  segments              Segment[]
+  imagePrompt           ImagePrompt?       @relation(fields: [imagePromptId], references: [id])
+  ImagePromptStyle      ImagePromptStyle?  @relation(fields: [imagePromptStyleId], references: [id])
+  user                  User               @relation(fields: [userId], references: [id])
+  intelligence          TripIntelligence?
+  TripPDF               TripPDF[]
+  weatherCache          TripWeatherCache[]
 }
 
 model Segment {
@@ -126,6 +133,9 @@ model Segment {
   startTimeZoneName String?
   wall_end_date     DateTime?          @db.Date
   wall_start_date   DateTime?          @db.Date
+  // AI Sample Trip fields
+  suggestionReason  String?
+  profileReferences String[]
   conversations     ChatConversation[]
   reservations      Reservation[]
   segmentType       SegmentType        @relation(fields: [segmentTypeId], references: [id])
@@ -211,6 +221,10 @@ model Reservation {
   wall_end_time       DateTime?          @db.Time(6)
   wall_start_date     DateTime?          @db.Date
   wall_start_time     DateTime?          @db.Time(6)
+  // AI Sample Trip fields
+  isSample            Boolean            @default(false)
+  suggestionReason    String?
+  profileReferences   String[]
   conversations       ChatConversation[]
   reservationStatus   ReservationStatus  @relation(fields: [reservationStatusId], references: [id])
   reservationType     ReservationType    @relation(fields: [reservationTypeId], references: [id])
@@ -899,6 +913,7 @@ model TripPDF {
 }
 
 enum TripStatus {
+  GENERATING
   DRAFT
   PLANNING
   LIVE

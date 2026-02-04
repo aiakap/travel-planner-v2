@@ -375,3 +375,62 @@ function getCurrencyForCountry(country: string): string {
 
   return currencyMap[country] || 'USD'
 }
+
+/**
+ * DELETE /api/trip-intelligence/currency?tripId=xxx
+ * 
+ * Clear existing currency advice for a trip
+ */
+export async function DELETE(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tripId = searchParams.get('tripId')
+
+    if (!tripId) {
+      return NextResponse.json({ error: 'Missing tripId' }, { status: 400 })
+    }
+
+    // Verify trip ownership
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId, userId: session.user.id }
+    })
+
+    if (!trip) {
+      return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    }
+
+    // Find and update intelligence record
+    const intelligence = await prisma.tripIntelligence.findUnique({
+      where: { tripId }
+    })
+
+    if (intelligence) {
+      // Delete currency advice items
+      await prisma.currencyAdvice.deleteMany({
+        where: { intelligenceId: intelligence.id }
+      })
+
+      // Update intelligence record
+      await prisma.tripIntelligence.update({
+        where: { id: intelligence.id },
+        data: {
+          hasCurrencyAdvice: false,
+          currencyGeneratedAt: null
+        }
+      })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error clearing currency advice:', error)
+    return NextResponse.json(
+      { error: 'Failed to clear currency advice' },
+      { status: 500 }
+    )
+  }
+}

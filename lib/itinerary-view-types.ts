@@ -42,6 +42,10 @@ export interface ViewReservation {
   durationDays?: number        // Total days spanning (for car rentals, etc.)
   checkInDate?: string         // Formatted check-in date
   checkOutDate?: string        // Formatted check-out date
+  // AI Sample Trip fields
+  isSample?: boolean           // Whether this is an AI-generated suggestion
+  suggestionReason?: string    // Why this item was suggested
+  profileReferences?: string[] // Profile items that influenced this suggestion
 }
 
 export interface ViewSegment {
@@ -61,6 +65,9 @@ export interface ViewSegment {
   segmentType: string
   color?: string
   imageUrl?: string
+  // AI Sample Trip fields
+  suggestionReason?: string    // Why this segment/location was chosen
+  profileReferences?: string[] // Profile items that influenced this segment
 }
 
 export interface ViewItinerary {
@@ -81,6 +88,17 @@ export interface ViewItinerary {
   imagePromptStyleId?: string | null
   imagePromptStyleName?: string | null
   imagePromptStyleSlug?: string | null
+  // AI Sample Trip fields
+  isSample?: boolean           // Whether this is an AI-generated sample trip
+  suggestionSummary?: string   // High-level explanation of why this trip was crafted
+  suggestionParameters?: {     // Structured parameters that influenced the trip
+    duration?: string
+    budget?: string
+    travelStyle?: string
+    keyInterests?: string[]
+    companions?: string
+  }
+  profileReferences?: string[] // All profile items that influenced the trip
 }
 
 export const reservationTypeIcons: Record<ViewReservation["type"], string> = {

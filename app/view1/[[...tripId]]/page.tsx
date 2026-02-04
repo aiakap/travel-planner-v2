@@ -84,11 +84,12 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
   }
 
   // Fetch the specific trip with all its data
+  // Include GENERATING and DRAFT status for sample trips
   const trip = await prisma.trip.findFirst({
     where: {
       id: tripId,
       userId: session.user.id,
-      status: { not: 'DRAFT' },
+      status: { notIn: ['ARCHIVED'] },
     },
     include: {
       ImagePromptStyle: true,
@@ -260,6 +261,10 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
         durationDays,
         checkInDate,
         checkOutDate,
+        // AI Sample Trip fields
+        isSample: res.isSample || false,
+        suggestionReason: res.suggestionReason || undefined,
+        profileReferences: res.profileReferences || undefined,
       }
     }))
     
@@ -278,6 +283,9 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
       segmentType: segment.segmentType.name,
       imageUrl: segment.imageUrl || undefined,
       reservations,
+      // AI Sample Trip fields
+      suggestionReason: segment.suggestionReason || undefined,
+      profileReferences: segment.profileReferences || undefined,
     }
   }))
   
@@ -313,6 +321,11 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
     imagePromptStyleId: trip.imagePromptStyleId,
     imagePromptStyleName: trip.ImagePromptStyle?.name || null,
     imagePromptStyleSlug: trip.ImagePromptStyle?.slug || null,
+    // AI Sample Trip fields
+    isSample: trip.isSample || false,
+    suggestionSummary: trip.suggestionSummary || undefined,
+    suggestionParameters: trip.suggestionParameters as ViewItinerary['suggestionParameters'] || undefined,
+    profileReferences: trip.profileReferences || undefined,
   }
 
   return (

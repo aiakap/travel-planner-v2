@@ -28,11 +28,8 @@ const MapPinIcon = MapPin;
 import { TripSuggestionCard } from "@/components/trip-suggestion-card";
 import { TripSuggestionDetailModal } from "@/components/trip-suggestion-detail-modal";
 import type { AITripSuggestion } from "@/lib/ai/generate-trip-suggestions";
-import { searchPlace } from "@/lib/actions/google-places";
-import { getPhotoUrl } from "@/lib/google-places/resolve-suggestions";
 import { generateLoadingMessages } from "@/lib/loading-messages";
 import { ProfileGraphItem, GraphCategory, GraphData } from "@/lib/types/profile-graph";
-import { parseXmlToGraph } from "@/lib/profile-graph-xml";
 
 interface SuggestionsClientProps {
   user: { id: string; name: string; email: string; image?: string };
@@ -65,14 +62,10 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
   const [profileOpen, setProfileOpen] = useState(false); // Closed by default
   
   // Profile state (local updates)
+  // graphData is lazily loaded - only populated from API responses when needed
   const [profileItems, setProfileItems] = useState<ProfileGraphItem[]>(initialProfileItems);
   const [xmlData, setXmlData] = useState<string | null>(initialXmlData);
-  const [graphData, setGraphData] = useState<GraphData>(() => {
-    if (initialXmlData) {
-      return parseXmlToGraph(initialXmlData);
-    }
-    return { nodes: [], edges: [] };
-  });
+  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
   
   // AI Trip Suggestions state
   const [tripSuggestions, setTripSuggestions] = useState<AITripSuggestion[]>([]);
@@ -182,9 +175,7 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
   // Handle item deletion
   const handleDeleteItem = async (item: ProfileGraphItem) => {
     try {
-      const node = graphData.nodes.find(n => n.id === item.id);
-      if (!node) return;
-      
+      // No need to lookup in graphData - we have the item directly from profileItems
       const response = await fetch("/api/profile-graph/delete-item", {
         method: "POST",
         headers: {
@@ -323,39 +314,42 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
     }
   };
 
-  // Fetch images for trip suggestions progressively
+  // Fetch images for trip suggestions using batch endpoint (single API call + server caching)
   useEffect(() => {
     if (tripSuggestions.length > 0) {
-      // Fetch images in parallel, but update state as each one completes
-      tripSuggestions.forEach(async (suggestion, idx) => {
-        try {
-          // Use the same approach as the working hover card
-          const query = suggestion.imageQuery || suggestion.destination;
-          const place = await searchPlace(query);
-          
-          if (place?.photos?.[0]) {
-            // Get Google Places photo URL
-            const photo = place.photos[0] as any;
-            if (photo.reference) {
-              const photoUrl = await getPhotoUrl(photo.reference, 800);
-              setSuggestionImages(prev => ({ ...prev, [idx]: photoUrl }));
-            }
-          } else {
-            // Fallback to Unsplash
-            const searchTerms = suggestion.destinationKeywords?.length 
-              ? suggestion.destinationKeywords.join(',')
-              : query;
-            const unsplashUrl = `https://source.unsplash.com/800x600/?${encodeURIComponent(searchTerms)},travel`;
-            setSuggestionImages(prev => ({ ...prev, [idx]: unsplashUrl }));
+      // Build batch query for all suggestions
+      const queries = tripSuggestions.map((suggestion, idx) => ({
+        query: suggestion.imageQuery || suggestion.destination,
+        index: idx,
+        fallbackKeywords: suggestion.destinationKeywords,
+      }));
+
+      // Single batch request instead of multiple server action calls
+      fetch("/api/places/batch-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queries }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.results) {
+            const newImages: Record<number, string> = {};
+            data.results.forEach((result: { index: number; url: string }) => {
+              newImages[result.index] = result.url;
+            });
+            setSuggestionImages(newImages);
           }
-        } catch (error) {
-          console.error(`Failed to fetch image for suggestion ${idx}:`, error);
-          // Fallback to Unsplash on error
-          const searchTerms = suggestion.destinationKeywords?.join(',') || suggestion.destination;
-          const unsplashUrl = `https://source.unsplash.com/800x600/?${encodeURIComponent(searchTerms)},travel`;
-          setSuggestionImages(prev => ({ ...prev, [idx]: unsplashUrl }));
-        }
-      });
+        })
+        .catch((error) => {
+          console.error("Failed to fetch suggestion images:", error);
+          // Fallback: set Unsplash URLs for all
+          const fallbackImages: Record<number, string> = {};
+          tripSuggestions.forEach((suggestion, idx) => {
+            const searchTerms = suggestion.destinationKeywords?.join(",") || suggestion.destination;
+            fallbackImages[idx] = `https://source.unsplash.com/800x600/?${encodeURIComponent(searchTerms)},travel`;
+          });
+          setSuggestionImages(fallbackImages);
+        });
     }
   }, [tripSuggestions]);
 
@@ -409,7 +403,7 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 pt-16">
       <div className="max-w-6xl mx-auto p-4 space-y-4">
         {/* Page Header */}
         <div className="mb-6">
@@ -664,6 +658,8 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
           isOpen={!!selectedSuggestion}
           onClose={() => setSelectedSuggestion(null)}
           onCreateTrip={handleCreateTripFromSuggestion}
+          profileItems={profileItems}
+          userProfile={userProfile}
         />
       </div>
     </div>

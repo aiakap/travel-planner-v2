@@ -5,10 +5,15 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
-import { ChevronDown, ChevronRight, MessageCircle, Calendar, MapPin, Plane, Hotel, Utensils, Compass, Car } from "lucide-react"
+import { ChevronDown, ChevronRight, MessageCircle, Calendar, MapPin, Plane, Hotel, Utensils, Compass, Car, Sparkles } from "lucide-react"
 import { getTripDates, formatDateCompact, formatDateWithLongWeekday } from "../lib/view-utils"
 import { chatAboutSegment, chatAboutReservation } from "../lib/chat-integration"
 import { formatAsUSD } from "@/lib/utils/currency-converter"
+import { 
+  TripSuggestionBanner, 
+  SegmentSuggestionReason,
+  SuggestionIndicator,
+} from "./suggestion-reason-display"
 
 interface VerticalTimelineViewProps {
   itinerary: ViewItinerary
@@ -64,6 +69,16 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
 
   return (
     <div className="space-y-4">
+      {/* Trip-level suggestion banner for AI-generated trips */}
+      {itinerary.isSample && itinerary.suggestionSummary && (
+        <TripSuggestionBanner
+          suggestionSummary={itinerary.suggestionSummary}
+          suggestionParameters={itinerary.suggestionParameters}
+          profileReferences={itinerary.profileReferences}
+          className="mb-2"
+        />
+      )}
+
       {itinerary.segments.map((segment, segmentIndex) => {
         const isCollapsed = collapsedSegments.has(segment.id)
         const segmentColor = itinerary.segmentColors[segment.id]
@@ -132,6 +147,15 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
                       </span>
                     )}
                   </div>
+
+                  {/* Segment-level suggestion reason */}
+                  {segment.suggestionReason && (
+                    <SegmentSuggestionReason
+                      suggestionReason={segment.suggestionReason}
+                      profileReferences={segment.profileReferences}
+                      className="mt-2"
+                    />
+                  )}
                 </div>
 
                 {/* Chat Button */}
@@ -199,6 +223,13 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                                     <span className="font-medium text-sm">{reservation.title}</span>
+                                    {reservation.isSample && reservation.suggestionReason && (
+                                      <SuggestionIndicator
+                                        suggestionReason={reservation.suggestionReason}
+                                        profileReferences={reservation.profileReferences}
+                                        compact
+                                      />
+                                    )}
                                     {reservation.confirmationNumber && (
                                       <Badge variant="secondary" className="text-xs">
                                         {reservation.confirmationNumber}

@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
-import { Calendar, Sparkles, Users, AlertCircle, Camera } from "lucide-react"
+import { Calendar, Sparkles, Users, AlertCircle, Camera, Loader2 } from "lucide-react"
 import { IntelligenceQuestionForm, type Question } from "./intelligence-question-form"
 import { IntelligenceCard } from "./intelligence-card"
 import { RelevanceTooltip, type ProfileReference } from "./relevance-tooltip"
@@ -29,10 +29,13 @@ interface CulturalEvent {
   profileReferences: ProfileReference[]
 }
 
-type ViewState = 'questions' | 'loading' | 'loaded'
+type ViewState = 'questions' | 'generating' | 'loaded'
+
+// Simple sessionStorage key
+const getGeneratingKey = (tripId: string) => `cultural_generating_${tripId}`
 
 export function CulturalView({ itinerary }: CulturalViewProps) {
-  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ events: CulturalEvent[] }>(
+  const { data, initialCheckComplete, updateCache } = useCachedIntelligence<{ events: CulturalEvent[] }>(
     'cultural',
     itinerary.id,
     '/api/trip-intelligence/cultural'
@@ -41,15 +44,90 @@ export function CulturalView({ itinerary }: CulturalViewProps) {
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [events, setEvents] = useState<CulturalEvent[]>([])
 
-  // Sync with cached data
+  // Polling refs
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const pollCountRef = useRef(0)
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+      }
+    }
+  }, [])
+
+  // Poll the GET endpoint to check if data exists
+  const pollForData = async () => {
+    try {
+      const res = await fetch(`/api/trip-intelligence/cultural?tripId=${itinerary.id}`)
+      const apiData = await res.json()
+      
+      if (apiData.events && apiData.events.length > 0) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        
+        setEvents(apiData.events)
+        updateCache({ events: apiData.events })
+        setViewState('loaded')
+        return
+      }
+      
+      pollCountRef.current++
+      if (pollCountRef.current > 100) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        setViewState('questions')
+        alert('Generation timed out. Please try again.')
+      }
+    } catch (error) {
+      console.error('Poll error:', error)
+    }
+  }
+
+  const startPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+    }
+    pollCountRef.current = 0
+    pollForData()
+    pollingRef.current = setInterval(pollForData, 3000)
+  }
+
+  // Check initial state on mount
   useEffect(() => {
     if (data?.events && data.events.length > 0) {
       setEvents(data.events)
       setViewState('loaded')
-    } else if (initialCheckComplete) {
+      try {
+        sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+      } catch (e) {}
+      return
+    }
+    
+    try {
+      if (sessionStorage.getItem(getGeneratingKey(itinerary.id))) {
+        setViewState('generating')
+        startPolling()
+        return
+      }
+    } catch (e) {}
+    
+    if (initialCheckComplete) {
       setViewState('questions')
     }
-  }, [data, initialCheckComplete])
+  }, [data, initialCheckComplete, itinerary.id])
 
   const questions: Question[] = [
     {
@@ -73,38 +151,39 @@ export function CulturalView({ itinerary }: CulturalViewProps) {
     }
   ]
 
+  // Fire-and-forget generate function
   const generateEvents = async (answers: Record<string, string>) => {
-    setViewState('loading')
-
+    setViewState('generating')
+    
     try {
-      const response = await fetch('/api/trip-intelligence/cultural', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tripId: itinerary.id,
-          interestedInEvents: answers.interestedInEvents === 'true',
-          crowdPreference: answers.crowdPreference || 'flexible'
-        })
-      })
+      sessionStorage.setItem(getGeneratingKey(itinerary.id), 'true')
+    } catch (e) {}
 
-      if (response.ok) {
-        const responseData = await response.json()
-        setEvents(responseData.events)
-        updateCache({ events: responseData.events }) // Update the cache
-        setViewState('loaded')
-      } else {
-        setViewState('questions')
-        alert('Failed to generate cultural calendar. Please try again.')
-      }
-    } catch (error) {
-      console.error('Error generating events:', error)
-      setViewState('questions')
-      alert('An error occurred. Please try again.')
-    }
+    fetch('/api/trip-intelligence/cultural', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tripId: itinerary.id,
+        interestedInEvents: answers.interestedInEvents === 'true',
+        crowdPreference: answers.crowdPreference || 'flexible'
+      })
+    }).catch(err => {
+      console.error('POST error:', err)
+    })
+
+    startPolling()
   }
 
-  const handleRegenerate = () => {
-    invalidateCache() // Clear cache when regenerating
+  const handleRegenerate = async () => {
+    try {
+      await fetch(`/api/trip-intelligence/cultural?tripId=${itinerary.id}`, {
+        method: 'DELETE'
+      })
+    } catch (e) {
+      console.error('Failed to clear cultural events:', e)
+    }
+    
+    setEvents([])
     setViewState('questions')
   }
 
@@ -152,15 +231,38 @@ export function CulturalView({ itinerary }: CulturalViewProps) {
     )
   }
 
-  if (viewState === 'loading') {
+  if (viewState === 'generating') {
     return (
       <div className="animate-fade-in">
-        <Card className="p-12 text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
-          <h3 className="text-xl font-semibold text-slate-900 mb-2">Finding Cultural Events...</h3>
-          <p className="text-slate-600 text-sm">
+        <Card className="p-8 text-center bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200">
+          <div className="relative mx-auto mb-6 w-20 h-20">
+            <div className="absolute inset-0 rounded-full bg-purple-100 animate-pulse"></div>
+            <div className="absolute inset-2 rounded-full bg-white flex items-center justify-center">
+              <Loader2 className="h-10 w-10 text-purple-600 animate-spin" />
+            </div>
+          </div>
+          
+          <h3 className="text-xl font-semibold text-slate-900 mb-2">
+            Finding Cultural Events...
+          </h3>
+          
+          <p className="text-slate-600 text-sm mb-4">
             Searching for holidays, festivals, and special events during your trip
           </p>
+          
+          <div className="bg-white/60 rounded-lg p-4 max-w-md mx-auto">
+            <p className="text-sm text-purple-700 font-medium mb-1">
+              Feel free to explore other tabs!
+            </p>
+            <p className="text-xs text-slate-500">
+              Your cultural calendar will be ready when you return.
+            </p>
+          </div>
+          
+          <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+            <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></div>
+            <span>Generation in progress</span>
+          </div>
         </Card>
       </div>
     )

@@ -1,11 +1,30 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { X, MapPin, Calendar, DollarSign, Sparkles, Car, Plane, Train } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { X, MapPin, Calendar, DollarSign, Sparkles, Car, Plane, Train, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import type { AITripSuggestion } from "@/lib/ai/generate-trip-suggestions";
+import type { ProfileGraphItem } from "@/lib/types/profile-graph";
 import { generateSuggestionMapUrl } from "@/lib/map-url-generator";
+
+interface GenerationProgress {
+  step: string;
+  completed: string[];
+  failed: string[];
+  percentComplete: number;
+  message: string;
+}
+
+interface GenerationState {
+  tripId: string | null;
+  status: "idle" | "generating" | "ready" | "failed";
+  progress: GenerationProgress | null;
+  error?: string;
+}
 
 interface TripSuggestionDetailModalProps {
   suggestion: AITripSuggestion | null;
@@ -13,6 +32,13 @@ interface TripSuggestionDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateTrip: (suggestion: AITripSuggestion) => void;
+  profileItems?: ProfileGraphItem[];
+  userProfile?: {
+    name: string;
+    city: string | null;
+    country: string | null;
+    dateOfBirth: Date | null;
+  };
 }
 
 export function TripSuggestionDetailModal({
@@ -21,8 +47,118 @@ export function TripSuggestionDetailModal({
   isOpen,
   onClose,
   onCreateTrip,
+  profileItems = [],
+  userProfile,
 }: TripSuggestionDetailModalProps) {
+  const router = useRouter();
+  const [generationState, setGenerationState] = useState<GenerationState>({
+    tripId: null,
+    status: "idle",
+    progress: null,
+  });
+
+  // Reset generation state when modal closes or suggestion changes
+  useEffect(() => {
+    if (!isOpen) {
+      setGenerationState({ tripId: null, status: "idle", progress: null });
+    }
+  }, [isOpen, suggestion]);
+
+  // Poll for generation status
+  useEffect(() => {
+    if (generationState.status !== "generating" || !generationState.tripId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/trips/${generationState.tripId}/generation-status`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch status");
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === "ready") {
+          setGenerationState(prev => ({
+            ...prev,
+            status: "ready",
+            progress: data.progress,
+          }));
+          // Navigate to the trip view after a brief delay
+          setTimeout(() => {
+            router.push(`/view1/${generationState.tripId}`);
+          }, 1000);
+        } else if (data.status === "failed") {
+          setGenerationState(prev => ({
+            ...prev,
+            status: "failed",
+            error: data.error,
+            progress: data.progress,
+          }));
+        } else {
+          setGenerationState(prev => ({
+            ...prev,
+            progress: data.progress,
+          }));
+        }
+      } catch (error) {
+        console.error("Error polling status:", error);
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [generationState.status, generationState.tripId, router]);
+
+  const handleCreateSampleTrip = useCallback(async () => {
+    if (!suggestion || !userProfile) return;
+
+    setGenerationState({
+      tripId: null,
+      status: "generating",
+      progress: { step: "starting", completed: [], failed: [], percentComplete: 0, message: "Starting generation..." },
+    });
+
+    try {
+      const response = await fetch("/api/suggestions/create-sample-trip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          suggestion,
+          profileItems,
+          userProfile,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to start trip generation");
+      }
+
+      const data = await response.json();
+      
+      setGenerationState(prev => ({
+        ...prev,
+        tripId: data.tripId,
+        progress: { 
+          step: "itinerary", 
+          completed: [], 
+          failed: [], 
+          percentComplete: 5, 
+          message: "Generating itinerary..." 
+        },
+      }));
+    } catch (error: any) {
+      setGenerationState(prev => ({
+        ...prev,
+        status: "failed",
+        error: error.message || "Failed to create trip",
+      }));
+    }
+  }, [suggestion, profileItems, userProfile]);
+
   if (!suggestion) return null;
+
+  const isGenerating = generationState.status === "generating";
+  const isReady = generationState.status === "ready";
+  const isFailed = generationState.status === "failed";
 
   // Generate large map URL for modal
   const largeMapUrl = suggestion.destinationLat && suggestion.destinationLng
@@ -207,18 +343,84 @@ export function TripSuggestionDetailModal({
             </div>
           </div>
 
-          {/* Create Trip Button */}
+          {/* Create Trip Button / Progress UI */}
           <div className="pt-4 border-t">
-            <Button 
-              onClick={() => {
-                onCreateTrip(suggestion);
-                onClose();
-              }}
-              className="w-full py-6 text-base font-semibold"
-              size="lg"
-            >
-              Create This Trip
-            </Button>
+            {isGenerating && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-center gap-3 text-primary">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="font-medium">{generationState.progress?.message || "Generating..."}</span>
+                </div>
+                <Progress value={generationState.progress?.percentComplete || 0} className="h-2" />
+                <div className="space-y-2 text-sm">
+                  {["itinerary", "flights", "hotels", "restaurants", "activities"].map((step) => {
+                    const isCompleted = generationState.progress?.completed.includes(step);
+                    const isCurrent = generationState.progress?.step === step;
+                    const isFailed = generationState.progress?.failed.includes(step);
+                    
+                    return (
+                      <div key={step} className="flex items-center gap-2">
+                        {isCompleted ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : isFailed ? (
+                          <AlertCircle className="h-4 w-4 text-red-500" />
+                        ) : isCurrent ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border-2 border-muted" />
+                        )}
+                        <span className={isCompleted ? "text-muted-foreground" : isCurrent ? "font-medium" : "text-muted-foreground"}>
+                          {step === "itinerary" && "Generate itinerary"}
+                          {step === "flights" && "Find flights"}
+                          {step === "hotels" && "Search hotels"}
+                          {step === "restaurants" && "Discover restaurants"}
+                          {step === "activities" && "Select activities"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {isReady && (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <CheckCircle className="h-10 w-10 text-green-500" />
+                <div>
+                  <p className="font-semibold text-lg">Trip Generated!</p>
+                  <p className="text-sm text-muted-foreground">Redirecting to your trip...</p>
+                </div>
+              </div>
+            )}
+            
+            {isFailed && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 text-destructive">
+                  <AlertCircle className="h-5 w-5" />
+                  <span>{generationState.error || "Generation failed"}</span>
+                </div>
+                <Button 
+                  onClick={handleCreateSampleTrip}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Try Again
+                </Button>
+              </div>
+            )}
+            
+            {!isGenerating && !isReady && !isFailed && (
+              <Button 
+                onClick={userProfile ? handleCreateSampleTrip : () => {
+                  onCreateTrip(suggestion);
+                  onClose();
+                }}
+                className="w-full py-6 text-base font-semibold"
+                size="lg"
+              >
+                Create This Trip
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

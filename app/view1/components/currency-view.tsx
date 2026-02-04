@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
-import { DollarSign, CreditCard, MapPin, TrendingUp, AlertCircle } from "lucide-react"
+import { DollarSign, CreditCard, MapPin, TrendingUp, AlertCircle, Loader2 } from "lucide-react"
 import { IntelligenceQuestionForm, type Question } from "./intelligence-question-form"
 import { IntelligenceCard, IntelligenceCardItem } from "./intelligence-card"
 import { RelevanceTooltip, type ProfileReference } from "./relevance-tooltip"
@@ -29,10 +29,13 @@ interface CurrencyAdvice {
   profileReferences: ProfileReference[]
 }
 
-type ViewState = 'questions' | 'loading' | 'loaded'
+type ViewState = 'questions' | 'generating' | 'loaded'
+
+// Simple sessionStorage key
+const getGeneratingKey = (tripId: string) => `currency_generating_${tripId}`
 
 export function CurrencyView({ itinerary }: CurrencyViewProps) {
-  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ advice: CurrencyAdvice[] }>(
+  const { data, initialCheckComplete, updateCache } = useCachedIntelligence<{ advice: CurrencyAdvice[] }>(
     'currency',
     itinerary.id,
     '/api/trip-intelligence/currency'
@@ -41,15 +44,96 @@ export function CurrencyView({ itinerary }: CurrencyViewProps) {
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [advice, setAdvice] = useState<CurrencyAdvice[]>([])
 
-  // Sync with cached data
+  // Polling refs
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const pollCountRef = useRef(0)
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+      }
+    }
+  }, [])
+
+  // Poll the GET endpoint to check if data exists
+  const pollForData = async () => {
+    try {
+      const res = await fetch(`/api/trip-intelligence/currency?tripId=${itinerary.id}`)
+      const apiData = await res.json()
+      
+      if (apiData.advice && apiData.advice.length > 0) {
+        // Stop polling
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        
+        // Clear generating flag
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        
+        // Display data
+        setAdvice(apiData.advice)
+        updateCache({ advice: apiData.advice })
+        setViewState('loaded')
+        return
+      }
+      
+      // Safety: stop after 5 minutes
+      pollCountRef.current++
+      if (pollCountRef.current > 100) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        setViewState('questions')
+        alert('Generation timed out. Please try again.')
+      }
+    } catch (error) {
+      console.error('Poll error:', error)
+    }
+  }
+
+  // Start polling
+  const startPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+    }
+    pollCountRef.current = 0
+    pollForData()
+    pollingRef.current = setInterval(pollForData, 3000)
+  }
+
+  // Check initial state on mount
   useEffect(() => {
     if (data?.advice && data.advice.length > 0) {
       setAdvice(data.advice)
       setViewState('loaded')
-    } else if (initialCheckComplete) {
+      try {
+        sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+      } catch (e) {}
+      return
+    }
+    
+    // Check if we were generating
+    try {
+      if (sessionStorage.getItem(getGeneratingKey(itinerary.id))) {
+        setViewState('generating')
+        startPolling()
+        return
+      }
+    } catch (e) {}
+    
+    if (initialCheckComplete) {
       setViewState('questions')
     }
-  }, [data, initialCheckComplete])
+  }, [data, initialCheckComplete, itinerary.id])
 
   const questions: Question[] = [
     {
@@ -88,38 +172,41 @@ export function CurrencyView({ itinerary }: CurrencyViewProps) {
     }
   ]
 
+  // Fire-and-forget generate function
   const generateAdvice = async (answers: Record<string, string>) => {
-    setViewState('loading')
-
+    setViewState('generating')
+    
     try {
-      const response = await fetch('/api/trip-intelligence/currency', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tripId: itinerary.id,
-          citizenship: answers.citizenship,
-          residence: answers.residence
-        })
-      })
+      sessionStorage.setItem(getGeneratingKey(itinerary.id), 'true')
+    } catch (e) {}
 
-      if (response.ok) {
-        const responseData = await response.json()
-        setAdvice(responseData.advice)
-        updateCache({ advice: responseData.advice }) // Update the cache
-        setViewState('loaded')
-      } else {
-        setViewState('questions')
-        alert('Failed to generate currency advice. Please try again.')
-      }
-    } catch (error) {
-      console.error('Error generating advice:', error)
-      setViewState('questions')
-      alert('An error occurred. Please try again.')
-    }
+    // Fire and forget - don't await
+    fetch('/api/trip-intelligence/currency', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tripId: itinerary.id,
+        citizenship: answers.citizenship,
+        residence: answers.residence
+      })
+    }).catch(err => {
+      console.error('POST error:', err)
+    })
+
+    startPolling()
   }
 
-  const handleRegenerate = () => {
-    invalidateCache() // Clear cache when regenerating
+  const handleRegenerate = async () => {
+    // Clear data from database first
+    try {
+      await fetch(`/api/trip-intelligence/currency?tripId=${itinerary.id}`, {
+        method: 'DELETE'
+      })
+    } catch (e) {
+      console.error('Failed to clear currency advice:', e)
+    }
+    
+    setAdvice([])
     setViewState('questions')
   }
   
@@ -140,15 +227,38 @@ export function CurrencyView({ itinerary }: CurrencyViewProps) {
     )
   }
 
-  if (viewState === 'loading') {
+  if (viewState === 'generating') {
     return (
       <div className="animate-fade-in">
-        <Card className="p-12 text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
-          <h3 className="text-xl font-semibold text-slate-900 mb-2">Analyzing Currency Needs...</h3>
-          <p className="text-slate-600 text-sm">
+        <Card className="p-8 text-center bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+          <div className="relative mx-auto mb-6 w-20 h-20">
+            <div className="absolute inset-0 rounded-full bg-green-100 animate-pulse"></div>
+            <div className="absolute inset-2 rounded-full bg-white flex items-center justify-center">
+              <Loader2 className="h-10 w-10 text-green-600 animate-spin" />
+            </div>
+          </div>
+          
+          <h3 className="text-xl font-semibold text-slate-900 mb-2">
+            Analyzing Currency Needs...
+          </h3>
+          
+          <p className="text-slate-600 text-sm mb-4">
             Fetching exchange rates and generating personalized money advice
           </p>
+          
+          <div className="bg-white/60 rounded-lg p-4 max-w-md mx-auto">
+            <p className="text-sm text-green-700 font-medium mb-1">
+              Feel free to explore other tabs!
+            </p>
+            <p className="text-xs text-slate-500">
+              Your currency advice will be ready when you return.
+            </p>
+          </div>
+          
+          <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+            <span>Generation in progress</span>
+          </div>
         </Card>
       </div>
     )

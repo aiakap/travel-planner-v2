@@ -1,8 +1,8 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { getUserProfileGraph } from "@/lib/actions/profile-graph-actions";
-import { extractItemsFromXml } from "@/lib/profile-graph-xml";
 import { SuggestionsClient } from "./client";
+import { ProfileGraphItem, GraphCategory } from "@/lib/types/profile-graph";
 
 export const metadata = {
   title: "Trip Suggestions",
@@ -16,11 +16,18 @@ export default async function SuggestionsPage() {
     redirect("/login?callbackUrl=/suggestions");
   }
 
-  // Fetch profile graph data
+  // Fetch profile graph data (already parses XML to graphData)
   const profileGraph = await getUserProfileGraph(session.user.id);
   
-  // Extract items from XML
-  const profileItems = extractItemsFromXml(profileGraph.xmlData || null);
+  // Extract items from already-parsed graphData.nodes (no re-parsing!)
+  const profileItems: ProfileGraphItem[] = profileGraph.graphData.nodes
+    .filter((n) => n.type === 'item')
+    .map((n) => ({
+      id: n.id,
+      category: n.category as GraphCategory,
+      value: n.value || n.label,
+      metadata: n.metadata
+    }));
 
   const user = {
     id: session.user.id,

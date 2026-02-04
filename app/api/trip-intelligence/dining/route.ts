@@ -439,3 +439,58 @@ export async function GET(request: Request) {
     )
   }
 }
+
+/**
+ * DELETE /api/trip-intelligence/dining?tripId=xxx
+ * 
+ * Clear existing dining recommendations for a trip
+ */
+export async function DELETE(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tripId = searchParams.get('tripId')
+
+    if (!tripId) {
+      return NextResponse.json({ error: 'Missing tripId' }, { status: 400 })
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId, userId: session.user.id }
+    })
+
+    if (!trip) {
+      return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    }
+
+    const intelligence = await prisma.tripIntelligence.findUnique({
+      where: { tripId }
+    })
+
+    if (intelligence) {
+      await prisma.diningRecommendation.deleteMany({
+        where: { intelligenceId: intelligence.id }
+      })
+
+      await prisma.tripIntelligence.update({
+        where: { id: intelligence.id },
+        data: {
+          hasDiningRecommendations: false,
+          diningGeneratedAt: null
+        }
+      })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error clearing dining recommendations:', error)
+    return NextResponse.json(
+      { error: 'Failed to clear dining recommendations' },
+      { status: 500 }
+    )
+  }
+}

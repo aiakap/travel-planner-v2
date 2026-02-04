@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
-import { Phone, MapPin, AlertTriangle, Shield, Hospital, Building2 } from "lucide-react"
+import { Phone, MapPin, AlertTriangle, Shield, Hospital, Building2, Loader2 } from "lucide-react"
 import { IntelligenceQuestionForm, type Question } from "./intelligence-question-form"
 import { IntelligenceCard, IntelligenceCardItem } from "./intelligence-card"
 import { RelevanceTooltip, type ProfileReference } from "./relevance-tooltip"
@@ -44,10 +44,13 @@ interface EmergencyInfo {
   profileReferences: ProfileReference[]
 }
 
-type ViewState = 'questions' | 'loading' | 'loaded'
+type ViewState = 'questions' | 'generating' | 'loaded'
+
+// Simple sessionStorage key
+const getGeneratingKey = (tripId: string) => `emergency_generating_${tripId}`
 
 export function EmergencyView({ itinerary }: EmergencyViewProps) {
-  const { data, initialCheckComplete, invalidateCache, updateCache } = useCachedIntelligence<{ info: EmergencyInfo[] }>(
+  const { data, initialCheckComplete, updateCache } = useCachedIntelligence<{ info: EmergencyInfo[] }>(
     'emergency',
     itinerary.id,
     '/api/trip-intelligence/emergency'
@@ -56,15 +59,90 @@ export function EmergencyView({ itinerary }: EmergencyViewProps) {
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [info, setInfo] = useState<EmergencyInfo[]>([])
 
-  // Sync with cached data
+  // Polling refs
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const pollCountRef = useRef(0)
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+      }
+    }
+  }, [])
+
+  // Poll the GET endpoint to check if data exists
+  const pollForData = async () => {
+    try {
+      const res = await fetch(`/api/trip-intelligence/emergency?tripId=${itinerary.id}`)
+      const apiData = await res.json()
+      
+      if (apiData.info && apiData.info.length > 0) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        
+        setInfo(apiData.info)
+        updateCache({ info: apiData.info })
+        setViewState('loaded')
+        return
+      }
+      
+      pollCountRef.current++
+      if (pollCountRef.current > 100) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        setViewState('questions')
+        alert('Generation timed out. Please try again.')
+      }
+    } catch (error) {
+      console.error('Poll error:', error)
+    }
+  }
+
+  const startPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+    }
+    pollCountRef.current = 0
+    pollForData()
+    pollingRef.current = setInterval(pollForData, 3000)
+  }
+
+  // Check initial state on mount
   useEffect(() => {
     if (data?.info && data.info.length > 0) {
       setInfo(data.info)
       setViewState('loaded')
-    } else if (initialCheckComplete) {
+      try {
+        sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+      } catch (e) {}
+      return
+    }
+    
+    try {
+      if (sessionStorage.getItem(getGeneratingKey(itinerary.id))) {
+        setViewState('generating')
+        startPolling()
+        return
+      }
+    } catch (e) {}
+    
+    if (initialCheckComplete) {
       setViewState('questions')
     }
-  }, [data, initialCheckComplete])
+  }, [data, initialCheckComplete, itinerary.id])
 
   const questions: Question[] = [
     {
@@ -106,39 +184,40 @@ export function EmergencyView({ itinerary }: EmergencyViewProps) {
     }
   ]
 
+  // Fire-and-forget generate function
   const generateInfo = async (answers: Record<string, string>) => {
-    setViewState('loading')
-
+    setViewState('generating')
+    
     try {
-      const response = await fetch('/api/trip-intelligence/emergency', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tripId: itinerary.id,
-          citizenship: answers.citizenship,
-          residence: answers.residence,
-          medicalConditions: answers.medicalConditions
-        })
-      })
+      sessionStorage.setItem(getGeneratingKey(itinerary.id), 'true')
+    } catch (e) {}
 
-      if (response.ok) {
-        const responseData = await response.json()
-        setInfo(responseData.info)
-        updateCache({ info: responseData.info }) // Update the cache
-        setViewState('loaded')
-      } else {
-        setViewState('questions')
-        alert('Failed to generate emergency information. Please try again.')
-      }
-    } catch (error) {
-      console.error('Error generating info:', error)
-      setViewState('questions')
-      alert('An error occurred. Please try again.')
-    }
+    fetch('/api/trip-intelligence/emergency', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tripId: itinerary.id,
+        citizenship: answers.citizenship,
+        residence: answers.residence,
+        medicalConditions: answers.medicalConditions
+      })
+    }).catch(err => {
+      console.error('POST error:', err)
+    })
+
+    startPolling()
   }
 
-  const handleRegenerate = () => {
-    invalidateCache() // Clear cache when regenerating
+  const handleRegenerate = async () => {
+    try {
+      await fetch(`/api/trip-intelligence/emergency?tripId=${itinerary.id}`, {
+        method: 'DELETE'
+      })
+    } catch (e) {
+      console.error('Failed to clear emergency info:', e)
+    }
+    
+    setInfo([])
     setViewState('questions')
   }
 
@@ -165,15 +244,38 @@ export function EmergencyView({ itinerary }: EmergencyViewProps) {
     )
   }
 
-  if (viewState === 'loading') {
+  if (viewState === 'generating') {
     return (
       <div className="animate-fade-in">
-        <Card className="p-12 text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
-          <h3 className="text-xl font-semibold text-slate-900 mb-2">Gathering Emergency Information...</h3>
-          <p className="text-slate-600 text-sm">
+        <Card className="p-8 text-center bg-gradient-to-br from-red-50 to-orange-50 border-red-200">
+          <div className="relative mx-auto mb-6 w-20 h-20">
+            <div className="absolute inset-0 rounded-full bg-red-100 animate-pulse"></div>
+            <div className="absolute inset-2 rounded-full bg-white flex items-center justify-center">
+              <Loader2 className="h-10 w-10 text-red-600 animate-spin" />
+            </div>
+          </div>
+          
+          <h3 className="text-xl font-semibold text-slate-900 mb-2">
+            Gathering Emergency Information...
+          </h3>
+          
+          <p className="text-slate-600 text-sm mb-4">
             Compiling embassy contacts, emergency numbers, and safety information
           </p>
+          
+          <div className="bg-white/60 rounded-lg p-4 max-w-md mx-auto">
+            <p className="text-sm text-red-700 font-medium mb-1">
+              Feel free to explore other tabs!
+            </p>
+            <p className="text-xs text-slate-500">
+              Your emergency info will be ready when you return.
+            </p>
+          </div>
+          
+          <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse"></div>
+            <span>Generation in progress</span>
+          </div>
         </Card>
       </div>
     )

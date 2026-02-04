@@ -503,6 +503,73 @@ Be practical and specific. Tailor every phrase to the user's profile and profici
 }
 
 /**
+ * DELETE /api/trip-intelligence/language?tripId=xxx
+ * 
+ * Clear existing language guides for a trip
+ */
+export async function DELETE(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tripId = searchParams.get('tripId')
+
+    if (!tripId) {
+      return NextResponse.json({ error: 'Missing tripId' }, { status: 400 })
+    }
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId, userId: session.user.id }
+    })
+
+    if (!trip) {
+      return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    }
+
+    const intelligence = await prisma.tripIntelligence.findUnique({
+      where: { tripId }
+    })
+
+    if (intelligence) {
+      // Delete language guides and related data (scenarios, phrases, verbs cascade)
+      const existingGuides = await prisma.languageGuide.findMany({
+        where: { intelligenceId: intelligence.id },
+        select: { id: true }
+      })
+      
+      for (const guide of existingGuides) {
+        await prisma.languageScenario.deleteMany({
+          where: { guideId: guide.id }
+        })
+      }
+      
+      await prisma.languageGuide.deleteMany({
+        where: { intelligenceId: intelligence.id }
+      })
+
+      await prisma.tripIntelligence.update({
+        where: { id: intelligence.id },
+        data: {
+          hasLanguageGuides: false,
+          languageGeneratedAt: null
+        }
+      })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error clearing language guides:', error)
+    return NextResponse.json(
+      { error: 'Failed to clear language guides' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
  * Determine target language based on destination
  */
 function determineTargetLanguage(destination: string): { name: string; code: string } {

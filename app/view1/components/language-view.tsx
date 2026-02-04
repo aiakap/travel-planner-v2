@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { ViewItinerary } from "@/lib/itinerary-view-types"
-import { Languages, Plane, Hotel, UtensilsCrossed, Bus, AlertCircle, Sparkles } from "lucide-react"
+import { Languages, Plane, Hotel, UtensilsCrossed, Bus, AlertCircle, Sparkles, Loader2 } from "lucide-react"
 import { IntelligenceSection, IntelligenceSectionGroup, type IntelligenceItem } from "./intelligence-section"
 import { Card } from "./card"
 import { useCachedIntelligence } from "../hooks/use-cached-intelligence"
@@ -43,7 +43,10 @@ interface LanguageGuide {
   scenarios: LanguageScenario[]
 }
 
-type ViewState = 'questions' | 'loading' | 'loaded'
+type ViewState = 'questions' | 'generating' | 'loaded'
+
+// Simple sessionStorage key
+const getGeneratingKey = (tripId: string) => `language_generating_${tripId}`
 
 const COMMON_LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -61,7 +64,7 @@ const COMMON_LANGUAGES = [
 ]
 
 export function LanguageView({ itinerary }: LanguageViewProps) {
-  const { data, loading, invalidateCache, updateCache, initialCheckComplete } = useCachedIntelligence<{ guides: LanguageGuide[] }>(
+  const { data, loading, updateCache, initialCheckComplete } = useCachedIntelligence<{ guides: LanguageGuide[] }>(
     'language',
     itinerary.id,
     '/api/trip-intelligence/language'
@@ -75,15 +78,91 @@ export function LanguageView({ itinerary }: LanguageViewProps) {
   const [selectedLanguages, setSelectedLanguages] = useState<Set<string>>(new Set())
   const [proficiencies, setProficiencies] = useState<Record<string, 'beginner' | 'intermediate' | 'advanced'>>({})
 
+  // Polling refs
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const pollCountRef = useRef(0)
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+      }
+    }
+  }, [])
+
+  // Poll the GET endpoint to check if data exists
+  const pollForData = async () => {
+    try {
+      const res = await fetch(`/api/trip-intelligence/language?tripId=${itinerary.id}`)
+      const apiData = await res.json()
+      
+      if (apiData.guides && apiData.guides.length > 0) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        
+        setGuides(apiData.guides)
+        updateCache({ guides: apiData.guides })
+        setViewState('loaded')
+        return
+      }
+      
+      pollCountRef.current++
+      if (pollCountRef.current > 100) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        setViewState('questions')
+        alert('Generation timed out. Please try again.')
+      }
+    } catch (error) {
+      console.error('Poll error:', error)
+    }
+  }
+
+  const startPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+    }
+    pollCountRef.current = 0
+    pollForData()
+    pollingRef.current = setInterval(pollForData, 3000)
+  }
+
+  // Check initial state on mount
   useEffect(() => {
     if (data?.guides && data.guides.length > 0) {
       setGuides(data.guides)
       setViewState('loaded')
-    } else if (!loading) {
+      try {
+        sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+      } catch (e) {}
+      return
+    }
+    
+    try {
+      if (sessionStorage.getItem(getGeneratingKey(itinerary.id))) {
+        setViewState('generating')
+        startPolling()
+        return
+      }
+    } catch (e) {}
+    
+    if (initialCheckComplete && !loading) {
       loadPreferences()
       setViewState('questions')
     }
-  }, [data, loading])
+  }, [data, loading, initialCheckComplete, itinerary.id])
 
   const loadPreferences = async () => {
     try {
@@ -130,49 +209,49 @@ export function LanguageView({ itinerary }: LanguageViewProps) {
     setProficiencies(prev => ({ ...prev, [code]: proficiency }))
   }
 
+  // Fire-and-forget generate function
   const generateGuide = async () => {
     if (selectedLanguages.size === 0) {
       alert('Please select at least one language')
       return
     }
 
-    setViewState('loading')
-
+    setViewState('generating')
+    
     try {
-      const knownLanguages = Array.from(selectedLanguages).map(code => ({
-        code,
-        name: COMMON_LANGUAGES.find(l => l.code === code)?.name || code,
-        proficiency: proficiencies[code] || 'beginner'
-      }))
+      sessionStorage.setItem(getGeneratingKey(itinerary.id), 'true')
+    } catch (e) {}
 
-      const response = await fetch('/api/trip-intelligence/language', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tripId: itinerary.id,
-          knownLanguages
-        })
+    const knownLanguages = Array.from(selectedLanguages).map(code => ({
+      code,
+      name: COMMON_LANGUAGES.find(l => l.code === code)?.name || code,
+      proficiency: proficiencies[code] || 'beginner'
+    }))
+
+    fetch('/api/trip-intelligence/language', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tripId: itinerary.id,
+        knownLanguages
       })
+    }).catch(err => {
+      console.error('POST error:', err)
+    })
 
-      if (response.ok) {
-        const responseData = await response.json()
-        setGuides(responseData.guides || [])
-        updateCache({ guides: responseData.guides || [] }) // Update the cache
-        setViewState('loaded')
-      } else {
-        const errorData = await response.json()
-        setViewState('questions')
-        alert(`Failed to generate language guide: ${errorData.error || 'Please try again.'}`)
-      }
-    } catch (error) {
-      console.error('Error generating guide:', error)
-      setViewState('questions')
-      alert('An error occurred while generating the language guide. Please try again.')
-    }
+    startPolling()
   }
 
-  const handleRegenerate = () => {
-    invalidateCache() // Clear cache when regenerating
+  const handleRegenerate = async () => {
+    try {
+      await fetch(`/api/trip-intelligence/language?tripId=${itinerary.id}`, {
+        method: 'DELETE'
+      })
+    } catch (e) {
+      console.error('Failed to clear language guides:', e)
+    }
+    
+    setGuides([])
     setViewState('questions')
   }
 
@@ -278,8 +357,41 @@ export function LanguageView({ itinerary }: LanguageViewProps) {
     )
   }
 
-  if (viewState === 'loading') {
-    return <IntelligenceLoading feature="language" mode="generating" />
+  if (viewState === 'generating') {
+    return (
+      <div className="animate-fade-in">
+        <Card className="p-8 text-center bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
+          <div className="relative mx-auto mb-6 w-20 h-20">
+            <div className="absolute inset-0 rounded-full bg-indigo-100 animate-pulse"></div>
+            <div className="absolute inset-2 rounded-full bg-white flex items-center justify-center">
+              <Loader2 className="h-10 w-10 text-indigo-600 animate-spin" />
+            </div>
+          </div>
+          
+          <h3 className="text-xl font-semibold text-slate-900 mb-2">
+            Creating Your Language Guide...
+          </h3>
+          
+          <p className="text-slate-600 text-sm mb-4">
+            Generating personalized phrases and vocabulary for your destinations
+          </p>
+          
+          <div className="bg-white/60 rounded-lg p-4 max-w-md mx-auto">
+            <p className="text-sm text-indigo-700 font-medium mb-1">
+              Feel free to explore other tabs!
+            </p>
+            <p className="text-xs text-slate-500">
+              Your language guide will be ready when you return.
+            </p>
+          </div>
+          
+          <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+            <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div>
+            <span>Generation in progress</span>
+          </div>
+        </Card>
+      </div>
+    )
   }
 
   if (guides.length === 0) return null
