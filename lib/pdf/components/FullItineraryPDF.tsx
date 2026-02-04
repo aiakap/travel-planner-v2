@@ -1,7 +1,8 @@
 /**
  * Full Itinerary PDF Document
  * 
- * Main PDF document component that assembles all sections
+ * Main PDF document component that assembles all sections.
+ * Includes per-segment maps, weather forecast, budget summary, and complete AI-powered insights.
  */
 
 import React from 'react'
@@ -14,18 +15,52 @@ import { PDFHeader } from './PDFHeader'
 import { PDFQuickReference } from './PDFQuickReference'
 import { PDFSegment } from './PDFSegment'
 import { PDFIntelligence } from './PDFIntelligence'
-import type { ViewItinerary } from '@/lib/itinerary-view-types'
+import { PDFSegmentMaps } from './PDFSegmentMaps'
+import { PDFWeather } from './PDFWeather'
+import { PDFBudget } from './PDFBudget'
+import type { ViewItinerary, WeatherData } from '@/lib/itinerary-view-types'
 import type { PDFTemplate } from '../templates/types'
+
+/**
+ * Budget data structure (pre-calculated in API route)
+ */
+interface BudgetCategoryItem {
+  id: string
+  title: string
+  amountUSD: number
+  amountLocal: number
+  currency: string
+  status: string
+}
+
+interface BudgetCategory {
+  category: string
+  total: number
+  count: number
+  items: BudgetCategoryItem[]
+}
+
+interface PDFBudgetData {
+  bookedTotal: number
+  categoryTotals: BudgetCategory[]
+  tripDays: number
+  tripNights: number
+  dailyAverage: number
+}
 
 interface FullItineraryPDFProps {
   itinerary: ViewItinerary
   intelligence?: any
+  weather?: WeatherData[]
+  budget?: PDFBudgetData
   template: PDFTemplate
 }
 
 export function FullItineraryPDF({
   itinerary,
   intelligence,
+  weather,
+  budget,
   template,
 }: FullItineraryPDFProps) {
   const generatedDate = new Date().toLocaleDateString('en-US', {
@@ -37,10 +72,10 @@ export function FullItineraryPDF({
   return (
     <Document
       title={itinerary.title}
-      author="Travel Planner"
+      author="Ntourage Travel"
       subject={`Trip Itinerary: ${itinerary.title}`}
       keywords="travel, itinerary, trip, vacation"
-      creator="Travel Planner v2"
+      creator="Ntourage Travel Planner"
     >
       <Page size="A4" style={styles.page}>
         {/* Header */}
@@ -56,7 +91,7 @@ export function FullItineraryPDF({
         {/* Quick Reference Table */}
         <PDFQuickReference itinerary={itinerary} />
         
-        {/* Journey Section */}
+        {/* Journey Section - Detailed segments and reservations */}
         {template.sections.journey && (
           <View>
             <Text style={styles.sectionHeader}>Your Journey</Text>
@@ -77,12 +112,40 @@ export function FullItineraryPDF({
           </View>
         )}
         
-        {/* Intelligence Sections */}
+        {/* Weather Forecast Section */}
+        {template.sections.weather !== false && weather && weather.length > 0 && (
+          <PDFWeather
+            weather={weather}
+            tripStartDate={itinerary.startDate}
+            tripEndDate={itinerary.endDate}
+          />
+        )}
+        
+        {/* Intelligence Sections - Complete AI-powered insights */}
         {template.includeIntelligence && intelligence && (
           <PDFIntelligence
             intelligence={intelligence}
             sections={template.sections}
           />
+        )}
+        
+        {/* Maps & Locations Section - Per-segment maps at the end */}
+        {itinerary.segments.length > 0 && (
+          <View>
+            <Text style={styles.sectionHeader}>Maps & Locations</Text>
+            {itinerary.segments.map((segment, index) => (
+              <PDFSegmentMaps
+                key={segment.id}
+                segment={segment}
+                segmentNumber={index + 1}
+              />
+            ))}
+          </View>
+        )}
+        
+        {/* Budget Summary Section */}
+        {budget && budget.bookedTotal > 0 && (
+          <PDFBudget budget={budget} />
         )}
         
         {/* Footer */}

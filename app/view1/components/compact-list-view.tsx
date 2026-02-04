@@ -8,6 +8,7 @@ import type { ViewItinerary } from "@/lib/itinerary-view-types"
 import { ChevronDown, ChevronRight, Calendar, MapPin, MessageCircle } from "lucide-react"
 import { chatAboutSegment, chatAboutReservation } from "../lib/chat-integration"
 import { formatDateCompact } from "../lib/view-utils"
+import { formatAsUSD } from "@/lib/utils/currency-converter"
 
 interface CompactListViewProps {
   itinerary: ViewItinerary
@@ -31,7 +32,8 @@ export function CompactListView({ itinerary }: CompactListViewProps) {
       {itinerary.segments.map((segment) => {
         const isExpanded = expandedSegments.has(segment.id)
         const segmentColor = itinerary.segmentColors[segment.id]
-        const totalCost = segment.reservations.reduce((sum, r) => sum + r.price, 0)
+        // Use priceUSD for accurate multi-currency totals
+        const totalCostUSD = segment.reservations.reduce((sum, r) => sum + (r.priceUSD || 0), 0)
 
         return (
           <Card key={segment.id} className="overflow-hidden">
@@ -91,9 +93,9 @@ export function CompactListView({ itinerary }: CompactListViewProps) {
                   <div className="flex items-center justify-between md:justify-end gap-3">
                     <div className="text-sm">
                       <span className="text-muted-foreground">{segment.reservations.length} items</span>
-                      {totalCost > 0 && (
+                      {totalCostUSD > 0 && (
                         <span className="ml-2 font-semibold text-emerald-600">
-                          ${totalCost.toLocaleString()}
+                          {formatAsUSD(totalCostUSD)}
                         </span>
                       )}
                     </div>

@@ -293,9 +293,11 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
                                 
                                 // Render continuation indicator for multi-day reservations (days 2+)
                                 if (moment.isContinuation) {
-                                  const label = moment.nightNumber 
-                                    ? `Night ${moment.nightNumber} of ${moment.totalNights}`
-                                    : `Day ${moment.dayNumber} of ${moment.totalDays}`
+                                  const label = moment.isCheckout
+                                    ? moment.time ? `Check-out at ${moment.time}` : 'Check-out'
+                                    : moment.nightNumber 
+                                      ? `Night ${moment.nightNumber} of ${moment.totalNights}`
+                                      : `Day ${moment.dayNumber} of ${moment.totalDays}`
                                   
                                   return (
                                     <div key={moment.id} className="relative">

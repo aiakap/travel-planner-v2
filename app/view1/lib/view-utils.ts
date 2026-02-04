@@ -241,6 +241,7 @@ export interface CalendarMoment {
   totalNights?: number      // e.g., 4
   dayNumber?: number        // e.g., 2 (for "Day 2 of 5" - car rentals)
   totalDays?: number        // e.g., 5
+  isCheckout?: boolean      // True for checkout continuation cards
   parentReservationId?: string
   reservationType?: ViewReservation['type']
   // Out-of-range display support (when reservation date is outside segment dates)
@@ -293,16 +294,6 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
       const isMultiDayTransport = res.type === 'transport' && res.durationDays && res.durationDays > 1
       const isMultiDay = isMultiDayHotel || isMultiDayTransport
       
-      // Determine where the full reservation card will actually be displayed
-      // If reservation date is outside segment range, it shows on the segment's first day
-      const resDateKey = `${MONTHS_SHORT[date.getUTCMonth()]}-${date.getUTCDate()}`
-      const segStartKey = `${MONTHS_SHORT[segStart.getUTCMonth()]}-${segStart.getUTCDate()}`
-      
-      // Check if reservation date is within segment range
-      const isDateInSegmentRange = date >= segStart && date <= segEnd
-      // The display date is either the reservation date (if in range) or segment start (if out of range)
-      const displayDateKey = isDateInSegmentRange ? resDateKey : segStartKey
-      
       // Add the primary moment (day 1) - shows full reservation card, no "Night 1 of X"
       moments.push({
         id: res.id,
@@ -323,14 +314,14 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
       })
       
       // Generate continuation moments for multi-day hotel reservations
+      // Continuations use actual reservation dates with calendar-based segment assignment
       if (isMultiDayHotel && res.nights) {
-        // Check if the actual check-in date is in a different segment
-        // If so, we need to show "Night 1 of X" in that segment
+        // Check if actual check-in date is before the segment (need to show Night 1 elsewhere)
         const checkInSegmentId = getSegmentIdForDate(date)
-        const isCheckInInDifferentSegment = checkInSegmentId && checkInSegmentId !== seg.id
+        const isCheckInBeforeSegment = date < segStart && checkInSegmentId && checkInSegmentId !== seg.id
         
-        if (isCheckInInDifferentSegment) {
-          // Add Night 1 continuation to the check-in segment
+        // If check-in is in a different segment, add Night 1 continuation there
+        if (isCheckInBeforeSegment) {
           moments.push({
             id: `${res.id}-night-1`,
             date: date.getUTCDate().toString(),
@@ -349,18 +340,20 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
           })
         }
         
-        // Generate continuations for nights 2+
+        // Calculate the segment start date key for comparison
+        const segStartKey = `${MONTHS_SHORT[segStart.getUTCMonth()]}-${segStart.getUTCDate()}`
+        
+        // Generate continuations for nights 2+ based on actual reservation dates
         for (let night = 2; night <= res.nights; night++) {
           const contDate = new Date(date)
           contDate.setUTCDate(contDate.getUTCDate() + night - 1)
+          
           const contDateKey = `${MONTHS_SHORT[contDate.getUTCMonth()]}-${contDate.getUTCDate()}`
           
-          // Skip this continuation if it falls on the same day as the full card display
-          if (contDateKey === displayDateKey) {
-            continue
-          }
+          // Skip if this is the same day as the segment start (full card displays there)
+          if (contDateKey === segStartKey) continue
           
-          // Find which segment this continuation date belongs to
+          // Assign to whichever segment owns this calendar date
           const contSegmentId = getSegmentIdForDate(contDate) || seg.id
           
           moments.push({
@@ -380,16 +373,45 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
             reservationType: res.type
           })
         }
+        
+        // Add checkout continuation on the checkout day (day after last night)
+        const checkoutDate = new Date(date)
+        checkoutDate.setUTCDate(checkoutDate.getUTCDate() + res.nights)
+        
+        const checkoutDateKey = `${MONTHS_SHORT[checkoutDate.getUTCMonth()]}-${checkoutDate.getUTCDate()}`
+        
+        // Skip if checkout falls on same day as segment start (full card displays there)
+        if (checkoutDateKey !== segStartKey) {
+          const checkoutSegmentId = getSegmentIdForDate(checkoutDate) || seg.id
+          
+          moments.push({
+            id: `${res.id}-checkout`,
+            date: checkoutDate.getUTCDate().toString(),
+            month: MONTHS_SHORT[checkoutDate.getUTCMonth()],
+            day: DAYS_SHORT[checkoutDate.getUTCDay()],
+            time: res.endTimeFormatted || '',  // Use checkout time if available
+            title: res.title,
+            icon: getIconForType(res.type),
+            chapterId: checkoutSegmentId,
+            isMultiDay: true,
+            isContinuation: true,
+            isCheckout: true,
+            totalNights: res.nights,
+            parentReservationId: res.id,
+            reservationType: res.type
+          })
+        }
       }
       
       // Generate continuation moments for multi-day transport (car rentals)
+      // Continuations use actual reservation dates with calendar-based segment assignment
       if (isMultiDayTransport && res.durationDays) {
-        // Check if the pickup date is in a different segment
+        // Check if actual pickup date is before the segment (need to show Day 1 elsewhere)
         const pickupSegmentId = getSegmentIdForDate(date)
-        const isPickupInDifferentSegment = pickupSegmentId && pickupSegmentId !== seg.id
+        const isPickupBeforeSegment = date < segStart && pickupSegmentId && pickupSegmentId !== seg.id
         
-        if (isPickupInDifferentSegment) {
-          // Add Day 1 continuation to the pickup segment
+        // If pickup is in a different segment, add Day 1 continuation there
+        if (isPickupBeforeSegment) {
           moments.push({
             id: `${res.id}-day-1`,
             date: date.getUTCDate().toString(),
@@ -408,18 +430,20 @@ export function mapToCalendarData(itinerary: ViewItinerary) {
           })
         }
         
-        // Generate continuations for days 2+
+        // Calculate the segment start date key for comparison
+        const segStartKey = `${MONTHS_SHORT[segStart.getUTCMonth()]}-${segStart.getUTCDate()}`
+        
+        // Generate continuations for days 2+ based on actual reservation dates
         for (let day = 2; day <= res.durationDays; day++) {
           const contDate = new Date(date)
           contDate.setUTCDate(contDate.getUTCDate() + day - 1)
+          
           const contDateKey = `${MONTHS_SHORT[contDate.getUTCMonth()]}-${contDate.getUTCDate()}`
           
-          // Skip this continuation if it falls on the same day as the full card display
-          if (contDateKey === displayDateKey) {
-            continue
-          }
+          // Skip if this is the same day as the segment start (full card displays there)
+          if (contDateKey === segStartKey) continue
           
-          // Find which segment this continuation date belongs to
+          // Assign to whichever segment owns this calendar date
           const contSegmentId = getSegmentIdForDate(contDate) || seg.id
           
           moments.push({

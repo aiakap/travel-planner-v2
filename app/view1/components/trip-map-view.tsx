@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MessageCircle, MapPin } from "lucide-react"
 import { chatAboutSegment, chatAboutReservation } from "../lib/chat-integration"
+import { useRoadRoutes, isGroundTransportSegment } from "@/hooks/use-road-routes"
 
 interface TripMapViewProps {
   itinerary: ViewItinerary
@@ -55,6 +56,9 @@ export function TripMapView({
     googleMapsApiKey: apiKey || "",
   })
 
+  // Road routes for ground transport segments
+  const { routes: roadRoutes, fetchRoutes, isLoading: isLoadingRoutes } = useRoadRoutes()
+
   // Filter segments and reservations
   const visibleSegments = selectedSegmentId
     ? itinerary.segments.filter(s => s.id === selectedSegmentId)
@@ -67,7 +71,25 @@ export function TripMapView({
       .map(r => ({ ...r, segment, segmentColor: itinerary.segmentColors[segment.id] }))
   )
 
-  // Fit map bounds to show all visible segments
+  // Fetch road routes for ground transport segments
+  useEffect(() => {
+    const groundSegments = visibleSegments.filter(
+      segment => isGroundTransportSegment(segment.segmentType)
+    )
+
+    if (groundSegments.length > 0) {
+      const requests = groundSegments.map(segment => ({
+        id: segment.id,
+        originLat: segment.startLat,
+        originLng: segment.startLng,
+        destLat: segment.endLat,
+        destLng: segment.endLng,
+      }))
+      fetchRoutes(requests)
+    }
+  }, [visibleSegments, fetchRoutes])
+
+  // Fit map bounds to show all visible segments (including road route paths)
   useEffect(() => {
     if (!mapInstance || visibleSegments.length === 0) {
       return
@@ -75,11 +97,19 @@ export function TripMapView({
 
     const bounds = new google.maps.LatLngBounds()
     visibleSegments.forEach(segment => {
-      bounds.extend({ lat: segment.startLat, lng: segment.startLng })
-      bounds.extend({ lat: segment.endLat, lng: segment.endLng })
+      // If we have a road route for this segment, use its path for bounds
+      const roadRoute = roadRoutes.get(segment.id)
+      if (roadRoute && roadRoute.path.length > 0) {
+        roadRoute.path.forEach(point => {
+          bounds.extend({ lat: point.lat, lng: point.lng })
+        })
+      } else {
+        bounds.extend({ lat: segment.startLat, lng: segment.startLng })
+        bounds.extend({ lat: segment.endLat, lng: segment.endLng })
+      }
     })
     mapInstance.fitBounds(bounds)
-  }, [mapInstance, visibleSegments, selectedSegmentId])
+  }, [mapInstance, visibleSegments, selectedSegmentId, roadRoutes])
 
   if (!apiKey) {
     return (
@@ -132,19 +162,26 @@ export function TripMapView({
           const color = itinerary.segmentColors[segment.id]
           const isFlightSegment = segment.segmentType.toLowerCase().includes('flight') ||
                                   segment.segmentType.toLowerCase().includes('air')
+          const isGroundSegment = isGroundTransportSegment(segment.segmentType)
+          
+          // Use road route path if available for ground transport, otherwise straight line as fallback
+          const roadRoute = isGroundSegment ? roadRoutes.get(segment.id) : null
+          const path = roadRoute && roadRoute.path.length > 0
+            ? roadRoute.path
+            : [
+                { lat: segment.startLat, lng: segment.startLng },
+                { lat: segment.endLat, lng: segment.endLng },
+              ]
 
           return (
             <Polyline
               key={segment.id}
-              path={[
-                { lat: segment.startLat, lng: segment.startLng },
-                { lat: segment.endLat, lng: segment.endLng },
-              ]}
+              path={path}
               options={{
                 strokeColor: color,
                 strokeOpacity: 0.7,
                 strokeWeight: 3,
-                geodesic: true,
+                geodesic: !isGroundSegment, // Geodesic for flights, not for road routes
                 icons: isFlightSegment
                   ? [
                       {

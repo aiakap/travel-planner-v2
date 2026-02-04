@@ -32,6 +32,7 @@ interface SegmentEditMapProps {
   currentReservationId: string
   segmentName?: string
   height?: string
+  returnTo?: string
 }
 
 interface MapMarker {
@@ -101,6 +102,7 @@ export function SegmentEditMap({
   currentReservationId,
   segmentName,
   height = "300px",
+  returnTo,
 }: SegmentEditMapProps) {
   const router = useRouter()
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -109,6 +111,7 @@ export function SegmentEditMap({
   const [markers, setMarkers] = useState<MapMarker[]>([])
 
   const { isLoaded, loadError } = useJsApiLoader({
+    id: "google-map-script",
     googleMapsApiKey: apiKey || "",
   })
 
@@ -177,7 +180,10 @@ export function SegmentEditMap({
   }
 
   const handleEditClick = (reservationId: string) => {
-    router.push(`/reservation/${reservationId}/edit`)
+    const url = returnTo 
+      ? `/reservation/${reservationId}/edit?returnTo=${encodeURIComponent(returnTo)}`
+      : `/reservation/${reservationId}/edit`
+    router.push(url)
   }
 
   if (loadError) {

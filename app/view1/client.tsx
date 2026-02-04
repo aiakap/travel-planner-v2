@@ -8,7 +8,7 @@ import {
   Calendar as CalendarIcon, FileText, Sparkles,
   Share2, Download, CalendarPlus, Cloud, CheckSquare, Map,
   DollarSign, Shield, Calendar, UtensilsCrossed, Plus, Settings, ArrowLeft, Languages,
-  Luggage, Mountain
+  Luggage, Mountain, Wallet
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
@@ -27,6 +27,7 @@ import { ActivitiesView } from "./components/activities-view"
 import { DiningView } from "./components/dining-view"
 import { DocumentsView } from "./components/documents-view"
 import { LanguageView } from "./components/language-view"
+import { BudgetView } from "./components/budget-view"
 import { SectionHeading } from "./components/section-heading"
 import { QuickAddModal } from "@/components/quick-add-modal"
 import { StyleSelector } from "./components/style-selector"
@@ -35,11 +36,12 @@ import { toast } from "sonner"
 interface View1ClientProps {
   itinerary: ViewItinerary
   profileValues: any[]
+  profileItems?: any[]
   currentStyleId?: string | null
   currentStyleName?: string | null
 }
 
-export function View1Client({ itinerary, profileValues, currentStyleId, currentStyleName }: View1ClientProps) {
+export function View1Client({ itinerary, profileValues, profileItems = [], currentStyleId, currentStyleName }: View1ClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -214,6 +216,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
     switch (activeTab) {
       case 'journey': return <JourneyView itinerary={itinerary} scrollToId={scrollToId} />
       case 'weather': return <WeatherView itinerary={itinerary} />
+      case 'budget': return <BudgetView itinerary={itinerary} profileItems={profileItems} />
       case 'todo': return <TodoView itinerary={itinerary} profileValues={profileValues} />
       case 'map': return <MapView itinerary={itinerary} />
       case 'packing': return <PackingView itinerary={itinerary} profileValues={profileValues} />
@@ -232,6 +235,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
     const headings = {
       journey: { icon: CalendarIcon, title: "Timelines", subtitle: "Full itinerary timeline" },
       weather: { icon: Cloud, title: "Weather Forecast", subtitle: "Conditions for your trip" },
+      budget: { icon: Wallet, title: "Trip Budget", subtitle: "Expenses & recommendations" },
       todo: { icon: CheckSquare, title: "Action Items", subtitle: "Tasks pending your review" },
       map: { icon: Map, title: "Trip Map", subtitle: "Explore destinations & pins" },
       packing: { icon: Sparkles, title: "Packing List", subtitle: "AI-powered recommendations" },
@@ -325,7 +329,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
                     />
                   </div>
                   
-                  {/* Weather & Map Buttons */}
+                  {/* Weather, Budget & Map Buttons */}
                   <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -343,6 +347,25 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Weather Forecast</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTabChange('budget')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
+                            activeTab === 'budget'
+                              ? 'text-emerald-600 bg-emerald-50'
+                              : 'text-slate-500 hover:text-emerald-600 hover:bg-emerald-50'
+                          }`}
+                        >
+                          <Wallet size={16} />
+                          <span className="hidden sm:inline">Budget</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Trip Budget</p>
                       </TooltipContent>
                     </Tooltip>
 
@@ -541,7 +564,7 @@ export function View1Client({ itinerary, profileValues, currentStyleId, currentS
 
       <main className="max-w-5xl mx-auto px-4 md:px-8 py-8 min-h-[500px]">
         {/* Section Header (shown for main tabs only, not AI assistants) */}
-        {!['weather', 'packing', 'currency', 'emergency', 'cultural', 'activities', 'dining', 'documents', 'language'].includes(activeTab) && (
+        {!['weather', 'budget', 'packing', 'currency', 'emergency', 'cultural', 'activities', 'dining', 'documents', 'language'].includes(activeTab) && (
           <div className="mb-6">
             <SectionHeading 
               icon={heading.icon} 

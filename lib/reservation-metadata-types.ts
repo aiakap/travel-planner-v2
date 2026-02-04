@@ -94,6 +94,12 @@ export interface TransportMetadata {
   serviceLevel?: string // "UberX", "Comfort", "XL", etc.
   estimatedDuration?: string
   estimatedDistance?: string
+  // Airport transfer specific fields
+  flightNumber?: string
+  flightArrivalTime?: string
+  meetingInstructions?: string // "showing a name board", etc.
+  passengerCount?: number
+  luggageDetails?: string
 }
 
 /**

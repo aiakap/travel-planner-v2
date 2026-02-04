@@ -48,6 +48,10 @@ export const privateDriverExtractionSchema = z.object({
   dropoffLocation: z.string().describe("Dropoff/destination location name (e.g., 'SANSUI NISEKO', 'Downtown Hotel') or empty string if not provided"),
   dropoffAddress: z.string().describe("Full dropoff address or empty string if not provided"),
   
+  // Flight information (for airport transfers)
+  flightNumber: z.string().describe("Flight number being picked up or dropped off (e.g., 'UA8006', 'NH73', 'UA8006 (NH73)') or empty string if not an airport transfer"),
+  flightArrivalTime: z.string().describe("Flight arrival/departure time (e.g., '18:35', '6:35 PM') or empty string if not provided"),
+  
   // Transfer details
   transferDuration: z.string().describe("Estimated transfer/drive time (e.g., '2-2.5 hours', '45 minutes') or empty string"),
   waitingInstructions: z.string().describe("How driver will identify passenger (e.g., 'showing a name board', 'holding sign with your name') or empty string"),

@@ -4,6 +4,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { PrivateDriverExtraction } from "@/lib/schemas/extraction/travel/private-driver-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
+import { TransportMetadata, ReservationMetadata } from "@/lib/reservation-metadata-types";
+import { enrichReservation } from "@/lib/actions/enrich-reservation";
 
 // Geocoding helper
 async function geocodeLocation(location: string): Promise<{
@@ -38,6 +40,110 @@ async function geocodeLocation(location: string): Promise<{
   }
 
   return { lat: 0, lng: 0, formatted: location };
+}
+
+/**
+ * Normalize time string to HH:mm:ss format
+ * Handles formats like "18:35", "6:35 PM", "2:00 PM", "14:00"
+ */
+function normalizeTimeString(timeStr: string): string {
+  if (!timeStr || timeStr.trim() === '') {
+    return '';
+  }
+  
+  const cleaned = timeStr.trim().toUpperCase();
+  
+  // Check for AM/PM format
+  const ampmMatch = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (ampmMatch) {
+    let hours = parseInt(ampmMatch[1], 10);
+    const minutes = ampmMatch[2];
+    const period = ampmMatch[3].toUpperCase();
+    
+    if (period === 'PM' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'AM' && hours === 12) {
+      hours = 0;
+    }
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes}:00`;
+  }
+  
+  // Check for 24-hour format (HH:mm or HH:mm:ss)
+  const h24Match = cleaned.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (h24Match) {
+    const hours = h24Match[1].padStart(2, '0');
+    const minutes = h24Match[2];
+    const seconds = h24Match[3] || '00';
+    return `${hours}:${minutes}:${seconds}`;
+  }
+  
+  // Return empty if we can't parse
+  return '';
+}
+
+/**
+ * Get the effective pickup time for an airport transfer
+ * Prefers flight arrival time over explicit pickup time for airport pickups
+ */
+function getEffectivePickupTime(driverData: PrivateDriverExtraction): string {
+  const isAirportPickup = driverData.pickupLocation.toLowerCase().includes('airport');
+  
+  // For airport pickups, prefer flight arrival time (driver waits for flight)
+  if (isAirportPickup && driverData.flightArrivalTime) {
+    const normalized = normalizeTimeString(driverData.flightArrivalTime);
+    if (normalized) {
+      console.log(`✈️ Using flight arrival time as pickup: ${driverData.flightArrivalTime} → ${normalized}`);
+      return normalized;
+    }
+  }
+  
+  // Fall back to explicit pickup time
+  if (driverData.pickupTime) {
+    const normalized = normalizeTimeString(driverData.pickupTime);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  
+  // Default to noon if nothing else
+  return '12:00:00';
+}
+
+/**
+ * Parse transfer duration string and calculate end time
+ * Handles formats like "2-2.5 hours", "2.5 hours", "45 minutes", "2 hrs"
+ */
+function calculateEndTime(startTime: Date, durationStr: string): Date | null {
+  if (!durationStr || durationStr.trim() === '') {
+    return null;
+  }
+  
+  const cleaned = durationStr.toLowerCase().trim();
+  
+  // Try to extract hours - take the maximum if a range is given
+  // "2-2.5 hours" -> 2.5, "2.5 hours" -> 2.5, "2 hrs" -> 2
+  const hourMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*(?:-\s*(\d+(?:\.\d+)?))?\s*(?:hours?|hrs?)/);
+  if (hourMatch) {
+    // If it's a range like "2-2.5 hours", use the higher value
+    const hours = hourMatch[2] ? parseFloat(hourMatch[2]) : parseFloat(hourMatch[1]);
+    if (!isNaN(hours) && hours > 0) {
+      const endTime = new Date(startTime.getTime() + hours * 60 * 60 * 1000);
+      return endTime;
+    }
+  }
+  
+  // Try minutes format
+  const minMatch = cleaned.match(/(\d+)\s*(?:minutes?|mins?)/);
+  if (minMatch) {
+    const minutes = parseInt(minMatch[1], 10);
+    if (!isNaN(minutes) && minutes > 0) {
+      const endTime = new Date(startTime.getTime() + minutes * 60 * 1000);
+      return endTime;
+    }
+  }
+  
+  return null;
 }
 
 /**
@@ -167,14 +273,15 @@ export async function addPrivateDriverToTrip(params: {
   const pickupGeo = await geocodeLocation(driverData.pickupLocation);
   const dropoffGeo = await geocodeLocation(driverData.dropoffLocation);
 
-  // Build private-driver-specific notes
+  // Build private-driver-specific notes (human-readable summary)
   const notes = [
-    `Driver: ${driverData.driverName}`,
+    driverData.driverName ? `Driver: ${driverData.driverName}` : null,
     driverData.driverPhone ? `Driver Phone: ${driverData.driverPhone}` : null,
-    `Vehicle: ${driverData.vehicleType}`,
+    driverData.vehicleType ? `Vehicle: ${driverData.vehicleType}` : null,
     driverData.plateNumber ? `Plate Number: ${driverData.plateNumber}` : null,
-    `Meeting Instructions: ${driverData.waitingInstructions}`,
+    driverData.waitingInstructions ? `Meeting Instructions: ${driverData.waitingInstructions}` : null,
     driverData.pickupInstructions ? `Pickup: ${driverData.pickupInstructions}` : null,
+    driverData.flightNumber ? `Flight: ${driverData.flightNumber}${driverData.flightArrivalTime ? ` (ETA ${driverData.flightArrivalTime})` : ''}` : null,
     driverData.transferDuration ? `Transfer Duration: ${driverData.transferDuration}` : null,
     driverData.passengerCount > 1 ? `Passengers: ${driverData.passengerCount}` : null,
     driverData.luggageDetails ? `Luggage: ${driverData.luggageDetails}` : null,
@@ -183,8 +290,36 @@ export async function addPrivateDriverToTrip(params: {
     driverData.notes ? `Additional Notes: ${driverData.notes}` : null,
   ].filter(Boolean).join('\n');
 
-  // Parse pickup datetime
-  const pickupDateTime = parseDateTime(driverData.pickupDate, driverData.pickupTime);
+  // Build structured metadata for transport
+  const transportMetadata: TransportMetadata = {
+    vehicleType: driverData.vehicleType || undefined,
+    driverName: driverData.driverName || undefined,
+    driverPhone: driverData.driverPhone || undefined,
+    licensePlate: driverData.plateNumber || undefined,
+    pickupInstructions: driverData.pickupInstructions || undefined,
+    meetingInstructions: driverData.waitingInstructions || undefined,
+    estimatedDuration: driverData.transferDuration || undefined,
+    flightNumber: driverData.flightNumber || undefined,
+    flightArrivalTime: driverData.flightArrivalTime || undefined,
+    passengerCount: driverData.passengerCount > 0 ? driverData.passengerCount : undefined,
+    luggageDetails: driverData.luggageDetails || undefined,
+  };
+  
+  // Only include metadata if we have at least some data
+  const hasMetadata = Object.values(transportMetadata).some(v => v !== undefined);
+  const metadata: ReservationMetadata | null = hasMetadata ? { transport: transportMetadata } : null;
+
+  // Get effective pickup time (prefers flight arrival time for airport pickups)
+  const effectivePickupTime = getEffectivePickupTime(driverData);
+  
+  // Parse pickup datetime with effective time
+  const pickupDateTime = parseDateTime(driverData.pickupDate, effectivePickupTime);
+  
+  // Calculate end time if we have transfer duration
+  const endDateTime = calculateEndTime(pickupDateTime, driverData.transferDuration);
+  if (endDateTime) {
+    console.log(`⏱️ Calculated end time: ${endDateTime.toISOString()} (from duration: ${driverData.transferDuration})`);
+  }
 
   console.log('📝 Creating private driver reservation...');
   
@@ -198,9 +333,13 @@ export async function addPrivateDriverToTrip(params: {
       reservationStatusId: confirmedStatus.id,
       segmentId: targetSegmentId,
       
-      // Timing
+      // Timing (both startTime/endTime AND wall_* fields for form compatibility)
       startTime: pickupDateTime,
-      // endTime calculated if we have transfer duration - could enhance this
+      endTime: endDateTime,
+      wall_start_date: pickupDateTime,
+      wall_start_time: pickupDateTime,
+      wall_end_date: endDateTime,
+      wall_end_time: endDateTime,
       
       // Financial
       cost: driverData.cost,
@@ -218,10 +357,22 @@ export async function addPrivateDriverToTrip(params: {
       // Contact
       contactEmail: driverData.contactEmail,
       contactPhone: driverData.contactPhone || driverData.driverPhone,
+      
+      // Structured metadata
+      metadata: metadata,
     },
   });
 
   console.log(`✅ Private driver reservation created: ${reservation.id}`);
+  
+  // Trigger async enrichment for image (dropoff location is usually more interesting than airport)
+  const locationQuery = driverData.dropoffLocation || driverData.pickupLocation;
+  
+  enrichReservation(reservation.id, {
+    locationQuery,
+  }).catch((error) => {
+    console.error(`[AddPrivateDriver] Enrichment failed for reservation ${reservation.id}:`, error);
+  });
   
   return {
     success: true,

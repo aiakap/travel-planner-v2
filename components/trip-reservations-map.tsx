@@ -10,6 +10,7 @@ import {
 import { useEffect, useState } from "react";
 import type { GlobeTripData, GlobeReservation } from "@/lib/globe-types";
 import { formatLocalDate, formatLocalTime } from "@/lib/utils/local-time";
+import { useRoadRoutes, isGroundTransportSegment } from "@/hooks/use-road-routes";
 
 interface TripReservationsMapProps {
   trip: GlobeTripData;
@@ -102,6 +103,9 @@ export function TripReservationsMap({
     googleMapsApiKey: apiKey || "",
   });
 
+  // Road routes for ground transport
+  const { routes: roadRoutes, fetchRoutes } = useRoadRoutes();
+
   // Generate color for each segment
   const getSegmentColor = (segmentId: string, index: number) => {
     const colors = [
@@ -170,6 +174,34 @@ export function TripReservationsMap({
 
     setMarkers(processedMarkers);
   }, [trip, selectedSegmentId, selectedReservationId]);
+
+  // Fetch road routes for ground transport markers
+  useEffect(() => {
+    const groundMarkers = markers.filter(marker => {
+      if (!marker.isRoute || !marker.endLat || !marker.endLng) return false;
+      const category = marker.reservation.reservationType.category.name.toLowerCase();
+      // Ground transport categories (not flights)
+      return !category.includes('flight') && !category.includes('air') && (
+        category.includes('transport') ||
+        category.includes('car') ||
+        category.includes('train') ||
+        category.includes('bus') ||
+        category.includes('ferry') ||
+        category.includes('driver')
+      );
+    });
+
+    if (groundMarkers.length > 0) {
+      const requests = groundMarkers.map(marker => ({
+        id: marker.id,
+        originLat: marker.lat,
+        originLng: marker.lng,
+        destLat: marker.endLat!,
+        destLng: marker.endLng!,
+      }));
+      fetchRoutes(requests);
+    }
+  }, [markers, fetchRoutes]);
 
   // Fit map bounds to show all markers (respecting filters)
   useEffect(() => {
@@ -276,56 +308,72 @@ export function TripReservationsMap({
 
         {/* Reservation markers */}
         {markers.map((marker) => {
+          const category = marker.reservation.reservationType.category.name.toLowerCase();
           const isTransportation = 
-            marker.reservation.reservationType.category.name.toLowerCase().includes('transport') ||
-            marker.reservation.reservationType.category.name.toLowerCase().includes('flight') ||
-            marker.reservation.reservationType.category.name.toLowerCase().includes('train') ||
-            marker.reservation.reservationType.category.name.toLowerCase().includes('bus') ||
-            marker.reservation.reservationType.category.name.toLowerCase().includes('car');
+            category.includes('transport') ||
+            category.includes('flight') ||
+            category.includes('train') ||
+            category.includes('bus') ||
+            category.includes('car');
+          
+          // Check if this is ground transport (not a flight)
+          const isGroundTransport = isTransportation && 
+            !category.includes('flight') && 
+            !category.includes('air');
+          
+          // Use road route if available for ground transport, otherwise straight line as fallback
+          const roadRoute = isGroundTransport ? roadRoutes.get(marker.id) : null;
+          const routePath = roadRoute && roadRoute.path.length > 0
+            ? roadRoute.path
+            : marker.isRoute && marker.endLat && marker.endLng
+              ? [
+                  { lat: marker.lat, lng: marker.lng },
+                  { lat: marker.endLat, lng: marker.endLng },
+                ]
+              : null;
 
           return (
             <div key={marker.id}>
               {marker.isRoute && marker.endLat && marker.endLng ? (
                 <>
-                  {/* Dashed route polyline for transportation reservations */}
-                  <Polyline
-                    path={[
-                      { lat: marker.lat, lng: marker.lng },
-                      { lat: marker.endLat, lng: marker.endLng },
-                    ]}
-                    options={{
-                      strokeColor: marker.segmentColor,
-                      strokeOpacity: isTransportation ? 0.8 : 0.6,
-                      strokeWeight: isTransportation ? 2.5 : 2,
-                      geodesic: true,
-                      icons: isTransportation
-                        ? [
-                            {
-                              icon: {
-                                path: "M 0,-1 0,1",
-                                strokeOpacity: 1,
-                                scale: 3,
+                  {/* Route polyline - road path for ground transport (or straight line while loading), geodesic for flights */}
+                  {routePath && (
+                    <Polyline
+                      path={routePath}
+                      options={{
+                        strokeColor: marker.segmentColor,
+                        strokeOpacity: isTransportation ? 0.8 : 0.6,
+                        strokeWeight: isTransportation ? 2.5 : 2,
+                        geodesic: !isGroundTransport, // Geodesic for flights, not for road routes
+                        icons: isTransportation && !isGroundTransport
+                          ? [
+                              {
+                                icon: {
+                                  path: "M 0,-1 0,1",
+                                  strokeOpacity: 1,
+                                  scale: 3,
+                                },
+                                offset: "0",
+                                repeat: "20px",
                               },
-                              offset: "0",
-                              repeat: "20px",
-                            },
-                            {
-                              icon: {
-                                path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                              {
+                                icon: {
+                                  path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                                },
+                                offset: "100%",
                               },
-                              offset: "100%",
-                            },
-                          ]
-                        : [
-                            {
-                              icon: {
-                                path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                            ]
+                          : [
+                              {
+                                icon: {
+                                  path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                                },
+                                offset: "100%",
                               },
-                              offset: "100%",
-                            },
-                          ],
-                    }}
-                  />
+                            ],
+                      }}
+                    />
+                  )}
                   {/* Start marker for route */}
                   <Marker
                     position={{ lat: marker.lat, lng: marker.lng }}

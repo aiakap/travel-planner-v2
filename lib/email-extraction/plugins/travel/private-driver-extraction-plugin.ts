@@ -50,6 +50,10 @@ Extract private driver or airport transfer booking information from the confirma
 - **Dropoff Location**: Final destination (e.g., "SANSUI NISEKO", "Downtown Hotel", "Resort Name")
 - **Dropoff Address**: Full dropoff address or empty string if not provided
 
+**Flight Information (for airport transfers):**
+- **Flight Number**: The flight number being picked up or dropped off (e.g., "UA8006", "NH73", "UA8006 (NH73)"). Look for patterns like "Flight Number:", "Flight:", "eta", or airline codes followed by numbers. If codeshare, include both (e.g., "UA8006 (NH73)").
+- **Flight Arrival Time**: The ETA/arrival time of the flight (e.g., "18:35", "6:35 PM"). This is often listed after "eta", "arrives", "arrival time", or near the flight number.
+
 **Transfer Details:**
 - **Transfer Duration**: Estimated drive time (e.g., "2-2.5 hours", "45 minutes") or empty string
 - **Waiting Instructions**: How driver will identify passenger (e.g., "showing a name board", "holding sign with your name") or empty string
@@ -77,6 +81,7 @@ Jan=01, Feb=02, Mar=03, Apr=04, May=05, Jun=06, Jul=07, Aug=08, Sep=09, Oct=10, 
 
 INPUT TEXT:
 Transfer Service Confirmation
+From: tabi pirka LLC <info@t-pirka.com>
 
 Booking Number: TR-2026-123456
 Passenger: Thomas Anderson
@@ -92,7 +97,7 @@ Pickup Details:
 Location: New Chitose Airport (CTS)
 Terminal: Domestic Terminal
 Date: Thursday, January 30, 2026
-Time: 14:00 (2:00 PM)
+Flight Number: UA8006 (NH73) eta 18:35
 Meeting Point: Arrival hall after baggage claim
 
 The driver will be waiting for you showing a name board with your name.
@@ -113,7 +118,7 @@ EXPECTED OUTPUT:
 {
   "confirmationNumber": "TR-2026-123456",
   "guestName": "Thomas Anderson",
-  "company": "",
+  "company": "tabi pirka LLC",
   "driverName": "Marumoto, Mr",
   "driverPhone": "+81-90-1234-5678",
   "vehicleType": "Alphard (SUV)",
@@ -121,10 +126,12 @@ EXPECTED OUTPUT:
   "pickupLocation": "New Chitose Airport (CTS)",
   "pickupAddress": "Domestic Terminal",
   "pickupDate": "2026-01-30",
-  "pickupTime": "2:00 PM",
+  "pickupTime": "18:35",
   "pickupInstructions": "Arrival hall after baggage claim",
   "dropoffLocation": "SANSUI NISEKO",
   "dropoffAddress": "185-7 Yamada, Kutchan-cho, Abuta-gun, Hokkaido",
+  "flightNumber": "UA8006 (NH73)",
+  "flightArrivalTime": "18:35",
   "transferDuration": "2-2.5 hours",
   "waitingInstructions": "showing a name board with your name",
   "passengerCount": 2,
@@ -134,7 +141,7 @@ EXPECTED OUTPUT:
   "cost": 15000,
   "currency": "JPY",
   "bookingDate": "2026-01-26",
-  "contactEmail": "",
+  "contactEmail": "info@t-pirka.com",
   "contactPhone": "",
   "notes": ""
 }
@@ -151,6 +158,8 @@ EXPECTED OUTPUT:
 8. **Guest names may use LAST/FIRST format** - Keep as-is from confirmation
 9. **Currency from symbols** - ¥ = JPY, $ = USD, € = EUR, £ = GBP
 10. **Combine luggage details** - "2 ski bags, 2 suitcases" as one string
+11. **For airport pickups with flight info** - Use flight arrival time as pickupTime (driver waits for flight)
+12. **Extract contact email from sender** - Look in "From:" header or company signature for vendor email
 
 ### Common Email Patterns
 
@@ -184,6 +193,10 @@ Common private driver/transfer services:
 - **Payment**: "PAID", "prepaid", "payment confirmed", or cost breakdown
 - **Date format**: May be written as "January 30, 2026", "Jan 30", or "2026-01-30"
 - **Time format**: Can be 12-hour ("2:00 PM") or 24-hour ("14:00")
+- **Flight number**: Look for "Flight Number:", "Flight:", airline codes (UA, NH, AA, DL, JL) followed by numbers, or patterns like "UA8006 (NH73)" for codeshares
+- **Flight arrival time**: Often appears after "eta", "ETA", "arrives", "arrival", or right after flight number (e.g., "UA8006 eta 18:35")
+- **Contact email**: Extract from "From:" header, company signature, or contact sections. This is the vendor's email (e.g., "info@t-pirka.com"), not the passenger's.
+- **IMPORTANT for airport pickups**: If a flight arrival time is provided (e.g., "eta 18:35"), use that as the pickupTime since the driver will wait for flight arrival
 
 ### Distinguishing from Other Types
 
@@ -238,7 +251,10 @@ export const privateDriverExtractionPlugin: ExtractionPlugin = {
       // Booking specifics
       'vehicle type:', 'car type:', 'plate number',
       'drive normally takes', 'drive takes', 'transfer duration',
-      'pickup location', 'destination:', 'dropoff'
+      'pickup location', 'destination:', 'dropoff',
+      
+      // Flight-related (for airport transfers)
+      'flight number', 'eta', 'flight arrival', 'arriving flight'
     ];
     
     const lowerText = context.emailText.toLowerCase();

@@ -4,7 +4,7 @@ import { Sparkles } from "lucide-react"
 import { Card } from "./card"
 
 interface IntelligenceLoadingProps {
-  feature: 'currency' | 'emergency' | 'cultural' | 'activities' | 'dining' | 'language' | 'packing' | 'documents' | 'weather'
+  feature: 'currency' | 'emergency' | 'cultural' | 'activities' | 'dining' | 'language' | 'packing' | 'documents' | 'weather' | 'budget'
   mode?: 'checking' | 'generating'
 }
 
@@ -44,6 +44,10 @@ const LOADING_MESSAGES = {
   weather: {
     checking: "Checking the clouds...",
     generating: "Fetching weather forecasts for your destinations..."
+  },
+  budget: {
+    checking: "Opening the piggy bank...",
+    generating: "Calculating your trip expenses and recommendations..."
   }
 }
 
@@ -56,7 +60,8 @@ const ICONS = {
   language: '💬',
   packing: '🧳',
   documents: '📄',
-  weather: '🌤️'
+  weather: '🌤️',
+  budget: '💵'
 }
 
 export function IntelligenceLoading({ feature, mode = 'checking' }: IntelligenceLoadingProps) {

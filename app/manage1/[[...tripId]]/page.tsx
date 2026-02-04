@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { Manage1Client } from "../client"
 import type { TripSummary } from "../components/trip-list-row"
 import type { RecommendationCardData } from "../components/recommendation-card"
+import { sumCostsInUSD, formatAsUSD, extractCostItems } from "@/lib/utils/currency-converter"
 
 interface PageProps {
   params: Promise<{ tripId?: string[] }>
@@ -34,8 +35,8 @@ export default async function ManagePage({ params }: PageProps) {
     orderBy: { startDate: "desc" }
   })
 
-  // Transform to TripSummary format
-  const tripSummaries: TripSummary[] = trips.map(trip => {
+  // Transform to TripSummary format (async for currency conversion)
+  const tripSummaries: TripSummary[] = await Promise.all(trips.map(async trip => {
     const totalReservations = trip.segments.reduce(
       (count, segment) => count + segment.reservations.length, 
       0
@@ -56,11 +57,11 @@ export default async function ManagePage({ params }: PageProps) {
     )
     const duration = `${daysDiff} Day${daysDiff !== 1 ? 's' : ''}`
 
-    // Calculate total cost from reservations
-    const totalCost = trip.segments.reduce((sum, segment) => {
-      return sum + segment.reservations.reduce((segSum, res) => segSum + (res.cost || 0), 0)
-    }, 0)
-    const costStr = totalCost > 0 ? `$${totalCost.toLocaleString()}` : "TBD"
+    // Calculate total cost from reservations (converted to USD)
+    const allReservations = trip.segments.flatMap(segment => segment.reservations)
+    const costItems = extractCostItems(allReservations)
+    const totalCostUSD = await sumCostsInUSD(costItems)
+    const costStr = totalCostUSD > 0 ? formatAsUSD(totalCostUSD) : "TBD"
 
     // Determine status and color
     let status: "Planning" | "Upcoming" | "Draft" | "Archived" = "Planning"
@@ -109,7 +110,7 @@ export default async function ManagePage({ params }: PageProps) {
       reservations: totalReservations,
       image: trip.imageUrl || "/placeholder.svg"
     }
-  })
+  }))
 
   // Mock recommendation data (stubbed for now)
   const recommendations: Record<string, RecommendationCardData[]> = {

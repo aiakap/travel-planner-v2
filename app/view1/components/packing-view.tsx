@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { ViewItinerary, PackingList } from "@/lib/itinerary-view-types"
-import { Backpack, Shirt, Footprints, ShieldCheck, Heart, FileText, RefreshCw, Sparkles, Luggage, Lightbulb, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
+import { Shirt, Footprints, ShieldCheck, Heart, FileText, RefreshCw, Luggage, Lightbulb, AlertCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
 import { Card } from "./card"
 import { Badge } from "./badge"
 import { IntelligenceQuestionForm, type Question } from "./intelligence-question-form"
@@ -14,11 +14,14 @@ interface PackingViewProps {
   profileValues: any[]
 }
 
-type ViewState = 'questions' | 'loading' | 'loaded'
+type ViewState = 'questions' | 'generating' | 'loaded'
 
-// Helper to transform raw data to packing list format
-function transformToPackingList(rawData: any): PackingList | null {
-  if (!rawData?.items || rawData.items.length === 0) {
+// Simple sessionStorage key - just tracks if we're generating
+const getGeneratingKey = (tripId: string) => `packing_generating_${tripId}`
+
+// Helper to transform API response to packing list format
+function transformApiResponse(apiData: any): PackingList | null {
+  if (!apiData?.packingList) {
     return null
   }
   
@@ -32,26 +35,30 @@ function transformToPackingList(rawData: any): PackingList | null {
     luggageStrategy: null
   }
   
-  // Group items by category
-  rawData.items.forEach((item: any) => {
-    const categoryMap: Record<string, string> = {
-      'Clothing': 'clothing',
-      'Footwear': 'footwear',
-      'Activity Gear': 'gear',
-      'Electronics': 'gear',
-      'Toiletries': 'toiletries',
-      'Documents': 'documents',
-      'Health & Safety': 'gear',
-      'Miscellaneous': 'gear'
+  // API returns { packingList: { Clothing: [...], Toiletries: [...], ... } }
+  const categoryMap: Record<string, string> = {
+    'Clothing': 'clothing',
+    'Footwear': 'footwear',
+    'Activity Gear': 'gear',
+    'Electronics': 'gear',
+    'Toiletries': 'toiletries',
+    'Documents': 'documents',
+    'Health & Safety': 'gear',
+    'Miscellaneous': 'gear'
+  }
+  
+  Object.entries(apiData.packingList).forEach(([category, items]: [string, any]) => {
+    const mappedCategory = categoryMap[category] || 'gear'
+    if (Array.isArray(items)) {
+      items.forEach((item: any) => {
+        categorizedList[mappedCategory].push({
+          name: item.itemName,
+          quantity: item.quantity,
+          reason: item.reason,
+          priority: item.priority
+        })
+      })
     }
-    
-    const mappedCategory = categoryMap[item.category] || 'gear'
-    categorizedList[mappedCategory].push({
-      name: item.itemName,
-      quantity: item.quantity,
-      reason: item.reason,
-      priority: item.priority
-    })
   })
   
   return categorizedList
@@ -67,20 +74,148 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
   const [packingList, setPackingList] = useState<PackingList | null>(null)
   const [viewState, setViewState] = useState<ViewState>('questions')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
-  const [debugInfo, setDebugInfo] = useState<any>(null)
+  
+  // Polling ref
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const pollCountRef = useRef(0)
 
-  // Sync with cached data
+  // Clean up polling on unmount
   useEffect(() => {
-    if (data?.items && data.items.length > 0) {
-      const transformed = transformToPackingList(data)
-      if (transformed) {
-        setPackingList(transformed)
-        setViewState('loaded')
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
       }
-    } else if (initialCheckComplete) {
+    }
+  }, [])
+
+  // Poll the GET endpoint to check if data exists
+  const pollForData = async () => {
+    try {
+      const res = await fetch(`/api/trip-intelligence/packing?tripId=${itinerary.id}`)
+      const apiData = await res.json()
+      
+      // Check if we got actual data
+      if (apiData.packingList && Object.keys(apiData.packingList).length > 0) {
+        // Stop polling
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        
+        // Clear generating flag
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        
+        // Transform and display
+        const transformed = transformApiResponse(apiData)
+        if (transformed) {
+          setPackingList(transformed)
+          setViewState('loaded')
+          
+          // Update cache for future use
+          const flatItems = Object.entries(apiData.packingList).flatMap(([category, items]: [string, any]) =>
+            Array.isArray(items) ? items.map((item: any) => ({ ...item, category })) : []
+          )
+          updateCache({ items: flatItems })
+        }
+        
+        console.log('🔵 [PACKING] Data loaded successfully')
+        return
+      }
+      
+      // Safety: stop after 5 minutes (100 polls at 3s)
+      pollCountRef.current++
+      if (pollCountRef.current > 100) {
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        try {
+          sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+        } catch (e) {}
+        setViewState('questions')
+        alert('Generation timed out. Please try again.')
+      }
+    } catch (error) {
+      console.error('🔴 [PACKING] Poll error:', error)
+      // Don't stop on network errors - might be temporary
+    }
+  }
+
+  // Start polling
+  const startPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+    }
+    pollCountRef.current = 0
+    
+    // Poll immediately, then every 3 seconds
+    pollForData()
+    pollingRef.current = setInterval(pollForData, 3000)
+  }
+
+  // Check initial state on mount
+  useEffect(() => {
+    // First check if we have cached data
+    if (data?.items && data.items.length > 0) {
+      // Transform cached data
+      const categorizedList: any = {
+        clothing: [],
+        footwear: [],
+        gear: [],
+        toiletries: [],
+        documents: [],
+        specialNotes: [],
+        luggageStrategy: null
+      }
+      
+      const categoryMap: Record<string, string> = {
+        'Clothing': 'clothing',
+        'Footwear': 'footwear',
+        'Activity Gear': 'gear',
+        'Electronics': 'gear',
+        'Toiletries': 'toiletries',
+        'Documents': 'documents',
+        'Health & Safety': 'gear',
+        'Miscellaneous': 'gear'
+      }
+      
+      data.items.forEach((item: any) => {
+        const mappedCategory = categoryMap[item.category] || 'gear'
+        categorizedList[mappedCategory].push({
+          name: item.itemName,
+          quantity: item.quantity,
+          reason: item.reason,
+          priority: item.priority
+        })
+      })
+      
+      setPackingList(categorizedList)
+      setViewState('loaded')
+      
+      // Clear any stale generating flag
+      try {
+        sessionStorage.removeItem(getGeneratingKey(itinerary.id))
+      } catch (e) {}
+      return
+    }
+    
+    // Check if we were generating (user navigated away and came back)
+    try {
+      if (sessionStorage.getItem(getGeneratingKey(itinerary.id))) {
+        console.log('🔵 [PACKING] Found generating flag, resuming poll')
+        setViewState('generating')
+        startPolling()
+        return
+      }
+    } catch (e) {}
+    
+    // No data and not generating - show questions
+    if (initialCheckComplete) {
       setViewState('questions')
     }
-  }, [data, initialCheckComplete])
+  }, [data, initialCheckComplete, itinerary.id])
 
   const questions: Question[] = [
     {
@@ -117,152 +252,48 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
     })
   }
   
+  // Simple fire-and-forget generate function
   const generatePackingList = async (answers: Record<string, string>) => {
-    setViewState('loading')
-    setDebugInfo(null)
+    // Instantly show generating state
+    setViewState('generating')
     
-    const requestBody = {
-      tripId: itinerary.id,
-      packingStyle: answers.packingStyle,
-      hasGear: answers.hasGear
-    }
-    
-    console.log('🔵 [PACKING DEBUG] Step 1: Request being sent')
-    console.log('🔵 [PACKING DEBUG] Request body:', JSON.stringify(requestBody, null, 2))
-    console.log('🔵 [PACKING DEBUG] Trip ID:', itinerary.id)
-    console.log('🔵 [PACKING DEBUG] Packing style:', answers.packingStyle)
-    console.log('🔵 [PACKING DEBUG] Has gear:', answers.hasGear)
-    
+    // Set generating flag in sessionStorage
     try {
-      // Generate packing list using intelligence API
-      console.log('🔵 [PACKING DEBUG] Step 2: Calling API...')
-      const response = await fetch('/api/trip-intelligence/packing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+      sessionStorage.setItem(getGeneratingKey(itinerary.id), 'true')
+    } catch (e) {}
+    
+    console.log('🔵 [PACKING] Starting generation...')
+    
+    // Fire and forget - don't await the response
+    fetch('/api/trip-intelligence/packing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tripId: itinerary.id,
+        packingStyle: answers.packingStyle,
+        hasGear: answers.hasGear
       })
-      
-      console.log('🔵 [PACKING DEBUG] Step 3: API response received')
-      console.log('🔵 [PACKING DEBUG] Response status:', response.status)
-      console.log('🔵 [PACKING DEBUG] Response statusText:', response.statusText)
-      console.log('🔵 [PACKING DEBUG] Response ok:', response.ok)
-      console.log('🔵 [PACKING DEBUG] Response headers:', Object.fromEntries(response.headers.entries()))
-      
-      const responseText = await response.text()
-      console.log('🔵 [PACKING DEBUG] Step 4: Raw response text length:', responseText.length)
-      console.log('🔵 [PACKING DEBUG] Raw response text:', responseText)
-      
-      let data
-      try {
-        data = JSON.parse(responseText)
-        console.log('🔵 [PACKING DEBUG] Step 5: Parsed response data:', JSON.stringify(data, null, 2))
-      } catch (parseError) {
-        console.error('🔴 [PACKING DEBUG] Failed to parse JSON:', parseError)
-        console.error('🔴 [PACKING DEBUG] Response text was:', responseText)
-        setDebugInfo({
-          step: 'parse_error',
-          error: 'Failed to parse JSON response',
-          rawResponse: responseText,
-          status: response.status
-        })
-        setViewState('questions')
-        alert(`Failed to parse response: ${parseError}`)
-        return
-      }
-      
-      if (response.ok) {
-        console.log('🔵 [PACKING DEBUG] Step 6: Response OK, processing data...')
-        console.log('🔵 [PACKING DEBUG] luggageStrategy:', JSON.stringify(data.luggageStrategy, null, 2))
-        console.log('🔵 [PACKING DEBUG] packingList items count:', data.packingList?.length || 0)
-        
-        // Transform database response to match UI expectations
-        const categorizedList: any = {
-          clothing: [],
-          footwear: [],
-          gear: [],
-          toiletries: [],
-          documents: [],
-          specialNotes: [],
-          luggageStrategy: data.luggageStrategy
-        }
-        
-        console.log('🔵 [PACKING DEBUG] Step 7: Transforming items by category...')
-        // Group items by category
-        if (data.packingList) {
-          data.packingList.forEach((item: any, index: number) => {
-            console.log(`🔵 [PACKING DEBUG] Processing item ${index + 1}:`, item.itemName, 'Category:', item.category)
-            const categoryMap: Record<string, string> = {
-              'Clothing': 'clothing',
-              'Footwear': 'footwear',
-              'Activity Gear': 'gear',
-              'Electronics': 'gear',
-              'Toiletries': 'toiletries',
-              'Documents': 'documents',
-              'Health & Safety': 'gear',
-              'Miscellaneous': 'gear'
-            }
-            
-            const mappedCategory = categoryMap[item.category] || 'gear'
-            categorizedList[mappedCategory].push({
-              name: item.itemName,
-              quantity: item.quantity,
-              reason: item.reason,
-              priority: item.priority
-            })
-          })
-        }
-        
-        console.log('🔵 [PACKING DEBUG] Step 8: Final categorized list:', JSON.stringify(categorizedList, null, 2))
-        console.log('🔵 [PACKING DEBUG] luggageStrategy.bags:', categorizedList.luggageStrategy?.bags)
-        
-        setDebugInfo({
-          step: 'success',
-          request: requestBody,
-          rawResponse: data,
-          categorizedList: categorizedList,
-          luggageStrategy: categorizedList.luggageStrategy
-        })
-        
-        // Update cache with the raw items for future use
-        updateCache({ items: data.packingList || [] })
-        
-        setPackingList(categorizedList)
-        setViewState('loaded')
-        console.log('🔵 [PACKING DEBUG] Step 9: ✅ Successfully loaded packing list')
-      } else {
-        console.error('🔴 [PACKING DEBUG] Response not OK')
-        console.error('🔴 [PACKING DEBUG] Status code:', response.status)
-        console.error('🔴 [PACKING DEBUG] Status text:', response.statusText)
-        console.error('🔴 [PACKING DEBUG] Error data:', data)
-        console.error('🔴 [PACKING DEBUG] Full error object:', JSON.stringify(data, null, 2))
-        setDebugInfo({
-          step: 'api_error',
-          request: requestBody,
-          status: response.status,
-          statusText: response.statusText,
-          error: data,
-          rawResponse: responseText
-        })
-        setViewState('questions')
-        const errorMessage = data?.error || data?.details || data?.message || `HTTP ${response.status}: ${response.statusText}`
-        alert(`Failed to generate packing list: ${errorMessage}`)
-      }
-    } catch (error: any) {
-      console.error('🔴 [PACKING DEBUG] Exception caught:', error)
-      console.error('🔴 [PACKING DEBUG] Error message:', error?.message)
-      console.error('🔴 [PACKING DEBUG] Error stack:', error?.stack)
-      setDebugInfo({
-        step: 'exception',
-        error: error?.message || 'Unknown error',
-        stack: error?.stack
-      })
-      setViewState('questions')
-      alert(`An error occurred: ${error?.message || 'Unknown error'}`)
-    }
+    }).catch(err => {
+      console.error('🔴 [PACKING] POST error:', err)
+    })
+    
+    // Start polling for the result
+    startPolling()
   }
 
-  const handleRegenerate = () => {
-    invalidateCache() // Clear cache when regenerating
+  const handleRegenerate = async () => {
+    // Clear data from database first
+    try {
+      await fetch(`/api/trip-intelligence/packing?tripId=${itinerary.id}`, {
+        method: 'DELETE'
+      })
+    } catch (e) {
+      console.error('Failed to clear packing list:', e)
+    }
+    
+    // Don't call invalidateCache() - it triggers the loading spinner
+    // The DELETE clears DB, and local state changes are sufficient
+    setPackingList(null)
     setViewState('questions')
   }
 
@@ -284,16 +315,39 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
     )
   }
   
-  // Loading state
-  if (viewState === 'loading') {
+  // Generating state - non-blocking
+  if (viewState === 'generating') {
     return (
       <div className="animate-fade-in">
-        <Card className="p-12 text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
-          <h3 className="text-xl font-semibold text-slate-900 mb-2">Generating Packing List...</h3>
-          <p className="text-slate-600 text-sm">
+        <Card className="p-8 text-center bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
+          <div className="relative mx-auto mb-6 w-20 h-20">
+            <div className="absolute inset-0 rounded-full bg-purple-100 animate-pulse"></div>
+            <div className="absolute inset-2 rounded-full bg-white flex items-center justify-center">
+              <Loader2 className="h-10 w-10 text-purple-600 animate-spin" />
+            </div>
+          </div>
+          
+          <h3 className="text-xl font-semibold text-slate-900 mb-2">
+            Generating Your Packing List...
+          </h3>
+          
+          <p className="text-slate-600 text-sm mb-4">
             Analyzing your trip, activities, and weather forecast
           </p>
+          
+          <div className="bg-white/60 rounded-lg p-4 max-w-md mx-auto">
+            <p className="text-sm text-purple-700 font-medium mb-1">
+              Feel free to explore other tabs!
+            </p>
+            <p className="text-xs text-slate-500">
+              Your packing list will be ready when you return.
+            </p>
+          </div>
+          
+          <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+            <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></div>
+            <span>Generation in progress</span>
+          </div>
         </Card>
       </div>
     )
@@ -327,77 +381,6 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
           Update Preferences
         </button>
       </div>
-
-      {/* Debug Panel */}
-      {debugInfo && (
-        <Card className="bg-yellow-50 border-yellow-200">
-          <div className="p-5">
-            <div className="flex items-center gap-2 mb-3 text-yellow-700">
-              <AlertCircle size={20} />
-              <h4 className="font-bold">Debug Information</h4>
-              <button
-                onClick={() => setDebugInfo(null)}
-                className="ml-auto text-xs text-yellow-600 hover:text-yellow-800"
-              >
-                Close
-              </button>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div>
-                <strong className="text-yellow-800">Step:</strong> <span className="text-yellow-900">{debugInfo.step}</span>
-              </div>
-              {debugInfo.request && (
-                <div>
-                  <strong className="text-yellow-800">Request:</strong>
-                  <pre className="mt-1 p-2 bg-yellow-100 rounded text-xs overflow-auto max-h-32">
-                    {JSON.stringify(debugInfo.request, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {debugInfo.rawResponse && (
-                <div>
-                  <strong className="text-yellow-800">Raw API Response:</strong>
-                  <pre className="mt-1 p-2 bg-yellow-100 rounded text-xs overflow-auto max-h-64">
-                    {JSON.stringify(debugInfo.rawResponse, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {debugInfo.luggageStrategy && (
-                <div>
-                  <strong className="text-yellow-800">Luggage Strategy:</strong>
-                  <pre className="mt-1 p-2 bg-yellow-100 rounded text-xs overflow-auto max-h-32">
-                    {JSON.stringify(debugInfo.luggageStrategy, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {debugInfo.error && (
-                <div>
-                  <strong className="text-red-800">Error:</strong>
-                  <pre className="mt-1 p-2 bg-red-100 rounded text-xs overflow-auto max-h-32">
-                    {typeof debugInfo.error === 'string' ? debugInfo.error : JSON.stringify(debugInfo.error, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {debugInfo.status && (
-                <div>
-                  <strong className="text-yellow-800">Status Code:</strong> <span className="text-yellow-900">{debugInfo.status}</span>
-                  {debugInfo.statusText && (
-                    <span className="text-yellow-700 ml-2">({debugInfo.statusText})</span>
-                  )}
-                </div>
-              )}
-              {debugInfo.rawResponse && debugInfo.step === 'api_error' && (
-                <div>
-                  <strong className="text-yellow-800">Raw Response:</strong>
-                  <pre className="mt-1 p-2 bg-yellow-100 rounded text-xs overflow-auto max-h-32">
-                    {debugInfo.rawResponse}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </div>
-        </Card>
-      )}
       
       {/* Special Notes Section */}
       {packingList.specialNotes && packingList.specialNotes.length > 0 && (
@@ -471,14 +454,10 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
         ))}
       </div>
 
-      {/* Luggage Strategy Section - MOVED TO BOTTOM */}
+      {/* Luggage Strategy Section */}
       {packingList.luggageStrategy && (() => {
-        // Handle both API response formats:
-        // 1. New format: { bags: LuggageBag[], organization: string, tips: string[] }
-        // 2. Old format: { recommendedBag: string, packingTips: string[] }
         const strategy = packingList.luggageStrategy as any
         
-        // Normalize the data structure
         const bags = strategy.bags && Array.isArray(strategy.bags) 
           ? strategy.bags 
           : strategy.recommendedBag 
@@ -492,7 +471,6 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
             ? strategy.packingTips
             : []
         
-        // Only render if we have at least some data
         if (bags.length === 0 && !organization && tips.length === 0) {
           return null
         }
@@ -505,7 +483,6 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
                 <h4 className="font-bold">Luggage Strategy</h4>
               </div>
               
-              {/* Recommended Bags */}
               {bags.length > 0 && (
                 <div className="mb-4">
                   <h5 className="text-sm font-semibold text-slate-700 mb-2">Recommended Bags:</h5>
@@ -520,7 +497,6 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
                 </div>
               )}
               
-              {/* Organization Strategy */}
               {organization && (
                 <div className="mb-4">
                   <h5 className="text-sm font-semibold text-slate-700 mb-2">Organization Strategy:</h5>
@@ -528,7 +504,6 @@ export function PackingView({ itinerary, profileValues }: PackingViewProps) {
                 </div>
               )}
               
-              {/* Packing Tips */}
               {tips.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">

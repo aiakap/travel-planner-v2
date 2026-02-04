@@ -12,6 +12,8 @@ export interface ViewReservation {
   confirmationNumber: string
   image: string
   price: number
+  currency?: string            // Currency code (e.g., "USD", "EUR", "JPY")
+  priceUSD?: number            // Price converted to USD (for rollup calculations)
   notes: string
   // Enhanced fields for mapping and chat
   latitude?: number
@@ -25,6 +27,12 @@ export interface ViewReservation {
   endTimeFormatted?: string
   // Days difference between start and end (0 = same day, 1 = next day, etc.)
   endDateDiff?: number
+  // Wall time fields for accurate local time display
+  wallStartDate?: string       // YYYY-MM-DD format
+  wallStartTime?: string       // HH:mm format
+  wallEndDate?: string         // YYYY-MM-DD format
+  wallEndTime?: string         // HH:mm format
+  timeZoneId?: string          // IANA timezone identifier (e.g., "America/Los_Angeles")
   // Status fields for to-do list
   status: "pending" | "confirmed" | "cancelled" | "completed" | "waitlisted"
   statusName: string

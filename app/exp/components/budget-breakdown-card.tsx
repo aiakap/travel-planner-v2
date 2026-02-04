@@ -14,6 +14,7 @@ import {
   TrendingUp,
   TrendingDown
 } from "lucide-react";
+import { convertToUSD, formatAsUSD } from "@/lib/utils/currency-converter";
 
 interface CategoryTotal {
   category: string;
@@ -37,7 +38,6 @@ export function BudgetBreakdownCard({ tripId }: BudgetBreakdownCardProps) {
   const [error, setError] = useState<string | null>(null);
   const [categoryTotals, setCategoryTotals] = useState<CategoryTotal[]>([]);
   const [grandTotal, setGrandTotal] = useState(0);
-  const [currency, setCurrency] = useState("USD");
 
   useEffect(() => {
     loadBudgetData();
@@ -82,37 +82,45 @@ export function BudgetBreakdownCard({ tripId }: BudgetBreakdownCardProps) {
       });
 
       // Process all reservations from all segments
+      // Convert all costs to USD for accurate aggregation
       let total = 0;
-      let detectedCurrency = "USD";
+
+      // Collect all reservation processing promises for parallel conversion
+      const reservationPromises: Promise<void>[] = [];
 
       trip.segments?.forEach((segment: any) => {
         segment.reservations?.forEach((reservation: any) => {
-          const category = reservation.reservationType?.category?.name || "Other";
-          const cost = reservation.cost || 0;
-          const status = reservation.reservationStatus?.name?.toLowerCase() || "suggested";
-          const resCurrency = reservation.currency || "USD";
+          const processReservation = async () => {
+            const category = reservation.reservationType?.category?.name || "Other";
+            const cost = reservation.cost || 0;
+            const currency = reservation.currency || "USD";
+            const status = reservation.reservationStatus?.name?.toLowerCase() || "suggested";
 
-          if (cost > 0) {
-            detectedCurrency = resCurrency;
-          }
+            // Convert cost to USD
+            const costUSD = cost > 0 ? await convertToUSD(cost, currency) : 0;
 
-          const categoryData = categoryMap.get(category) || categoryMap.get("Other")!;
-          categoryData.total += cost;
-          categoryData.count += 1;
-          total += cost;
+            const categoryData = categoryMap.get(category) || categoryMap.get("Other")!;
+            categoryData.total += costUSD;
+            categoryData.count += 1;
+            total += costUSD;
 
-          // Track by status
-          if (status.includes("confirm")) {
-            categoryData.status.confirmed += cost;
-          } else if (status.includes("plan")) {
-            categoryData.status.planned += cost;
-          } else {
-            categoryData.status.suggested += cost;
-          }
+            // Track by status (also converted to USD)
+            if (status.includes("confirm")) {
+              categoryData.status.confirmed += costUSD;
+            } else if (status.includes("plan")) {
+              categoryData.status.planned += costUSD;
+            } else {
+              categoryData.status.suggested += costUSD;
+            }
+          };
+          
+          reservationPromises.push(processReservation());
         });
       });
 
-      setCurrency(detectedCurrency);
+      // Wait for all currency conversions to complete
+      await Promise.all(reservationPromises);
+
       setGrandTotal(total);
       setCategoryTotals(Array.from(categoryMap.values()).filter(c => c.count > 0));
     } catch (err: any) {
@@ -121,15 +129,6 @@ export function BudgetBreakdownCard({ tripId }: BudgetBreakdownCardProps) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
   };
 
   const getPercentage = (amount: number): number => {
@@ -166,10 +165,10 @@ export function BudgetBreakdownCard({ tripId }: BudgetBreakdownCardProps) {
         </div>
         <div className="mt-2">
           <div className="text-3xl font-bold text-slate-900">
-            {formatCurrency(grandTotal)}
+            {formatAsUSD(grandTotal)}
           </div>
           <p className="text-sm text-slate-600 mt-1">
-            Total estimated cost
+            Total estimated cost (USD)
           </p>
         </div>
       </div>
@@ -204,7 +203,7 @@ export function BudgetBreakdownCard({ tripId }: BudgetBreakdownCardProps) {
                   </div>
                   <div className="text-right">
                     <div className="font-semibold text-slate-900">
-                      {formatCurrency(category.total)}
+                      {formatAsUSD(category.total)}
                     </div>
                     <div className="text-xs text-slate-500">
                       {percentage.toFixed(1)}%
@@ -225,19 +224,19 @@ export function BudgetBreakdownCard({ tripId }: BudgetBreakdownCardProps) {
                   {category.status.confirmed > 0 && (
                     <div className="flex items-center gap-1 text-emerald-600">
                       <div className="w-2 h-2 rounded-full bg-emerald-600" />
-                      <span>Confirmed: {formatCurrency(category.status.confirmed)}</span>
+                      <span>Confirmed: {formatAsUSD(category.status.confirmed)}</span>
                     </div>
                   )}
                   {category.status.planned > 0 && (
                     <div className="flex items-center gap-1 text-blue-600">
                       <div className="w-2 h-2 rounded-full bg-blue-600" />
-                      <span>Planned: {formatCurrency(category.status.planned)}</span>
+                      <span>Planned: {formatAsUSD(category.status.planned)}</span>
                     </div>
                   )}
                   {category.status.suggested > 0 && (
                     <div className="flex items-center gap-1 text-slate-500">
                       <div className="w-2 h-2 rounded-full bg-slate-400" />
-                      <span>Suggested: {formatCurrency(category.status.suggested)}</span>
+                      <span>Suggested: {formatAsUSD(category.status.suggested)}</span>
                     </div>
                   )}
                 </div>

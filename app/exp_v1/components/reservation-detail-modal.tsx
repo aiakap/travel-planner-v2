@@ -250,9 +250,10 @@ export function ReservationDetailModal({
     }
   }
 
-  // Combine date and time
+  // Combine date and time - return datetime-local format directly
+  // No ISO/UTC conversion - wall clock fields are source of truth
   const combineDateAndTime = (date: string, time: string) => {
-    return new Date(`${date}T${time}`).toISOString()
+    return `${date}T${time}`
   }
 
   const getStatusBadge = (statusName: string, confirmationNumber?: string | null) => {

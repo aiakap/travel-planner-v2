@@ -95,8 +95,10 @@ export function ReservationCard({
     }
   };
 
+  // Return datetime-local format directly - no ISO/UTC conversion
+  // Wall clock fields are source of truth, server parses this format correctly
   const combineDateAndTime = (date: string, time: string) => {
-    return new Date(`${date}T${time}`).toISOString();
+    return `${date}T${time}`;
   };
 
   // State for formatted times (async)

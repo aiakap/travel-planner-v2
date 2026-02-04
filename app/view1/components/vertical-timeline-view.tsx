@@ -8,6 +8,7 @@ import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
 import { ChevronDown, ChevronRight, MessageCircle, Calendar, MapPin, Plane, Hotel, Utensils, Compass, Car } from "lucide-react"
 import { getTripDates, formatDateCompact, formatDateWithLongWeekday } from "../lib/view-utils"
 import { chatAboutSegment, chatAboutReservation } from "../lib/chat-integration"
+import { formatAsUSD } from "@/lib/utils/currency-converter"
 
 interface VerticalTimelineViewProps {
   itinerary: ViewItinerary
@@ -67,7 +68,8 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
         const isCollapsed = collapsedSegments.has(segment.id)
         const segmentColor = itinerary.segmentColors[segment.id]
         const days = getSegmentDays(segment)
-        const totalCost = segment.reservations.reduce((sum, r) => sum + r.price, 0)
+        // Use priceUSD for accurate multi-currency totals
+        const totalCostUSD = segment.reservations.reduce((sum, r) => sum + (r.priceUSD || 0), 0)
 
         return (
           <Card key={segment.id} className="overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all">
@@ -124,9 +126,9 @@ export function VerticalTimelineView({ itinerary }: VerticalTimelineViewProps) {
                     <span className="text-sm text-muted-foreground">
                       {segment.reservations.length} reservation{segment.reservations.length !== 1 ? 's' : ''}
                     </span>
-                    {totalCost > 0 && (
+                    {totalCostUSD > 0 && (
                       <span className="text-sm font-semibold text-emerald-600">
-                        ${totalCost.toLocaleString()}
+                        {formatAsUSD(totalCostUSD)}
                       </span>
                     )}
                   </div>

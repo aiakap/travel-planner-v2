@@ -47,6 +47,19 @@ export interface OptimizedRoute {
   suggestedOrder?: number[];
 }
 
+export interface DisplayRoute {
+  path: Array<{ lat: number; lng: number }>;
+  distance: {
+    meters: number;
+    text: string;
+  };
+  duration: {
+    seconds: number;
+    text: string;
+  };
+  encodedPolyline?: string;
+}
+
 /**
  * Get API key for Routes API
  */
@@ -317,6 +330,154 @@ export async function getTravelTime(
     durationText: route.totalDuration.text,
     distanceText: route.totalDistance.text,
   };
+}
+
+/**
+ * Get a display route between two points with the full polyline path
+ * This is optimized for map display, returning the actual road path
+ */
+export async function getDisplayRoute(
+  originLat: number,
+  originLng: number,
+  destLat: number,
+  destLng: number,
+  transportMode: TransportMode = "DRIVE"
+): Promise<DisplayRoute | null> {
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    console.error("Google Routes API key not configured");
+    return null;
+  }
+
+  try {
+    const url = "https://routes.googleapis.com/directions/v2:computeRoutes";
+    
+    const requestBody = {
+      origin: {
+        location: {
+          latLng: {
+            latitude: originLat,
+            longitude: originLng,
+          },
+        },
+      },
+      destination: {
+        location: {
+          latLng: {
+            latitude: destLat,
+            longitude: destLng,
+          },
+        },
+      },
+      travelMode: transportMode,
+      routingPreference: transportMode === "DRIVE" ? "TRAFFIC_AWARE" : undefined,
+      computeAlternativeRoutes: false,
+      routeModifiers: {
+        avoidTolls: false,
+        avoidHighways: false,
+        avoidFerries: false,
+      },
+      languageCode: "en-US",
+      units: "IMPERIAL",
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Routes API error:", response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    if (!data.routes || data.routes.length === 0) {
+      console.error("No routes found");
+      return null;
+    }
+
+    const route = data.routes[0];
+    const encodedPolyline = route.polyline?.encodedPolyline;
+    
+    // Decode the polyline to get lat/lng path
+    const path = encodedPolyline ? decodePolyline(encodedPolyline) : [];
+    
+    // Parse duration (comes as "1234s" string)
+    const durationSeconds = parseInt(route.duration?.replace("s", "") || "0");
+    
+    return {
+      path,
+      distance: {
+        meters: route.distanceMeters || 0,
+        text: formatDistance(route.distanceMeters || 0),
+      },
+      duration: {
+        seconds: durationSeconds,
+        text: formatDuration(durationSeconds),
+      },
+      encodedPolyline,
+    };
+  } catch (error) {
+    console.error("Error getting display route:", error);
+    return null;
+  }
+}
+
+/**
+ * Decode a Google encoded polyline string into an array of lat/lng coordinates
+ * Based on the Google Polyline Algorithm
+ * @see https://developers.google.com/maps/documentation/utilities/polylinealgorithm
+ */
+function decodePolyline(encoded: string): Array<{ lat: number; lng: number }> {
+  const points: Array<{ lat: number; lng: number }> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    // Decode latitude
+    let shift = 0;
+    let result = 0;
+    let byte: number;
+    
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    
+    const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lat += dlat;
+
+    // Decode longitude
+    shift = 0;
+    result = 0;
+    
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    
+    const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lng += dlng;
+
+    points.push({
+      lat: lat / 1e5,
+      lng: lng / 1e5,
+    });
+  }
+
+  return points;
 }
 
 /**

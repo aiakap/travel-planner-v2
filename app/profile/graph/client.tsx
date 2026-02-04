@@ -556,7 +556,7 @@ export function ProfileGraphClient({
   }, [handleMouseMove, handleMouseUp]);
 
   return (
-    <div ref={containerRef} className="flex bg-slate-50" style={{ height: 'calc(100vh - 64px)' }}>
+    <div ref={containerRef} className="flex bg-slate-50 mt-16" style={{ height: 'calc(100vh - 64px)' }}>
       {/* Left Panel: Chat Interface */}
       <div className="flex flex-col h-full border-r bg-white overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
         {/* Fixed Header */}

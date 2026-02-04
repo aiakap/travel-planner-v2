@@ -21,7 +21,7 @@ export function PDFSegment({ segment, segmentNumber }: PDFSegmentProps) {
   const formattedEndDate = format(new Date(segment.endDate), 'MMM d, yyyy')
   
   return (
-    <View style={styles.segment} wrap={false}>
+    <View style={styles.segment}>
       <Text style={styles.segmentTitle}>
         Segment {segmentNumber}: {segment.title}
       </Text>

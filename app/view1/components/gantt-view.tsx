@@ -6,6 +6,7 @@ import type { ViewItinerary, ViewReservation } from "@/lib/itinerary-view-types"
 import { Calendar, MapPin, Plane, Hotel, Utensils, Compass, Car } from "lucide-react"
 import { getTripDates, formatDateFull, formatDateWithWeekday, getDateNumber } from "../lib/view-utils"
 import { chatAboutSegment, chatAboutReservation } from "../lib/chat-integration"
+import { formatAsUSD } from "@/lib/utils/currency-converter"
 
 interface GanttViewProps {
   itinerary: ViewItinerary
@@ -71,7 +72,8 @@ export function GanttView({ itinerary }: GanttViewProps) {
         {itinerary.segments.map((segment) => {
           const segmentColor = itinerary.segmentColors[segment.id]
           const position = getSegmentPosition(segment)
-          const totalCost = segment.reservations.reduce((sum, r) => sum + r.price, 0)
+          // Use priceUSD for accurate multi-currency totals
+          const totalCostUSD = segment.reservations.reduce((sum, r) => sum + (r.priceUSD || 0), 0)
 
           return (
             <Card key={segment.id} className="p-4 overflow-hidden">
@@ -109,9 +111,9 @@ export function GanttView({ itinerary }: GanttViewProps) {
                     </div>
                   </div>
 
-                  {totalCost > 0 && (
+                  {totalCostUSD > 0 && (
                     <span className="text-sm font-semibold text-emerald-600 shrink-0">
-                      ${totalCost.toLocaleString()}
+                      {formatAsUSD(totalCostUSD)}
                     </span>
                   )}
                 </div>

@@ -9,9 +9,17 @@ import { DatePopover } from "@/components/ui/date-popover"
 import { ClickToSelect, ClickToSelectStatus } from "@/components/ui/click-to-select"
 import { CurrencySelect } from "@/components/ui/currency-select"
 import { SegmentEditMap } from "@/components/segment-edit-map"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { updateReservation } from "@/lib/actions/update-reservation"
 import { deleteReservation } from "@/lib/actions/delete-reservation"
 import { getTimeZoneForLocation } from "@/lib/actions/timezone"
+import { geocodeWithTimezone } from "@/lib/actions/geocode-with-timezone"
 import { checkTimeConflict, getAlternativeTimeSlots } from "@/lib/actions/check-conflicts"
 import { PlaceAutocompleteResult } from "@/lib/types/place-suggestion"
 import { getDefaultTimeForType } from "@/lib/scheduling-utils"
@@ -20,6 +28,8 @@ import { localToUTC, parseToLocalComponents } from "@/lib/utils/local-time"
 import { getCurrencyByCode } from "@/lib/currencies"
 import TimezoneSelect from "@/components/timezone-select"
 import FlightMap from "@/components/flight-map"
+import { MetadataDisplay } from "@/components/metadata-display"
+import { ReservationMetadata } from "@/lib/reservation-metadata-types"
 import type {
   Reservation,
   ReservationType,
@@ -189,6 +199,9 @@ export function ReservationEditClient({
   const [cancellationPolicy, setCancellationPolicy] = useState(reservation.cancellationPolicy || "")
   const [vendor, setVendor] = useState(reservation.vendor || "")
   
+  // Chapter (segment) selection
+  const [selectedSegmentId, setSelectedSegmentId] = useState(reservation.segmentId)
+  
   // Flight/transport-specific state
   const [departureLocation, setDepartureLocation] = useState(reservation.departureLocation || "")
   const [departureTimezone, setDepartureTimezone] = useState(reservation.departureTimezone || "")
@@ -355,6 +368,48 @@ export function ReservationEditClient({
     }
   }, [startTime, endTime, locationCache.lat, locationCache.lng, trip.id, trip.startDate, reservation.id, currentCategory, currentType])
 
+  // Initialize departure/arrival coords from existing locations on mount
+  useEffect(() => {
+    const initializeCoords = async () => {
+      if (!isPointToPoint && !isShortDistance) return;
+      
+      // Geocode departure location if we have a name but no coords
+      if (departureLocation && !departureCoords) {
+        try {
+          const result = await geocodeWithTimezone(departureLocation);
+          if (result) {
+            setDepartureCoords({
+              name: departureLocation,
+              lat: result.lat,
+              lng: result.lng,
+            });
+          }
+        } catch (error) {
+          console.error("Error geocoding departure:", error);
+        }
+      }
+      
+      // Geocode arrival location if we have a name but no coords
+      if (arrivalLocation && !arrivalCoords) {
+        try {
+          const result = await geocodeWithTimezone(arrivalLocation);
+          if (result) {
+            setArrivalCoords({
+              name: arrivalLocation,
+              lat: result.lat,
+              lng: result.lng,
+            });
+          }
+        } catch (error) {
+          console.error("Error geocoding arrival:", error);
+        }
+      }
+    };
+    
+    initializeCoords();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount
+
   // Handle location change with timezone lookup
   const handleLocationChange = useCallback(async (
     value: string,
@@ -494,22 +549,25 @@ export function ReservationEditClient({
       formData.set("cancellationPolicy", cancellationPolicy)
       formData.set("vendor", vendor)
       formData.set("returnTo", scrollToUrl)
+      formData.set("segmentId", selectedSegmentId)
       
       if (cost) formData.set("cost", cost)
       if (currency) formData.set("currency", currency)
       
       // Handle times based on display group
+      // Send datetime-local values directly - no conversion to ISO/UTC
+      // Wall clock fields are source of truth, server parses and stores them directly
       if (isPointToPoint || isShortDistance) {
         formData.set("departureLocation", departureLocation)
         formData.set("departureTimezone", departureTimezone)
         formData.set("arrivalLocation", arrivalLocation)
         formData.set("arrivalTimezone", arrivalTimezone)
-        if (startTime) formData.set("startTime", new Date(startTime).toISOString())
-        if (endTime) formData.set("endTime", new Date(endTime).toISOString())
+        if (startTime) formData.set("startTime", startTime)
+        if (endTime) formData.set("endTime", endTime)
       } else {
         formData.set("location", location)
-        if (startTime) formData.set("startTime", new Date(startTime).toISOString())
-        if (endTime) formData.set("endTime", new Date(endTime).toISOString())
+        if (startTime) formData.set("startTime", startTime)
+        if (endTime) formData.set("endTime", endTime)
         if (locationCache.lat) formData.set("latitude", locationCache.lat.toString())
         if (locationCache.lng) formData.set("longitude", locationCache.lng.toString())
         if (locationCache.timeZoneId) formData.set("timeZoneId", locationCache.timeZoneId)
@@ -522,7 +580,12 @@ export function ReservationEditClient({
       // But if it doesn't for some reason, fallback to client-side navigation
       router.push(scrollToUrl)
       router.refresh()
-    } catch (error) {
+    } catch (error: any) {
+      // Check if this is a redirect (not an actual error)
+      // Next.js redirect() throws a special error with digest starting with 'NEXT_REDIRECT'
+      if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+        return;
+      }
       console.error("Failed to save reservation:", error)
       alert("Failed to save changes. Please try again.")
       setIsSaving(false)
@@ -700,19 +763,34 @@ export function ReservationEditClient({
               />
             </div>
 
-            {/* POINT_TO_POINT_TRANSPORT: Flight Map + Departure/Arrival */}
+            {/* Chapter (Segment) Selection */}
+            <div className="pb-4 border-b border-slate-100">
+              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-2">
+                Chapter
+              </label>
+              <Select 
+                value={selectedSegmentId} 
+                onValueChange={(value) => {
+                  setSelectedSegmentId(value)
+                  setIsDirty(true)
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a chapter" />
+                </SelectTrigger>
+                <SelectContent>
+                  {trip.segments.map((seg) => (
+                    <SelectItem key={seg.id} value={seg.id}>
+                      {seg.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* POINT_TO_POINT_TRANSPORT: Departure/Arrival */}
             {isPointToPoint && (
               <>
-                {/* Flight Map */}
-                {departureCoords && arrivalCoords && (
-                  <div className="h-64 rounded-lg overflow-hidden border border-slate-200 shadow-sm">
-                    <FlightMap
-                      departureLocation={departureCoords}
-                      arrivalLocation={arrivalCoords}
-                    />
-                  </div>
-                )}
-
                 {/* Departure Section */}
                 <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
                   <div className="flex items-center gap-2 mb-4">
@@ -1353,8 +1431,24 @@ export function ReservationEditClient({
               />
             </div>
 
-            {/* Segment Reservations Map */}
-            {segment.reservations && segment.reservations.length > 0 && (
+            {/* Route Map - for point-to-point and short distance transport */}
+            {(isPointToPoint || isShortDistance) && departureCoords && arrivalCoords && (
+              <div className="pt-4 border-t border-slate-100">
+                <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-3">
+                  {isShortDistance ? "Route Map" : "Flight Path"}
+                </label>
+                <div className="h-72 rounded-lg overflow-hidden border border-slate-200 shadow-sm">
+                  <FlightMap
+                    departureLocation={departureCoords}
+                    arrivalLocation={arrivalCoords}
+                    variant={isShortDistance ? "ground" : "flight"}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Segment Map - for all other reservation types */}
+            {!isPointToPoint && !isShortDistance && segment.reservations && segment.reservations.length > 0 && (
               <div className="pt-4 border-t border-slate-100">
                 <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-3">
                   Segment Map - All Reservations
@@ -1375,6 +1469,16 @@ export function ReservationEditClient({
                   currentReservationId={reservation.id}
                   segmentName={segment.name}
                   height="280px"
+                  returnTo={returnTo}
+                />
+              </div>
+            )}
+
+            {/* Metadata Display - shows structured data like driver info, flight details, etc. */}
+            {reservation.metadata && (
+              <div className="pt-4 border-t border-slate-100">
+                <MetadataDisplay 
+                  metadata={reservation.metadata as ReservationMetadata} 
                 />
               </div>
             )}

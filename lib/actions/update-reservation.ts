@@ -43,6 +43,9 @@ export async function updateReservation(formData: FormData) {
   const arrivalLocation = formData.get("arrivalLocation")?.toString();
   const arrivalTimezone = formData.get("arrivalTimezone")?.toString();
 
+  // Chapter (segment) assignment
+  const segmentId = formData.get("segmentId")?.toString();
+
   if (!reservationId || !name || !reservationTypeId || !reservationStatusId) {
     throw new Error("Missing required fields");
   }
@@ -73,6 +76,25 @@ export async function updateReservation(formData: FormData) {
 
   if (!existingReservation) {
     throw new Error("Reservation not found or unauthorized");
+  }
+
+  // Validate segmentId if changed - must belong to the same trip
+  let validatedSegmentId: string | undefined = undefined;
+  if (segmentId && segmentId !== existingReservation.segmentId) {
+    const newSegment = await prisma.segment.findUnique({
+      where: { id: segmentId },
+      select: { tripId: true }
+    });
+    
+    if (!newSegment) {
+      throw new Error("Selected chapter not found");
+    }
+    
+    if (newSegment.tripId !== existingReservation.segment.tripId) {
+      throw new Error("Cannot move reservation to a chapter in a different trip");
+    }
+    
+    validatedSegmentId = segmentId;
   }
 
   // Check if relevant fields changed
@@ -108,6 +130,8 @@ export async function updateReservation(formData: FormData) {
     departureTimezone: departureTimezone || null,
     arrivalLocation: arrivalLocation || null,
     arrivalTimezone: arrivalTimezone || null,
+    // Include segmentId only if changed and validated
+    ...(validatedSegmentId ? { segmentId: validatedSegmentId } : {}),
   };
 
   // Parse datetime-local values into local date/time components

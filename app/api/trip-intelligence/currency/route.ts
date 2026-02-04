@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { generateText } from 'ai'
 import { openai } from '@ai-sdk/openai'
+import { getExchangeRates } from '@/lib/utils/exchange-rate-cache'
 
 interface CurrencyRequest {
   tripId: string
@@ -73,7 +74,8 @@ export async function POST(request: Request) {
       destinations.add(seg.endTitle)
     })
 
-    // Fetch exchange rates for each destination
+    // Fetch exchange rates using shared cache (single API call, 24hr cache, fallback rates)
+    const allRates = await getExchangeRates()
     const exchangeRates: Record<string, { currency: string; rate: number }> = {}
     
     for (const dest of destinations) {
@@ -84,18 +86,9 @@ export async function POST(request: Request) {
       const currencyCode = getCurrencyForCountry(country)
       
       if (currencyCode && currencyCode !== 'USD') {
-        try {
-          const rateResponse = await fetch(
-            `https://api.exchangerate-api.com/v4/latest/USD`
-          )
-          const rateData = await rateResponse.json()
-          exchangeRates[dest] = {
-            currency: currencyCode,
-            rate: rateData.rates[currencyCode] || 1
-          }
-        } catch (error) {
-          console.error(`Error fetching rate for ${currencyCode}:`, error)
-          exchangeRates[dest] = { currency: currencyCode, rate: 1 }
+        exchangeRates[dest] = {
+          currency: currencyCode,
+          rate: allRates[currencyCode] || 1
         }
       } else {
         exchangeRates[dest] = { currency: 'USD', rate: 1 }

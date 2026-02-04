@@ -215,11 +215,23 @@ export function WeatherView({ itinerary }: WeatherViewProps) {
     )
   }
 
-  // Extract unique locations from weather data
+  // Extract unique locations from weather data and aggregate segment dates
+  const weatherLocations = getWeatherLocations();
   const uniqueLocations = Array.from(
-    new Map(
-      weatherData.map(w => [`${w.location}-${w.country}`, w])
-    ).values()
+    weatherData.reduce((map, w) => {
+      const key = `${w.location}-${w.country}`;
+      if (!map.has(key)) {
+        map.set(key, { ...w, segmentDates: [] as Array<{start: string, end: string}> });
+      }
+      // Find the matching location from getWeatherLocations to get segment dates
+      const loc = weatherLocations.find(l => 
+        l.segmentId === w.segmentId && l.position === w.position
+      );
+      if (loc) {
+        map.get(key)!.segmentDates.push(loc.dates);
+      }
+      return map;
+    }, new Map<string, WeatherData & { segmentDates: Array<{start: string, end: string}> }>()).values()
   );
 
   // Get next 5 days starting from today
@@ -231,19 +243,14 @@ export function WeatherView({ itinerary }: WeatherViewProps) {
     return date;
   });
 
-  // Helper: Check if a date overlaps with any segment dates
-  const isDateInSegments = (date: Date, location: string) => {
-    return itinerary.segments.some(seg => {
-      const segStart = new Date(seg.startDate);
-      const segEnd = new Date(seg.endDate);
+  // Helper: Check if a date overlaps with any of the location's segment dates
+  const isDateInSegments = (date: Date, segmentDates: Array<{start: string, end: string}>) => {
+    return segmentDates.some(dates => {
+      const segStart = new Date(dates.start);
+      const segEnd = new Date(dates.end);
       segStart.setHours(0, 0, 0, 0);
       segEnd.setHours(0, 0, 0, 0);
-      
-      const matchesLocation = 
-        seg.startTitle === location || 
-        seg.endTitle === location;
-      
-      return matchesLocation && date >= segStart && date <= segEnd;
+      return date >= segStart && date <= segEnd;
     });
   };
 
@@ -326,7 +333,7 @@ export function WeatherView({ itinerary }: WeatherViewProps) {
                       return forecastDate.getTime() === date.getTime();
                     });
                     
-                    const isHighlighted = isDateInSegments(date, locationName);
+                    const isHighlighted = isDateInSegments(date, locationData.segmentDates);
                     
                     if (!dayForecast) {
                       return (

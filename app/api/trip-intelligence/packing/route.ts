@@ -25,7 +25,13 @@ const packingListResponseSchema = z.object({
           weatherBased: z.boolean(),
           profileBased: z.boolean(),
           relevanceScore: z.number(),
-          profileReferences: z.array(z.any()).optional().default([]),
+          profileReferences: z.array(
+            z.object({
+              category: z.string(),
+              value: z.string(),
+              relevance: z.string(),
+            })
+          ),
         })
       ),
     })
@@ -342,11 +348,11 @@ IMPORTANT: The luggageStrategy.bags array MUST contain at least one bag recommen
     let result
     try {
       console.log('🔵 [PACKING API DEBUG] Step 2: Calling generateObject...')
-      console.log('🔵 [PACKING API DEBUG] Model: gpt-4-turbo')
+      console.log('🔵 [PACKING API DEBUG] Model: gpt-4o')
       console.log('🔵 [PACKING API DEBUG] Schema name: PackingListResponse')
       
       result = await generateObject({
-        model: openai('gpt-4-turbo'),
+        model: openai('gpt-4o'),
         schema: packingListResponseSchema,
         prompt,
         temperature: 0.7,
@@ -530,6 +536,65 @@ export async function GET(request: Request) {
     console.error('Error fetching packing list:', error)
     return NextResponse.json(
       { error: 'Failed to fetch packing list' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * DELETE /api/trip-intelligence/packing?tripId=xxx
+ * 
+ * Clear existing packing list for a trip
+ */
+export async function DELETE(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tripId = searchParams.get('tripId')
+
+    if (!tripId) {
+      return NextResponse.json({ error: 'Missing tripId' }, { status: 400 })
+    }
+
+    // Verify trip ownership
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId, userId: session.user.id }
+    })
+
+    if (!trip) {
+      return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
+    }
+
+    // Find and update intelligence record
+    const intelligence = await prisma.tripIntelligence.findUnique({
+      where: { tripId }
+    })
+
+    if (intelligence) {
+      // Delete packing list items
+      await prisma.packingList.deleteMany({
+        where: { intelligenceId: intelligence.id }
+      })
+
+      // Update intelligence record
+      await prisma.tripIntelligence.update({
+        where: { id: intelligence.id },
+        data: {
+          hasPackingList: false,
+          packingGeneratedAt: null
+        }
+      })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error clearing packing list:', error)
+    return NextResponse.json(
+      { error: 'Failed to clear packing list' },
       { status: 500 }
     )
   }
