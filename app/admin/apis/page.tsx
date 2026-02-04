@@ -307,9 +307,9 @@ export default function ApiTestingPage() {
               Refresh Status
             </Button>
             <Button variant="outline" className="w-full" asChild>
-              <Link href="/admin/apis/showcase">
-                <Sparkles className="mr-2 h-4 w-4" />
-                View Showcase
+              <Link href="/admin/apis/google-maps">
+                <Map className="mr-2 h-4 w-4" />
+                Test Maps
               </Link>
             </Button>
             <Button variant="outline" className="w-full" onClick={() => {
@@ -325,9 +325,9 @@ export default function ApiTestingPage() {
               Cost Report
             </Button>
             <Button variant="outline" className="w-full" asChild>
-              <Link href="/admin/apis/showcase/map-playground">
-                <Map className="mr-2 h-4 w-4" />
-                Map Playground
+              <Link href="/admin/apis/imagen">
+                <Sparkles className="mr-2 h-4 w-4" />
+                Test Imagen
               </Link>
             </Button>
           </div>

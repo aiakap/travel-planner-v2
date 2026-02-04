@@ -1,7 +1,26 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, TestTube, Settings, ArrowRight, Plug, Upload, Trash2, Mail, List, ImageIcon, Code, MapPin, Home } from "lucide-react";
+import { 
+  FileText, 
+  TestTube, 
+  ArrowRight, 
+  Plug, 
+  Upload, 
+  Trash2, 
+  Mail, 
+  List, 
+  ImageIcon, 
+  Code, 
+  MapPin,
+  Database,
+  Dice5,
+  Clock,
+  Brain,
+  Map,
+  Plane,
+  Bot,
+} from "lucide-react";
 
 export default function AdminDashboard() {
   return (
@@ -9,7 +28,7 @@ export default function AdminDashboard() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">
-          Manage prompts, test card generation, and explore the exp system
+          Manage prompts, test APIs, and access admin tools
         </p>
       </div>
 
@@ -76,222 +95,300 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      {/* Admin Tools */}
+      {/* Core Tools */}
       <div>
-        <h3 className="text-xl font-semibold mb-4">Admin Tools</h3>
-      </div>
-      
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Manage Plugins</CardTitle>
-            <CardDescription>
-              View, edit, and configure all prompt plugins
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/prompts">
-              <Button className="w-full">
-                View Plugins
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <h3 className="text-xl font-semibold mb-4">Core Tools</h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Manage Plugins</CardTitle>
+              <CardDescription>
+                View, edit, and configure all prompt plugins
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/prompts">
+                <Button className="w-full">
+                  View Plugins
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Card Types</CardTitle>
-            <CardDescription>
-              Explore all 10 card types with schema reference
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/cards">
-              <Button variant="outline" className="w-full">
-                Card Explorer
-                <Code className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Test Prompts & Cards</CardTitle>
+              <CardDescription>
+                Build prompts and preview AI-generated cards
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/prompts/test">
+                <Button variant="outline" className="w-full">
+                  Open Testing Interface
+                  <TestTube className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Test Prompts & Cards</CardTitle>
-            <CardDescription>
-              Build prompts and preview AI-generated cards
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/prompts/test">
-              <Button variant="outline" className="w-full">
-                Open Testing Interface
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>API Testing</CardTitle>
+              <CardDescription>
+                Test external APIs and view health status
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/apis">
+                <Button variant="outline" className="w-full">
+                  API Overview
+                  <Plug className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Suggestion Testing</CardTitle>
-            <CardDescription>
-              Test place, transport, and hotel suggestion schemas
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/suggestions">
-              <Button variant="outline" className="w-full">
-                Test Suggestions
-                <MapPin className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Email Extraction</CardTitle>
+              <CardDescription>
+                Extract flight/hotel data from confirmation emails
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/email-extract">
+                <Button variant="outline" className="w-full">
+                  Email Extraction
+                  <Mail className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>API Testing</CardTitle>
-            <CardDescription>
-              Test external APIs and structured outputs
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/apis">
-              <Button variant="outline" className="w-full">
-                Test APIs
-                <Plug className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Email Extraction</CardTitle>
-            <CardDescription>
-              Extract flight/hotel data from confirmation emails
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/email-extract">
-              <Button variant="outline" className="w-full">
-                Email Extraction
-                <Mail className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Travel Extraction (Queue)</CardTitle>
-            <CardDescription>
-              Batch upload and process .eml files with queue system
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/travel-extraction">
-              <Button variant="outline" className="w-full">
-                Queue Processing
-                <List className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>User Data Cleanup</CardTitle>
-            <CardDescription>
-              Search users and manage their data (profile, graph, trips)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/user-cleanup">
-              <Button variant="outline" className="w-full">
-                Manage User Data
-                <Trash2 className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Travel Extraction (Queue)</CardTitle>
+              <CardDescription>
+                Batch upload and process .eml files with queue system
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/travel-extraction">
+                <Button variant="outline" className="w-full">
+                  Queue Processing
+                  <List className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Individual API Test Pages */}
+      {/* User Management */}
       <div>
-        <h3 className="text-xl font-semibold mb-4 mt-8">Individual API Tests</h3>
+        <h3 className="text-xl font-semibold mb-4">User Management</h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>User Data Cleanup</CardTitle>
+              <CardDescription>
+                Search users and manage their data (profile, graph, trips)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/user-cleanup">
+                <Button variant="outline" className="w-full">
+                  Manage User Data
+                  <Trash2 className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Seed Trips</CardTitle>
+              <CardDescription>
+                Generate comprehensive test trips with real venue data
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/seed-trips">
+                <Button variant="outline" className="w-full">
+                  Generate Test Trips
+                  <Database className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-      
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Google Maps</CardTitle>
-            <CardDescription>
-              Places, Geocoding, Timezone APIs
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/apis/google-maps">
-              <Button variant="outline" className="w-full" size="sm">
-                Test Google Maps
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Amadeus</CardTitle>
-            <CardDescription>
-              Flight search and hotel APIs
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/apis/amadeus">
-              <Button variant="outline" className="w-full" size="sm">
-                Test Amadeus
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+      {/* Testing & Debug */}
+      <div>
+        <h3 className="text-xl font-semibold mb-4">Testing & Debug</h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Card Explorer</CardTitle>
+              <CardDescription>
+                Explore all 10 card types with schema reference
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/cards">
+                <Button variant="outline" className="w-full">
+                  Card Explorer
+                  <Code className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>OpenAI</CardTitle>
-            <CardDescription>
-              Chat and structured generation
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/apis/openai">
-              <Button variant="outline" className="w-full" size="sm">
-                Test OpenAI
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Suggestion Testing</CardTitle>
+              <CardDescription>
+                Test place, transport, and hotel suggestion schemas
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/suggestions">
+                <Button variant="outline" className="w-full">
+                  Test Suggestions
+                  <MapPin className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Vertex AI Imagen</CardTitle>
-            <CardDescription>
-              Image generation with Imagen
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/apis/imagen">
-              <Button variant="outline" className="w-full" size="sm">
-                Test Imagen
-                <ImageIcon className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Get Lucky Test</CardTitle>
+              <CardDescription>
+                Debug harness for surprise trip feature
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/get-lucky-test">
+                <Button variant="outline" className="w-full">
+                  Test Get Lucky
+                  <Dice5 className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Timezone Test</CardTitle>
+              <CardDescription>
+                Test date and timezone conversion utilities
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/timezone-test">
+                <Button variant="outline" className="w-full">
+                  Test Timezones
+                  <Clock className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Trip Intelligence</CardTitle>
+              <CardDescription>
+                Test currency, emergency, cultural, and activity features
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/trip-intelligence">
+                <Button variant="outline" className="w-full">
+                  Test Intelligence
+                  <Brain className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Quick API Tests */}
+      <div>
+        <h3 className="text-xl font-semibold mb-4">Quick API Tests</h3>
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Google Maps</CardTitle>
+              <CardDescription className="text-xs">
+                Places, Geocoding, Timezone
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/apis/google-maps">
+                <Button variant="outline" className="w-full" size="sm">
+                  Test
+                  <Map className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Amadeus</CardTitle>
+              <CardDescription className="text-xs">
+                Flights, Hotels, Transfers
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/apis/amadeus">
+                <Button variant="outline" className="w-full" size="sm">
+                  Test
+                  <Plane className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">OpenAI</CardTitle>
+              <CardDescription className="text-xs">
+                Chat, Structured Outputs
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/apis/openai">
+                <Button variant="outline" className="w-full" size="sm">
+                  Test
+                  <Bot className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Imagen</CardTitle>
+              <CardDescription className="text-xs">
+                AI Image Generation
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/apis/imagen">
+                <Button variant="outline" className="w-full" size="sm">
+                  Test
+                  <ImageIcon className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* System Info */}
@@ -302,7 +399,7 @@ export default function AdminDashboard() {
         <CardContent className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Admin Version</span>
-            <span className="font-medium">2.0.0</span>
+            <span className="font-medium">2.1.0</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Exp System</span>
@@ -315,10 +412,6 @@ export default function AdminDashboard() {
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Plugin Registry</span>
             <span className="font-mono text-xs">app/exp/lib/prompts/registry.ts</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Old Card Syntax</span>
-            <span className="text-orange-600 font-medium">Deprecated (use structured outputs)</span>
           </div>
         </CardContent>
       </Card>

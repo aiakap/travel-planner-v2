@@ -1099,10 +1099,10 @@ export function ComponentsDemoClient({ session }: { session: Session | null }) {
                   /exp - Most Components
                 </Button>
               </Link>
-              <Link href="/profile/graph">
+              <Link href="/profile#dossier">
                 <Button variant="outline" className="w-full justify-start">
                   <User className="mr-2 size-4" />
-                  /profile/graph - Interactive Graph
+                  /profile#dossier - Profile Builder
                 </Button>
               </Link>
               <Link href="/">

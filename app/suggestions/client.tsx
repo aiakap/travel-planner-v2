@@ -27,6 +27,7 @@ import {
 const MapPinIcon = MapPin;
 import dynamic from "next/dynamic";
 import { TripSuggestionCard } from "@/components/trip-suggestion-card";
+import { AssistedTripWizard } from "@/components/assisted-trip-wizard";
 import type { AITripSuggestion } from "@/lib/ai/generate-trip-suggestions";
 
 // Dynamically import the modal for code splitting - only loaded when needed
@@ -648,11 +649,17 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Visit your <a href="/profile/graph" className="text-blue-600 hover:underline">Profile Graph</a> to start building your travel profile.
+                Visit your <a href="/profile#dossier" className="text-blue-600 hover:underline">Dossier</a> to start building your travel profile.
               </p>
             </CardContent>
           </Card>
         )}
+
+        {/* Assisted Trip Planning Wizard */}
+        <AssistedTripWizard
+          profileItems={profileItems}
+          userProfile={userProfile}
+        />
 
         {/* AI Trip Suggestions */}
         <Card className="border-2 border-purple-100">

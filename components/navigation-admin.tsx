@@ -17,6 +17,17 @@ import {
   Image as ImageIcon,
   Upload,
   ArrowLeft,
+  Mail,
+  Trash2,
+  Database,
+  Code,
+  MapPin,
+  Dice5,
+  Clock,
+  Brain,
+  Cloud,
+  Utensils,
+  Ticket,
 } from "lucide-react";
 
 interface NavItem {
@@ -87,6 +98,24 @@ const adminNavItems: NavItem[] = [
         description: "Test AI image generation",
         icon: <ImageIcon className="h-5 w-5" />,
       },
+      {
+        label: "Weather",
+        href: "/admin/apis/weather",
+        description: "Test weather forecasts",
+        icon: <Cloud className="h-5 w-5" />,
+      },
+      {
+        label: "Restaurants",
+        href: "/admin/apis/restaurants",
+        description: "Test Yelp restaurant search",
+        icon: <Utensils className="h-5 w-5" />,
+      },
+      {
+        label: "Activities",
+        href: "/admin/apis/activities",
+        description: "Test Viator tours & activities",
+        icon: <Ticket className="h-5 w-5" />,
+      },
     ],
   },
   {
@@ -94,10 +123,64 @@ const adminNavItems: NavItem[] = [
     href: "/admin/travel-extraction",
     children: [
       {
+        label: "Email Extraction",
+        href: "/admin/email-extract",
+        description: "Extract booking info from emails",
+        icon: <Mail className="h-5 w-5" />,
+      },
+      {
         label: "Travel Extraction",
         href: "/admin/travel-extraction",
-        description: "Extract flights & hotels from emails/images",
+        description: "Queue-based batch extraction",
         icon: <Upload className="h-5 w-5" />,
+      },
+      {
+        label: "Seed Trips",
+        href: "/admin/seed-trips",
+        description: "Generate test trips with real data",
+        icon: <Database className="h-5 w-5" />,
+      },
+      {
+        label: "User Cleanup",
+        href: "/admin/user-cleanup",
+        description: "Search and manage user data",
+        icon: <Trash2 className="h-5 w-5" />,
+      },
+    ],
+  },
+  {
+    label: "Dev Testing",
+    href: "/admin/cards",
+    children: [
+      {
+        label: "Card Explorer",
+        href: "/admin/cards",
+        description: "View card type schemas",
+        icon: <Code className="h-5 w-5" />,
+      },
+      {
+        label: "Suggestions",
+        href: "/admin/suggestions",
+        description: "Test suggestion schemas",
+        icon: <MapPin className="h-5 w-5" />,
+      },
+      {
+        label: "Get Lucky Test",
+        href: "/admin/get-lucky-test",
+        description: "Debug surprise trip feature",
+        icon: <Dice5 className="h-5 w-5" />,
+      },
+      {
+        label: "Timezone Test",
+        href: "/admin/timezone-test",
+        description: "Test date/timezone conversions",
+        icon: <Clock className="h-5 w-5" />,
+      },
+      {
+        label: "Trip Intelligence",
+        href: "/admin/trip-intelligence",
+        description: "Test trip intelligence features",
+        icon: <Brain className="h-5 w-5" />,
       },
     ],
   },

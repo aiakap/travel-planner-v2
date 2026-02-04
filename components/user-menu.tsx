@@ -80,7 +80,7 @@ export function UserMenu({ userName, userEmail, userImage }: UserMenuProps) {
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link
-            href="/profile/graph"
+            href="/profile#dossier"
             className="flex items-center gap-2 cursor-pointer"
           >
             <BookOpen className="w-4 h-4" />

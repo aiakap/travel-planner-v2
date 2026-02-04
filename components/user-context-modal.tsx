@@ -482,7 +482,7 @@ export function UserContextModal({ isOpen, onClose }: UserContextModalProps) {
                   </div>
 
                   <Button variant="outline" className="w-full" asChild>
-                    <a href="/profile/graph">View Full Graph</a>
+                    <a href="/profile#dossier">View Full Profile</a>
                   </Button>
                 </>
               ) : (
@@ -490,7 +490,7 @@ export function UserContextModal({ isOpen, onClose }: UserContextModalProps) {
                   message="No profile graph data yet" 
                   action={
                     <Button variant="outline" asChild>
-                      <a href="/profile/graph">Create Graph</a>
+                      <a href="/profile#dossier">Build Your Profile</a>
                     </Button>
                   }
                 />
