@@ -71,6 +71,7 @@ export interface HotelReservation {
   currency: string;
   status: ReservationStatus;
   notes?: string;
+  imageUrl?: string; // Direct image URL (overrides venue.imageUrl if set)
 }
 
 export interface RestaurantReservation {
@@ -83,6 +84,7 @@ export interface RestaurantReservation {
   currency: string;
   status: ReservationStatus;
   notes?: string;
+  imageUrl?: string; // Direct image URL (from Yelp, Google Places, etc.)
 }
 
 export interface ActivityReservation {
@@ -95,6 +97,7 @@ export interface ActivityReservation {
   currency: string;
   status: ReservationStatus;
   notes?: string;
+  imageUrl?: string; // Direct image URL (from Amadeus, Google Places, etc.)
 }
 
 export interface TransportReservation {

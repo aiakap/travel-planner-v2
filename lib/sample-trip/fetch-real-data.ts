@@ -42,6 +42,7 @@ export interface YelpBusiness {
   id: string;
   name: string;
   url: string;
+  image_url?: string; // Restaurant image from Yelp
   rating: number;
   review_count: number;
   price?: string;
@@ -325,16 +326,20 @@ export async function fetchRestaurantReservation(
       venue: {
         name: business.name,
         address: business.location.display_address.join(', '),
+        city: business.location.city,
+        country: business.location.country || 'United States',
         lat: business.coordinates.latitude,
         lng: business.coordinates.longitude,
         timezone: 'UTC',
         phone: business.phone,
         url: business.url,
+        imageUrl: business.image_url, // Capture Yelp image
       },
       reservationTime: getReservationTime(search.date, search.mealType),
       partySize: 2,
       cost: estimateMealCost(search.priceRange),
       currency: 'USD',
+      imageUrl: business.image_url, // Also set directly on reservation
     };
 
     return {

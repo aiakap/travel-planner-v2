@@ -62,8 +62,8 @@ const RestaurantSearchSchema = z.object({
 });
 
 const SegmentSchema = z.object({
-  type: z.enum(["Travel", "Stay", "Tour", "Retreat", "Road Trip"]).describe("Segment type"),
-  name: z.string().describe("Segment name (e.g., 'Flight to Florence', 'Florence Exploration')"),
+  type: z.enum(["Travel", "Stay", "Tour", "Retreat", "Road Trip"]).describe("Segment type - use 'Stay' for destination segments (most common)"),
+  name: z.string().describe("Segment name - use the destination name (e.g., 'Half Moon Bay', 'Florence', 'Paris')"),
   startLocation: LocationSchema,
   endLocation: LocationSchema,
   startTime: z.string().describe("Segment start time in ISO format"),
@@ -170,19 +170,29 @@ End: ${tripEndDate}
 
 ## REQUIREMENTS
 
-1. **Segments**: Create logical segments:
-   - "Travel" segment for flights/trains between cities
-   - "Stay" segment for each destination where they stay overnight
-   - "Tour" for day trips or excursions
-   - Include realistic timings with proper timezones
+1. **Segments = Destinations (CRITICAL)**:
+   - Create ONE segment per distinct destination/city where the traveler spends time
+   - For single-destination trips (weekend getaway, city visit), create just ONE segment
+   - Only create a NEW segment when traveling to a DIFFERENT city/region requiring:
+     - A flight, OR
+     - A train journey of 2+ hours, OR
+     - A drive of 2+ hours
+   - Day trips from a base location stay within that base segment (NOT a separate segment)
+   - Name segments after the destination (e.g., "Half Moon Bay", "Florence", "Paris")
+   - Use "Stay" type for destination segments (most common)
+   - Use "Travel" type ONLY for transit-only segments (very rare - only for long layovers)
+   - Use "Road Trip" for multi-stop driving adventures
+   - Include ALL reservations for a destination within its segment (flights, hotels, restaurants, activities)
 
-2. **Flights** (for Travel segments):
+2. **Flights** (included IN the destination segment they arrive at):
    - Use real IATA codes
    - Origin from closest major airport to ${homeLocation}
    - Realistic departure/arrival times
    - Note why this routing fits their profile
+   - The outbound flight goes in the FIRST destination segment
+   - The return flight goes in the LAST destination segment
 
-3. **Hotels** (one per Stay segment):
+3. **Hotels** (one per segment where they stay overnight):
    - Match style to their preferences (${getHotelPreference(profileItems)})
    - Include realistic check-in/check-out dates
    - Explain why this style suits them
@@ -202,6 +212,23 @@ End: ${tripEndDate}
 6. **Profile References**: For EVERY choice (flights, hotels, activities, restaurants), include:
    - \`explanation\`: A sentence explaining WHY this was chosen for this specific traveler
    - \`profileReferences\`: Array of profile item IDs that influenced the choice (e.g., "hobbies-photography", "travel-preferences-boutique-hotels")
+
+7. **Duration Guidelines (CRITICAL)**:
+   - Weekend trips: MINIMUM 2 nights (Friday-Sunday or Saturday-Monday)
+   - Short trips (3-5 days): Match the full duration with appropriate nights (3 days = 2-3 nights)
+   - Week trips: 6-7 nights
+   - Hotels should span the ENTIRE stay at each destination
+   - Check-in on arrival day, check-out on departure day
+   - Example: A "Weekend in Tahoe" should have Fri night + Sat night hotel stay at minimum
+
+8. **Location Coordinates (CRITICAL)**:
+   - startLocation: Where the traveler departs FROM (their home city, e.g., San Francisco)
+   - endLocation: The ACTUAL destination where they'll stay and explore
+   - Use coordinates of the DESTINATION town/area, NOT the nearest major airport
+   - For Lake Tahoe: use South Lake Tahoe coordinates (~38.94, -119.97), NOT Sacramento
+   - For coastal towns: use the town center, NOT nearby cities
+   - For small destinations: use the actual town center coordinates
+   - The segment's endLocation determines where restaurants and activities are searched
 
 ## PROFILE ITEM ID FORMAT
 Use the format: "category-value" where:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,9 +25,18 @@ import {
 } from "lucide-react";
 
 const MapPinIcon = MapPin;
+import dynamic from "next/dynamic";
 import { TripSuggestionCard } from "@/components/trip-suggestion-card";
-import { TripSuggestionDetailModal } from "@/components/trip-suggestion-detail-modal";
 import type { AITripSuggestion } from "@/lib/ai/generate-trip-suggestions";
+
+// Dynamically import the modal for code splitting - only loaded when needed
+const TripSuggestionDetailModal = dynamic(
+  () => import("@/components/trip-suggestion-detail-modal").then(mod => mod.TripSuggestionDetailModal),
+  { 
+    ssr: false,
+    loading: () => null // No loading state needed since modal only shows when user clicks
+  }
+);
 import { generateLoadingMessages } from "@/lib/loading-messages";
 import { ProfileGraphItem, GraphCategory, GraphData } from "@/lib/types/profile-graph";
 
@@ -94,23 +103,20 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
   const [newlyAddedItems, setNewlyAddedItems] = useState<Set<string>>(new Set());
   const [animatingItems, setAnimatingItems] = useState<Map<string, { from: { x: number; y: number }; category: string }>>(new Map());
 
-  // Group profile items by category
-  const groupedProfile: GroupedProfile = profileItems.reduce((acc, item) => {
-    const category = item.category || 'other';
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(item);
-    return acc;
-  }, {} as GroupedProfile);
+  // Memoize grouped profile items by category
+  const groupedProfile = useMemo<GroupedProfile>(() => {
+    return profileItems.reduce((acc, item) => {
+      const category = item.category || 'other';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(item);
+      return acc;
+    }, {} as GroupedProfile);
+  }, [profileItems]);
 
-  const loadTripSuggestions = async () => {
-    if (!profileItems || profileItems.length === 0) {
-      setSuggestionsError("Please build your profile first before generating suggestions");
-      return;
-    }
-    
-    // Generate loading messages before starting - format data correctly
+  // Memoize profile data for loading messages
+  const loadingMessagesData = useMemo(() => {
     const hobbies = profileItems
       .filter(item => item.category === 'hobbies')
       .map(item => ({ hobby: { name: item.value, category: null } }));
@@ -131,11 +137,20 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
       .filter(item => item.category === 'family')
       .map(item => ({ relationshipType: item.value, nickname: null }));
     
-    const messages = generateLoadingMessages({
-      hobbies,
-      preferences,
-      relationships
-    });
+    return { hobbies, preferences, relationships };
+  }, [profileItems]);
+
+  // Memoize total items count
+  const totalItems = useMemo(() => profileItems.length, [profileItems]);
+
+  const loadTripSuggestions = useCallback(async () => {
+    if (!profileItems || profileItems.length === 0) {
+      setSuggestionsError("Please build your profile first before generating suggestions");
+      return;
+    }
+    
+    // Use memoized loading messages data
+    const messages = generateLoadingMessages(loadingMessagesData);
     setLoadingMessages(messages);
     setCurrentMessageIndex(0);
     
@@ -170,10 +185,10 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
       clearInterval(messageInterval);
       setLoadingSuggestions(false);
     }
-  };
+  }, [profileItems, loadingMessagesData, xmlData, userProfile]);
 
-  // Handle item deletion
-  const handleDeleteItem = async (item: ProfileGraphItem) => {
+  // Handle item deletion - memoized with useCallback
+  const handleDeleteItem = useCallback(async (item: ProfileGraphItem) => {
     try {
       // No need to lookup in graphData - we have the item directly from profileItems
       const response = await fetch("/api/profile-graph/delete-item", {
@@ -217,10 +232,10 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
     } catch (error) {
       console.error("Error deleting item:", error);
     }
-  };
+  }, []);
 
-  // Handle chat submit
-  const handleChatSubmit = async () => {
+  // Handle chat submit - memoized with useCallback
+  const handleChatSubmit = useCallback(async () => {
     if (!chatInput.trim() || isChatLoading) return;
 
     const userInput = chatInput.trim();
@@ -304,19 +319,42 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
       setIsChatLoading(false);
       chatInputRef.current?.focus();
     }
-  };
+  }, [chatInput, isChatLoading, profileOpen]);
 
-  // Handle key down in chat
-  const handleChatKeyDown = (e: React.KeyboardEvent) => {
+  // Handle key down in chat - memoized with useCallback
+  const handleChatKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleChatSubmit();
     }
-  };
+  }, [handleChatSubmit]);
 
   // Fetch images for trip suggestions using batch endpoint (single API call + server caching)
+  // Also uses sessionStorage for client-side caching across page views
   useEffect(() => {
     if (tripSuggestions.length > 0) {
+      // Generate a cache key based on suggestion queries
+      const cacheKey = `suggestion-images-${tripSuggestions
+        .map(s => s.imageQuery || s.destination)
+        .sort()
+        .join('|')}`;
+      
+      // Check sessionStorage cache first
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const cachedImages = JSON.parse(cached) as Record<number, string>;
+          // Verify cache has correct number of entries
+          if (Object.keys(cachedImages).length === tripSuggestions.length) {
+            setSuggestionImages(cachedImages);
+            return; // Use cached data, skip API call
+          }
+        }
+      } catch (e) {
+        // Ignore sessionStorage errors (e.g., in private browsing)
+        console.debug("SessionStorage not available:", e);
+      }
+
       // Build batch query for all suggestions
       const queries = tripSuggestions.map((suggestion, idx) => ({
         query: suggestion.imageQuery || suggestion.destination,
@@ -338,6 +376,14 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
               newImages[result.index] = result.url;
             });
             setSuggestionImages(newImages);
+            
+            // Cache in sessionStorage for future visits
+            try {
+              sessionStorage.setItem(cacheKey, JSON.stringify(newImages));
+            } catch (e) {
+              // Ignore quota exceeded or other storage errors
+              console.debug("Failed to cache images:", e);
+            }
           }
         })
         .catch((error) => {
@@ -353,22 +399,26 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
     }
   }, [tripSuggestions]);
 
-  const handleSuggestionClick = (suggestion: AITripSuggestion, imageUrl?: string) => {
+  // Handle suggestion click - memoized with useCallback
+  const handleSuggestionClick = useCallback((suggestion: AITripSuggestion, imageUrl?: string) => {
     setSelectedSuggestion(suggestion);
     setSelectedSuggestionImage(imageUrl);
-  };
+  }, []);
 
-  const handleCreateTripFromSuggestion = (suggestion: AITripSuggestion) => {
+  // Handle create trip from suggestion - memoized with useCallback
+  const handleCreateTripFromSuggestion = useCallback((suggestion: AITripSuggestion) => {
     // For now, just log - in the future this could navigate to trip creation
     console.log("Create trip from suggestion:", suggestion);
     alert(`Creating trip: ${suggestion.title}\n\nThis would navigate to trip creation with pre-filled data.`);
-  };
+  }, []);
 
-  // Calculate total items count
-  const totalItems = profileItems.length;
+  // Close modal handler - memoized with useCallback
+  const handleCloseModal = useCallback(() => {
+    setSelectedSuggestion(null);
+  }, []);
   
-  // Helper function to get category background color for animation
-  const getCategoryBgColor = (category: GraphCategory): string => {
+  // Helper function to get category background color for animation - memoized
+  const getCategoryBgColor = useCallback((category: GraphCategory): string => {
     const colors: Record<GraphCategory, string> = {
       "travel-preferences": "#dbeafe",
       "family": "#f3e8ff",
@@ -379,10 +429,10 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
       "other": "#f1f5f9"
     };
     return colors[category] || colors.other;
-  };
+  }, []);
   
-  // Animation variants for input pulse
-  const inputPulseVariants = {
+  // Animation variants for input pulse - memoized to prevent recreation
+  const inputPulseVariants = useMemo(() => ({
     idle: {
       scale: 1,
       boxShadow: "0 0 0 0px rgba(59, 130, 246, 0)"
@@ -400,7 +450,7 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
         ease: "easeInOut"
       }
     }
-  };
+  }), []);
 
   return (
     <div className="min-h-screen bg-slate-50 pt-16">
@@ -492,11 +542,13 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
                           </CardHeader>
                           <CardContent className="pt-0">
                             <div className="flex flex-wrap gap-1.5">
-                              <AnimatePresence>
-                                {items.map((item, idx) => {
-                                  const isAnimating = animatingItems.has(item.id);
-                                  const animData = animatingItems.get(item.id);
-                                  
+                              {items.map((item) => {
+                                const isAnimating = animatingItems.has(item.id);
+                                const animData = animatingItems.get(item.id);
+                                const isNew = newlyAddedItems.has(item.id);
+                                
+                                // Only use framer-motion for newly added items that need fly-in animation
+                                if (isAnimating && animData) {
                                   return (
                                     <motion.div
                                       key={item.id}
@@ -504,45 +556,38 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
                                       className="relative inline-flex items-center group"
                                       onMouseEnter={() => setHoveredItem(item.id)}
                                       onMouseLeave={() => setHoveredItem(null)}
-                                      initial={isAnimating && animData ? {
+                                      initial={{
                                         position: 'fixed',
                                         left: animData.from.x,
                                         top: animData.from.y,
                                         scale: 0.8,
                                         opacity: 0.8,
                                         zIndex: 1000
-                                      } : false}
-                                      animate={isAnimating ? {
+                                      }}
+                                      animate={{
                                         position: 'relative',
                                         left: 0,
                                         top: 0,
                                         scale: 1,
                                         opacity: 1,
                                         zIndex: 1
-                                      } : {}}
+                                      }}
                                       transition={{
                                         type: 'spring',
                                         duration: 0.8,
                                         bounce: 0.3
                                       }}
                                     >
-                                      <motion.div
-                                        initial={isAnimating ? {
-                                          backgroundColor: getCategoryBgColor(item.category as GraphCategory)
-                                        } : false}
-                                        animate={isAnimating ? {
-                                          backgroundColor: '#e2e8f0'
-                                        } : {}}
-                                        transition={{ duration: 0.6, delay: 0.4 }}
-                                        className="rounded-full"
+                                      <Badge 
+                                        variant="secondary" 
+                                        className="text-xs font-normal hover:bg-slate-300 transition-colors cursor-default"
+                                        style={{ 
+                                          backgroundColor: isNew ? getCategoryBgColor(item.category as GraphCategory) : undefined,
+                                          transition: 'background-color 0.6s ease-out 0.4s'
+                                        }}
                                       >
-                                        <Badge 
-                                          variant="secondary" 
-                                          className="text-xs font-normal hover:bg-slate-300 transition-colors cursor-default"
-                                        >
-                                          {item.value}
-                                        </Badge>
-                                      </motion.div>
+                                        {item.value}
+                                      </Badge>
                                       {hoveredItem === item.id && (
                                         <button
                                           onClick={() => handleDeleteItem(item)}
@@ -554,8 +599,35 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
                                       )}
                                     </motion.div>
                                   );
-                                })}
-                              </AnimatePresence>
+                                }
+                                
+                                // Use simple CSS for non-animating items (better performance)
+                                return (
+                                  <div
+                                    key={item.id}
+                                    data-item-id={item.id}
+                                    className="relative inline-flex items-center group transition-transform hover:scale-105"
+                                    onMouseEnter={() => setHoveredItem(item.id)}
+                                    onMouseLeave={() => setHoveredItem(null)}
+                                  >
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="text-xs font-normal hover:bg-slate-300 transition-colors cursor-default"
+                                    >
+                                      {item.value}
+                                    </Badge>
+                                    {hoveredItem === item.id && (
+                                      <button
+                                        onClick={() => handleDeleteItem(item)}
+                                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors z-10"
+                                        title="Delete"
+                                      >
+                                        <X className="w-2.5 h-2.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </CardContent>
                         </Card>
@@ -656,7 +728,7 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
           suggestion={selectedSuggestion}
           imageUrl={selectedSuggestionImage}
           isOpen={!!selectedSuggestion}
-          onClose={() => setSelectedSuggestion(null)}
+          onClose={handleCloseModal}
           onCreateTrip={handleCreateTripFromSuggestion}
           profileItems={profileItems}
           userProfile={userProfile}

@@ -341,6 +341,12 @@ export function buildReservationSpecificData(res: AnyReservation): any {
     data.timeZoneName = hotel.venue.timezone;
     data.url = hotel.venue.url;
     data.contactPhone = hotel.venue.phone;
+    // Image URL - prefer direct imageUrl, fallback to venue.imageUrl
+    if (hotel.imageUrl) {
+      data.imageUrl = hotel.imageUrl;
+    } else if (hotel.venue.imageUrl) {
+      data.imageUrl = hotel.venue.imageUrl;
+    }
   }
   
   // Handle restaurants
@@ -356,6 +362,12 @@ export function buildReservationSpecificData(res: AnyReservation): any {
     data.timeZoneName = restaurant.venue.timezone;
     data.url = restaurant.venue.url;
     data.contactPhone = restaurant.venue.phone;
+    // Image URL - prefer direct imageUrl (from Yelp), fallback to venue.imageUrl
+    if (restaurant.imageUrl) {
+      data.imageUrl = restaurant.imageUrl;
+    } else if (restaurant.venue.imageUrl) {
+      data.imageUrl = restaurant.venue.imageUrl;
+    }
   }
   
   // Handle activities
@@ -381,6 +393,12 @@ export function buildReservationSpecificData(res: AnyReservation): any {
     data.timeZoneId = activity.venue.timezone;
     data.timeZoneName = activity.venue.timezone;
     data.url = activity.venue.url;
+    // Image URL - prefer direct imageUrl, fallback to venue.imageUrl
+    if (activity.imageUrl) {
+      data.imageUrl = activity.imageUrl;
+    } else if (activity.venue.imageUrl) {
+      data.imageUrl = activity.venue.imageUrl;
+    }
   }
   
   // Handle transport
@@ -406,6 +424,19 @@ export function buildReservationSpecificData(res: AnyReservation): any {
     data.timeZoneId = transport.pickupLocation.timezone;
     data.timeZoneName = transport.pickupLocation.timezone;
     data.vendor = transport.vendor;
+  }
+
+  // Extract and store wall (local) date and time from the full datetime
+  // This ensures the view displays the correct local time without timezone conversion issues
+  if (data.startTime instanceof Date) {
+    // For wall times, we store the date and time as they appear in the source data
+    // (which is already in local time for the destination)
+    data.wall_start_date = data.startTime;
+    data.wall_start_time = data.startTime;
+  }
+  if (data.endTime instanceof Date) {
+    data.wall_end_date = data.endTime;
+    data.wall_end_time = data.endTime;
   }
 
   return data;

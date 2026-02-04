@@ -19,11 +19,10 @@ export default async function ManagePage({ params }: PageProps) {
 
   const paramsResolved = await params;
 
-  // Fetch user's trips
+  // Fetch user's trips (including drafts for filtering)
   const trips = await prisma.trip.findMany({
     where: { 
-      userId: session.user.id,
-      status: { not: 'DRAFT' }
+      userId: session.user.id
     },
     include: {
       segments: {
@@ -68,7 +67,12 @@ export default async function ManagePage({ params }: PageProps) {
     let statusColor: "info" | "success" | "default" | "warning" = "info"
     
     const now = new Date()
-    if (trip.startDate > now) {
+    
+    // Check if trip is a draft first
+    if (trip.status === 'DRAFT') {
+      status = "Draft"
+      statusColor = "warning"
+    } else if (trip.startDate > now) {
       // Trip is in the future
       const daysUntil = Math.ceil((trip.startDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
       if (daysUntil <= 30) {
@@ -108,7 +112,8 @@ export default async function ManagePage({ params }: PageProps) {
       duration,
       cost: costStr,
       reservations: totalReservations,
-      image: trip.imageUrl || "/placeholder.svg"
+      image: trip.imageUrl || "/placeholder.svg",
+      dbStatus: trip.status // Original database status for filtering
     }
   }))
 

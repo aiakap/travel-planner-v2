@@ -11,6 +11,11 @@ import { generateAllDays, mapToCalendarData, getDayOfWeek, getSegmentDaysWithMom
 import { editReservation } from "../lib/chat-integration"
 import { useOptimisticDelete } from "@/hooks/use-optimistic-delete"
 import { deleteReservation } from "@/lib/actions/delete-reservation"
+import { 
+  TripSuggestionBanner, 
+  SegmentSuggestionReason,
+  SuggestionIndicator,
+} from "./suggestion-reason-display"
 
 interface JourneyViewProps {
   itinerary: ViewItinerary
@@ -128,6 +133,15 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Trip-level suggestion banner for AI-generated trips */}
+      {optimisticItinerary.isSample && optimisticItinerary.suggestionSummary && (
+        <TripSuggestionBanner
+          suggestionSummary={optimisticItinerary.suggestionSummary}
+          suggestionParameters={optimisticItinerary.suggestionParameters}
+          profileReferences={optimisticItinerary.profileReferences}
+        />
+      )}
+
        {/* Visual Calendar Grid */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center mb-3">
@@ -200,6 +214,8 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
       <div className="space-y-8">
         {calendarData.chapters.map((chapter) => {
           const chapterMoments = calendarData.moments.filter(m => m.chapterId === chapter.id)
+          // Look up segment to access suggestion reason
+          const chapterSegment = optimisticItinerary.segments.find(s => s.id === chapter.id)
           
           return (
             <div key={chapter.id} id={`segment-${chapter.id}`} className={`relative scroll-mt-[120px] ${
@@ -225,6 +241,14 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
                           </>
                         )}
                       </div>
+                      {/* Segment-level suggestion reason */}
+                      {chapterSegment?.suggestionReason && (
+                        <SegmentSuggestionReason
+                          suggestionReason={chapterSegment.suggestionReason}
+                          profileReferences={chapterSegment.profileReferences}
+                          className="mt-1"
+                        />
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-1">
@@ -290,6 +314,8 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
                             <div className="space-y-2 ml-1">
                               {dayObj.moments.map((moment) => {
                                 const momentId = `${moment.month}-${moment.date}`
+                                // Look up the reservation to access isSample and suggestionReason
+                                const reservation = segment.reservations.find(r => r.id === moment.id)
                                 
                                 // Render continuation indicator for multi-day reservations (days 2+)
                                 if (moment.isContinuation) {
@@ -364,6 +390,14 @@ export function JourneyView({ itinerary, scrollToId }: JourneyViewProps) {
                                             <div className="flex items-center gap-2 mb-0.5">
                                               <h4 className="font-bold text-sm text-slate-900 truncate">{moment.title}</h4>
                                               <moment.icon className="text-slate-400 flex-shrink-0" size={14} />
+                                              {/* AI suggestion indicator */}
+                                              {reservation?.isSample && reservation?.suggestionReason && (
+                                                <SuggestionIndicator
+                                                  suggestionReason={reservation.suggestionReason}
+                                                  profileReferences={reservation.profileReferences}
+                                                  compact
+                                                />
+                                              )}
                                               {/* Multi-day badge for hotels */}
                                               {moment.isMultiDay && moment.totalNights && moment.totalNights > 1 && (
                                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-0.5">

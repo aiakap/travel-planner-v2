@@ -49,6 +49,7 @@ export interface VenueLocation {
   phone?: string;
   priceLevel?: number; // 1-4 scale (Google Places standard)
   rating?: number;
+  imageUrl?: string; // Image URL from API (Yelp, Google Places, etc.)
 }
 
 export interface CityLocation {

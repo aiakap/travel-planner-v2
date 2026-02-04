@@ -1,6 +1,6 @@
 "use client"
 
-import { Calendar, Wallet, Ticket, Share2, MoreHorizontal, ArrowRight } from "lucide-react"
+import { Calendar, Wallet, Ticket, Share2, MoreHorizontal, ArrowRight, PlayCircle, Trash2 } from "lucide-react"
 import { Badge } from "./badge"
 import { useRouter } from "next/navigation"
 
@@ -15,17 +15,25 @@ export interface TripSummary {
   cost: string
   reservations: number
   image: string
+  dbStatus: string // Original database status (DRAFT, PLANNING, LIVE, ARCHIVED)
 }
 
 interface TripListRowProps {
   trip: TripSummary
+  onDelete?: (trip: TripSummary) => void
 }
 
-export const TripListRow = ({ trip }: TripListRowProps) => {
+export const TripListRow = ({ trip, onDelete }: TripListRowProps) => {
   const router = useRouter()
+  const isDraft = trip.dbStatus === 'DRAFT'
 
   const handleClick = () => {
-    router.push(`/view1/${trip.id}`)
+    if (isDraft) {
+      // Continue editing draft trip
+      router.push(`/trip/new?tripId=${trip.id}`)
+    } else {
+      router.push(`/view1/${trip.id}`)
+    }
   }
 
   return (
@@ -75,6 +83,16 @@ export const TripListRow = ({ trip }: TripListRowProps) => {
             >
               <MoreHorizontal size={18} />
             </button>
+            <button 
+              className="p-2 hover:bg-rose-100 rounded-full text-slate-400 hover:text-rose-600 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete?.(trip)
+              }}
+              title="Delete trip"
+            >
+              <Trash2 size={18} />
+            </button>
           </div>
         </div>
 
@@ -113,9 +131,15 @@ export const TripListRow = ({ trip }: TripListRowProps) => {
         </div>
 
         <div className="flex items-center justify-end mt-3">
-          <span className="text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-            Enter Experience <ArrowRight size={14} />
-          </span>
+          {isDraft ? (
+            <span className="text-xs font-bold text-amber-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
+              <PlayCircle size={14} /> Continue Planning
+            </span>
+          ) : (
+            <span className="text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
+              Enter Experience <ArrowRight size={14} />
+            </span>
+          )}
         </div>
       </div>
     </div>

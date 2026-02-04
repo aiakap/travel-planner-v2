@@ -30,6 +30,7 @@ export async function deleteTrip(tripId: string) {
   });
 
   revalidatePath("/manage");
+  revalidatePath("/manage1");
   
   return { success: true };
 }

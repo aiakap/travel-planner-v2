@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Calendar, DollarSign, Car, Plane, Train } from "lucide-react";
@@ -13,54 +13,92 @@ interface TripSuggestionCardProps {
   onClick: () => void;
 }
 
-export function TripSuggestionCard({ suggestion, imageUrl, onClick }: TripSuggestionCardProps) {
+// Type labels constant - defined outside component to avoid recreation
+const TRIP_TYPE_LABELS = {
+  local_experience: { label: "Local", color: "bg-green-100 text-green-700" },
+  road_trip: { label: "Road Trip", color: "bg-blue-100 text-blue-700" },
+  single_destination: { label: "Single Stop", color: "bg-purple-100 text-purple-700" },
+  multi_destination: { label: "Multi-City", color: "bg-orange-100 text-orange-700" },
+} as const;
+
+export const TripSuggestionCard = React.memo(function TripSuggestionCard({ 
+  suggestion, 
+  imageUrl, 
+  onClick 
+}: TripSuggestionCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   
+  // Intersection Observer state for lazy loading map
+  const [isMapInView, setIsMapInView] = useState(false);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  
   // Reset image loaded state when imageUrl changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (imageUrl) {
       setImageLoaded(false);
       setImageError(false);
     }
   }, [imageUrl]);
-  // Generate mini map URL
-  const mapUrl = suggestion.destinationLat && suggestion.destinationLng
-    ? generateSuggestionMapUrl(
-        {
-          destinationLat: suggestion.destinationLat,
-          destinationLng: suggestion.destinationLng,
-          keyLocations: suggestion.keyLocations,
-          tripType: suggestion.tripType,
-        },
-        300, // width
-        120  // height
-      )
-    : null;
 
-  const getTransportIcon = () => {
+  // Intersection Observer for lazy loading map images
+  useEffect(() => {
+    const mapContainer = mapContainerRef.current;
+    if (!mapContainer) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsMapInView(true);
+          // Disconnect once the map is in view - no need to observe anymore
+          observer.disconnect();
+        }
+      },
+      {
+        threshold: 0.1, // Trigger when 10% of the element is visible
+        rootMargin: '100px', // Start loading slightly before it enters viewport
+      }
+    );
+
+    observer.observe(mapContainer);
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Memoize map URL generation
+  const mapUrl = useMemo(() => {
+    if (!suggestion.destinationLat || !suggestion.destinationLng) return null;
+    return generateSuggestionMapUrl(
+      {
+        destinationLat: suggestion.destinationLat,
+        destinationLng: suggestion.destinationLng,
+        keyLocations: suggestion.keyLocations,
+        tripType: suggestion.tripType,
+      },
+      300, // width
+      120  // height
+    );
+  }, [suggestion.destinationLat, suggestion.destinationLng, suggestion.keyLocations, suggestion.tripType]);
+
+  // Memoize transport icon
+  const transportIcon = useMemo(() => {
     const mode = suggestion.transportMode?.toLowerCase() || "";
     if (mode.includes("plane")) return <Plane className="h-3 w-3" />;
     if (mode.includes("car")) return <Car className="h-3 w-3" />;
     if (mode.includes("train")) return <Train className="h-3 w-3" />;
     return <MapPin className="h-3 w-3" />;
-  };
+  }, [suggestion.transportMode]);
 
-  const getTripTypeBadge = () => {
-    const typeLabels = {
-      local_experience: { label: "Local", color: "bg-green-100 text-green-700" },
-      road_trip: { label: "Road Trip", color: "bg-blue-100 text-blue-700" },
-      single_destination: { label: "Single Stop", color: "bg-purple-100 text-purple-700" },
-      multi_destination: { label: "Multi-City", color: "bg-orange-100 text-orange-700" },
-    };
-    const typeInfo = typeLabels[suggestion.tripType as keyof typeof typeLabels] || typeLabels.single_destination;
-    return (
-      <Badge className={`text-xs ${typeInfo.color} absolute top-3 right-3 shadow-sm`} variant="secondary">
-        {typeInfo.label}
-      </Badge>
-    );
-  };
+  // Memoize trip type badge info
+  const tripTypeInfo = useMemo(() => {
+    return TRIP_TYPE_LABELS[suggestion.tripType as keyof typeof TRIP_TYPE_LABELS] || TRIP_TYPE_LABELS.single_destination;
+  }, [suggestion.tripType]);
+
+  // Memoize callbacks
+  const handleImageLoad = useCallback(() => setImageLoaded(true), []);
+  const handleImageError = useCallback(() => setImageError(true), []);
+  const handleMapLoad = useCallback(() => setMapLoaded(true), []);
 
   return (
     <Card 
@@ -78,18 +116,16 @@ export function TripSuggestionCard({ suggestion, imageUrl, onClick }: TripSugges
         
         {/* Actual image */}
         {imageUrl && !imageError && (
-          <>
-            <img
-              src={imageUrl}
-              alt={suggestion.title}
-              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-110 ${
-                imageLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-              loading="lazy"
-              onLoad={() => setImageLoaded(true)}
-              onError={() => setImageError(true)}
-            />
-          </>
+          <img
+            src={imageUrl}
+            alt={suggestion.title}
+            className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-110 ${
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+            loading="lazy"
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+          />
         )}
         
         {/* Error state */}
@@ -100,7 +136,9 @@ export function TripSuggestionCard({ suggestion, imageUrl, onClick }: TripSugges
         )}
         
         {/* Trip Type Badge */}
-        {getTripTypeBadge()}
+        <Badge className={`text-xs ${tripTypeInfo.color} absolute top-3 right-3 shadow-sm`} variant="secondary">
+          {tripTypeInfo.label}
+        </Badge>
       </div>
 
       {/* Content Section */}
@@ -123,24 +161,29 @@ export function TripSuggestionCard({ suggestion, imageUrl, onClick }: TripSugges
           </span>
         </div>
 
-        {/* Mini Map */}
+        {/* Mini Map - Lazy loaded with Intersection Observer */}
         {mapUrl && (
-          <div className="rounded-lg overflow-hidden border border-slate-200 shadow-sm relative">
-            {/* Map skeleton loader */}
-            {!mapLoaded && (
+          <div 
+            ref={mapContainerRef}
+            className="rounded-lg overflow-hidden border border-slate-200 shadow-sm relative h-[120px]"
+          >
+            {/* Map skeleton loader - show while not in view or loading */}
+            {(!isMapInView || !mapLoaded) && (
               <div className="absolute inset-0 animate-pulse bg-slate-200 flex items-center justify-center">
                 <MapPin className="h-8 w-8 text-slate-400" />
               </div>
             )}
-            <img
-              src={mapUrl}
-              alt={`Map of ${suggestion.destination}`}
-              className={`w-full h-[120px] object-cover transition-opacity duration-500 ${
-                mapLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-              loading="lazy"
-              onLoad={() => setMapLoaded(true)}
-            />
+            {/* Only render map image when in viewport */}
+            {isMapInView && (
+              <img
+                src={mapUrl}
+                alt={`Map of ${suggestion.destination}`}
+                className={`w-full h-[120px] object-cover transition-opacity duration-500 ${
+                  mapLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
+                onLoad={handleMapLoad}
+              />
+            )}
           </div>
         )}
 
@@ -151,7 +194,7 @@ export function TripSuggestionCard({ suggestion, imageUrl, onClick }: TripSugges
             {suggestion.estimatedBudget}
           </span>
           <span className="flex items-center gap-1 text-slate-500">
-            {getTransportIcon()}
+            {transportIcon}
             <span className="text-xs">{suggestion.transportMode}</span>
           </span>
         </div>
@@ -179,4 +222,4 @@ export function TripSuggestionCard({ suggestion, imageUrl, onClick }: TripSugges
       </div>
     </Card>
   );
-}
+});
