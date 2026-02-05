@@ -11,6 +11,7 @@ import { parseConversationalMessage, isConversationalMessage } from "@/lib/ai/pa
 import { GraphCategory, GRAPH_CATEGORIES } from "@/lib/types/profile-graph";
 import { Button } from "./ui/button";
 import { Sparkles } from "lucide-react";
+import { normalizeProfileValueText } from "@/lib/profile/normalize-profile-value";
 
 export interface ConversationalMessageProps {
   message: string;
@@ -136,7 +137,7 @@ export function ConversationalMessage({
                 } else if (segment.type === 'suggestion' && segment.suggestion) {
                   // Check if this item is already in the profile
                   const isExisting = existingProfileValues?.has(
-                    segment.suggestion.text.toLowerCase()
+                    normalizeProfileValueText(segment.suggestion.text).toLowerCase()
                   );
                   
                   if (isExisting) {

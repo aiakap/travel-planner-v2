@@ -667,3 +667,28 @@ export async function removePreferredAirport(iataCode: string) {
   revalidateTag(`user-profile-${session.user.id}`);
   revalidatePath("/profile");
 }
+
+// Update user avatar image
+export async function updateUserAvatar(imageUrl: string) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Not authenticated");
+  }
+
+  // Validate URL format
+  if (!imageUrl || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
+    throw new Error("Invalid image URL");
+  }
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { image: imageUrl },
+  });
+
+  revalidateTag(`user-profile-${session.user.id}`);
+  revalidatePath("/profile");
+  revalidatePath("/profile1");
+  revalidatePath("/");
+  
+  return { success: true, imageUrl };
+}

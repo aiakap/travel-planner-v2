@@ -10,7 +10,6 @@ interface Airport {
   city: string;
   country: string;
   displayName: string;
-  hasIATA?: boolean;
 }
 
 interface AirportAutocompleteInputProps {
@@ -53,55 +52,23 @@ export function AirportAutocompleteInput({
       setLoading(true);
       setError(null);
       try {
-        console.log("Searching airports for:", query);
+        const response = await fetch(`/api/airports/search?q=${encodeURIComponent(query)}`);
         
-        // Try Google Places first (more reliable)
-        const googleResponse = await fetch(`/api/airports/search-google?q=${encodeURIComponent(query)}`);
-        console.log("Google Places airport search status:", googleResponse.status);
-        
-        if (googleResponse.ok) {
-          const googleData = await googleResponse.json();
-          console.log("Google Places airport search data:", googleData);
+        if (response.ok) {
+          const data = await response.json();
           
-          if (googleData.airports && googleData.airports.length > 0) {
-            setResults(googleData.airports);
+          if (data.airports && data.airports.length > 0) {
+            setResults(data.airports);
             setShowDropdown(true);
           } else {
-            // Fallback to Amadeus if Google returns no results
-            console.log("No Google results, trying Amadeus...");
-            const amadeusResponse = await fetch(`/api/airports/search?q=${encodeURIComponent(query)}`);
-            
-            if (amadeusResponse.ok) {
-              const amadeusData = await amadeusResponse.json();
-              console.log("Amadeus fallback data:", amadeusData);
-              setResults(amadeusData.airports || []);
-              setShowDropdown(true);
-              if (!amadeusData.airports || amadeusData.airports.length === 0) {
-                setError("No airports found");
-              }
-            } else {
-              setError("No airports found");
-              setResults([]);
-              setShowDropdown(true);
-            }
-          }
-        } else {
-          // If Google fails, try Amadeus
-          console.log("Google failed, trying Amadeus...");
-          const amadeusResponse = await fetch(`/api/airports/search?q=${encodeURIComponent(query)}`);
-          
-          if (amadeusResponse.ok) {
-            const amadeusData = await amadeusResponse.json();
-            setResults(amadeusData.airports || []);
-            setShowDropdown(true);
-            if (!amadeusData.airports || amadeusData.airports.length === 0) {
-              setError("No airports found");
-            }
-          } else {
-            setError("Failed to search airports");
+            setError("No airports found");
             setResults([]);
             setShowDropdown(true);
           }
+        } else {
+          setError("Failed to search airports");
+          setResults([]);
+          setShowDropdown(true);
         }
       } catch (error) {
         console.error("Airport search error:", error);
@@ -205,13 +172,8 @@ export function AirportAutocompleteInput({
             >
               <Plane className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate flex items-center gap-1.5">
-                  <span>{airport.name} ({airport.iataCode})</span>
-                  {airport.hasIATA === false && (
-                    <span className="text-[10px] bg-orange-100 text-orange-700 px-1 py-0.5 rounded">
-                      estimated
-                    </span>
-                  )}
+                <div className="text-sm font-medium truncate">
+                  {airport.name} ({airport.iataCode})
                 </div>
                 <div className="text-xs text-gray-500 truncate">
                   {airport.city}, {airport.country}

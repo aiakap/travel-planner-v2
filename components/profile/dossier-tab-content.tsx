@@ -22,6 +22,7 @@ import { Trash2, MessageCircle, Network, FileText, GripVertical, Loader2, Send, 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PendingSuggestion, InlineSuggestion, GraphCategory } from "@/lib/types/profile-graph";
+import { normalizeProfileValueText } from "@/lib/profile/normalize-profile-value";
 
 interface DossierTabContentProps {
   initialGraphData: GraphData;
@@ -114,7 +115,7 @@ export function DossierTabContent({
     const values = new Set<string>();
     graphData.nodes.forEach(node => {
       if (node.type === 'item' && node.value) {
-        values.add(node.value.toLowerCase());
+        values.add(normalizeProfileValueText(node.value).toLowerCase());
       }
     });
     return values;

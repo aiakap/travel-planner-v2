@@ -1,0 +1,34 @@
+@import "../../view1/styles/shared-theme.css";
+
+@layer base {
+  .profile1-theme {
+    @apply ntourage-theme;
+  }
+}
+
+@layer components {
+  .profile1-card {
+    background-color: var(--ntourage-surface);
+    border: 1px solid var(--ntourage-border);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-md);
+  }
+
+  .profile1-muted {
+    color: var(--ntourage-muted);
+  }
+
+  .profile1-pill {
+    border: 1px solid var(--ntourage-border);
+    background-color: #ffffff;
+    border-radius: 9999px;
+    transition: all 150ms ease;
+  }
+
+  .profile1-pill-active {
+    background-color: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+    box-shadow: var(--shadow-md);
+  }
+}

@@ -49,6 +49,7 @@ export function PlacesAutocompleteInput({
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<NodeJS.Timeout>();
@@ -62,7 +63,8 @@ export function PlacesAutocompleteInput({
 
   // Search places with debounce
   useEffect(() => {
-    if (query.trim().length < 3) {
+    // Avoid auto-lookup until the user actually interacts (focus or types)
+    if (!hasInteracted || query.trim().length < 3) {
       setResults([]);
       setShowDropdown(false);
       return;
@@ -182,9 +184,18 @@ export function PlacesAutocompleteInput({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    if (!hasInteracted) {
+      setHasInteracted(true);
+    }
     setQuery(value);
     if (controlledOnChange) {
       controlledOnChange(value);
+    }
+  };
+
+  const handleFocus = () => {
+    if (!hasInteracted) {
+      setHasInteracted(true);
     }
   };
 
@@ -197,6 +208,7 @@ export function PlacesAutocompleteInput({
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          onFocus={handleFocus}
           placeholder={placeholder}
           className={className}
         />

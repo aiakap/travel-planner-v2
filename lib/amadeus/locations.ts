@@ -106,7 +106,7 @@ export async function searchAirports(keyword: string, max: number = 10): Promise
     const response = await amadeus.referenceData.locations.get({
       keyword,
       subType: 'AIRPORT',
-      max,
+      'page[limit]': max,
     });
 
     console.log(`✅ Found ${response.data.length} airports`);

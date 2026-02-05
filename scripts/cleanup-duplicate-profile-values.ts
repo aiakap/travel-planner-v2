@@ -12,6 +12,7 @@
  */
 
 import { PrismaClient } from "@/app/generated/prisma/client";
+import { normalizeProfileValueText } from "@/lib/profile/normalize-profile-value";
 
 const prisma = new PrismaClient();
 
@@ -70,7 +71,7 @@ async function cleanupDuplicateProfileValues() {
     const duplicateGroups: Map<string, DuplicateGroup> = new Map();
 
     for (const upv of userProfileValues) {
-      const normalizedValue = upv.value.value.toLowerCase().trim();
+      const normalizedValue = normalizeProfileValueText(upv.value.value).toLowerCase();
       const groupKey = `${upv.userId}:${normalizedValue}`;
       
       if (!duplicateGroups.has(groupKey)) {

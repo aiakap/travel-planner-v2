@@ -16,6 +16,7 @@ import {
 } from './types/profile-graph';
 import { createSubnodes } from './subnode-logic';
 import { calculateHubSpokeLayout } from './graph-layout';
+import { normalizeProfileValueText } from "./profile/normalize-profile-value";
 
 /**
  * Type for UserProfileValue with full category relations
@@ -210,7 +211,7 @@ export function convertUserValuesToGraphData(
   const categoryGroups = new Map<string, UserProfileValueWithRelations[]>();
   
   for (const uv of userValues) {
-    const valueKey = uv.value.value.toLowerCase();
+    const valueKey = normalizeProfileValueText(uv.value.value).toLowerCase();
     
     // Check if we've seen this value before (in ANY category)
     if (seenValues.has(valueKey)) {

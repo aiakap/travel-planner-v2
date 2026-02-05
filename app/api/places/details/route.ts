@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       'formatted_phone_number', 'international_phone_number', 'website',
       'opening_hours', 'business_status', 'price_level', 'user_ratings_total',
       'url', 'plus_code', 'wheelchair_accessible_entrance', 'reviews',
-      'editorial_summary', 'place_id', 'vicinity'
+      'editorial_summary', 'place_id', 'vicinity', 'address_component'
     ].join(',');
     
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(
@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
         },
         placeId,
         types: result.types,
+        addressComponents: result.address_components || [],
         // Full result for inspection
         result: data.result,
         status: "success"

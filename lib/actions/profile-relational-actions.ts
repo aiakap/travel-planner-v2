@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { normalizeProfileValueText } from "@/lib/profile/normalize-profile-value";
 
 /**
  * Get all profile categories with their hierarchy
@@ -145,29 +146,39 @@ export async function addProfileValue(
   metadata?: any
 ) {
   try {
+    const normalizedValue = normalizeProfileValueText(value);
+    if (!normalizedValue) {
+      return { success: false, error: "Value is required" };
+    }
+
     // Use a serializable transaction to prevent race conditions
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Check for existing value (case-insensitive) in ANY category first
-      // This is the primary duplicate prevention check
-      const existingByValue = await tx.userProfileValue.findFirst({
-        where: {
-          userId,
+      // 1. Robust duplicate prevention (normalized, across ANY category)
+      // We cannot rely on Prisma "equals" alone because invisible unicode/whitespace variants
+      // may render identical but not compare equal.
+      const existingUserValues = await tx.userProfileValue.findMany({
+        where: { userId },
+        select: {
+          id: true,
           value: {
-            value: { equals: value, mode: 'insensitive' }
-          }
+            select: {
+              value: true,
+              category: { select: { slug: true } },
+            },
+          },
         },
-        include: {
-          value: {
-            include: {
-              category: true
-            }
-          }
-        }
       });
 
-      if (existingByValue) {
-        console.log(`[addProfileValue] Skipping duplicate value "${value}" - already exists in category "${existingByValue.value.category.slug}"`);
-        return { success: false, error: 'Value already exists for this user', isDuplicate: true };
+      const existingMatch = existingUserValues.find((uv) => {
+        const existingNormalized = normalizeProfileValueText(uv.value.value);
+        return existingNormalized.toLowerCase() === normalizedValue.toLowerCase();
+      });
+
+      if (existingMatch) {
+        console.log(
+          `[addProfileValue] Skipping duplicate value "${normalizedValue}" - already exists in category "${existingMatch.value.category.slug}"`
+        );
+        return { success: false, error: "Value already exists for this user", isDuplicate: true };
       }
 
       // 2. Find the category
@@ -183,12 +194,12 @@ export async function addProfileValue(
       const profileValue = await tx.profileValue.upsert({
         where: {
           value_categoryId: {
-            value: value,
+            value: normalizedValue,
             categoryId: category.id
           }
         },
         create: {
-          value: value,
+          value: normalizedValue,
           categoryId: category.id
         },
         update: {}
@@ -225,7 +236,7 @@ export async function addProfileValue(
         }
       });
 
-      console.log(`[addProfileValue] Successfully added "${value}" to category "${categorySlug}" for user ${userId}`);
+      console.log(`[addProfileValue] Successfully added "${normalizedValue}" to category "${categorySlug}" for user ${userId}`);
       return { success: true, data: userValue };
     }, {
       // Serializable isolation level prevents phantom reads and race conditions

@@ -188,6 +188,7 @@ export function PersonalInfoSection({
       let city = "";
       let state = "";
       let country = "";
+      let countryCode = "";
       
       for (const component of addressComponents) {
         const types = component.types || [];
@@ -202,7 +203,8 @@ export function PersonalInfoSection({
           state = component.long_name;
         } else if (types.includes("country")) {
           country = component.long_name;
-          console.log("Country found:", country, "Component:", component);
+          countryCode = (component.short_name || "").toUpperCase();
+          console.log("Country found:", country, "Code:", countryCode, "Component:", component);
         }
       }
       
@@ -222,15 +224,27 @@ export function PersonalInfoSection({
       
       // Use formatted address if no street address was found
       const finalAddress = streetAddress.trim() || placeDetails.formattedAddress || "";
+      const countryName = country || (countryCode ? getCountryName(countryCode) : "");
       
-      console.log("Parsed address data:", { finalAddress, city, country });
+      console.log("Parsed address data:", { finalAddress, city, country: countryName, countryCode });
       
-      // ALWAYS update all three fields, even if they already have values
-      const updateData = {
+      // ALWAYS update all fields, even if they already have values
+      const updateData: {
+        address: string;
+        city?: string;
+        country?: string;
+        countryOfResidence?: string;
+      } = {
         address: finalAddress,
         city: city || "",
-        country: country || "",
       };
+      
+      if (countryName) {
+        updateData.country = countryName;
+      }
+      if (countryCode) {
+        updateData.countryOfResidence = countryCode;
+      }
       
       await updateUserProfile(updateData);
       
@@ -238,7 +252,8 @@ export function PersonalInfoSection({
         ...formData,
         address: finalAddress,
         city: city || "",
-        country: country || "",
+        country: countryName || formData.country,
+        countryOfResidence: countryCode || formData.countryOfResidence,
       });
       
       // Mark auto-save fields as saved to prevent double-saving

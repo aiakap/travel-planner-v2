@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { processProfileGraphChat, extractExplicitItems, processProfileGraphChatCards } from "@/lib/ai/profile-graph-chat";
 import { addGraphItem, getUserProfileGraph, getProfileGraphItems } from "@/lib/actions/profile-graph-actions";
+import { normalizeProfileValueText } from "@/lib/profile/normalize-profile-value";
 
 export const maxDuration = 60;
 
@@ -58,18 +59,19 @@ export async function POST(req: NextRequest) {
     
     for (const item of extractedItems) {
       try {
-        console.log("➕ [Profile Graph API] Attempting to add:", item.value, "to category:", item.category);
+        const normalizedValue = normalizeProfileValueText(item.value);
+        console.log("➕ [Profile Graph API] Attempting to add:", normalizedValue, "to category:", item.category);
         const result = await addGraphItem(
           item.category,
           item.subcategory,
-          item.value,
+          normalizedValue,
           item.metadata
         );
-        console.log("✅ [Profile Graph API] Successfully added:", item.value);
+        console.log("✅ [Profile Graph API] Successfully added:", normalizedValue);
         addedItems.push({
           category: item.category,
           subcategory: item.subcategory,
-          value: item.value,
+          value: normalizedValue,
           metadata: item.metadata
         });
       } catch (error) {
@@ -89,8 +91,8 @@ export async function POST(req: NextRequest) {
       console.log("🎴 [Profile Graph API] Phase 2: Generating card-based response...");
       const cardResponse = await processProfileGraphChatCards(message, conversationHistory, updatedProfileItems);
       
-      // Create a set of already-added values (case-insensitive) for duplicate prevention
-      const addedValuesSet = new Set(addedItems.map(i => i.value.toLowerCase()));
+      // Create a set of already-added values (normalized + case-insensitive) for duplicate prevention
+      const addedValuesSet = new Set(addedItems.map(i => normalizeProfileValueText(i.value).toLowerCase()));
       
       // Filter and annotate cards to prevent duplicate additions
       // - Remove AUTO_ADD cards for items already added in Phase 1
@@ -99,7 +101,7 @@ export async function POST(req: NextRequest) {
         .filter(card => {
           // Filter out AUTO_ADD cards for values already added in Phase 1
           if (card.type === 'auto_add' && card.data?.value) {
-            const isDuplicate = addedValuesSet.has(card.data.value.toLowerCase());
+            const isDuplicate = addedValuesSet.has(normalizeProfileValueText(card.data.value).toLowerCase());
             if (isDuplicate) {
               console.log("🚫 [Profile Graph API] Filtering duplicate AUTO_ADD card:", card.data.value);
             }
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest) {
         .map(card => {
           // For any remaining AUTO_ADD cards, add alreadyAdded flag as safety net
           if (card.type === 'auto_add' && card.data?.value) {
-            const wasAdded = addedValuesSet.has(card.data.value.toLowerCase());
+            const wasAdded = addedValuesSet.has(normalizeProfileValueText(card.data.value).toLowerCase());
             return {
               ...card,
               data: { ...card.data, alreadyAdded: wasAdded }

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { addGraphItem, getUserProfileGraph } from "@/lib/actions/profile-graph-actions";
+import { normalizeProfileValueText } from "@/lib/profile/normalize-profile-value";
 
 export const maxDuration = 60;
 
@@ -33,13 +34,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("➕ [Add Item API] Adding item:", { category, subcategory, value });
+    const normalizedValue = normalizeProfileValueText(String(value ?? ""));
+
+    console.log("➕ [Add Item API] Adding item:", { category, subcategory, value: normalizedValue });
 
     // Add item to profile graph
     const result = await addGraphItem(
       category,
       subcategory,
-      value,
+      normalizedValue,
       metadata
     );
 

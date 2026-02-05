@@ -92,13 +92,13 @@ const loggedInNavItems: (NavItem & { action?: string })[] = [
       },
       {
         label: "Profile",
-        href: "/profile",
+        href: "/profile1",
         description: "Your account and preferences",
         icon: <User className="h-5 w-5" />,
       },
       {
         label: "Dossier",
-        href: "/profile#dossier",
+        href: "/profile1#dossier",
         description: "Build your travel profile",
         icon: <BookOpen className="h-5 w-5" />,
       },

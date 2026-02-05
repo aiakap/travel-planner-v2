@@ -8,6 +8,7 @@ import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { ProfileGraphChatResponse, ProfileGraphItem, GRAPH_CATEGORIES, GraphData } from "@/lib/types/profile-graph";
 import { generateInitialSimilarTags } from "./generate-similar-tags";
+import { normalizeProfileValueText } from "@/lib/profile/normalize-profile-value";
 
 const EXTRACTION_SYSTEM_PROMPT = `You are an expert at extracting explicit profile information from user messages.
 
@@ -576,7 +577,8 @@ function formatProfileItemsForAI(items: ProfileGraphItem[]): string {
     if (!grouped[item.category][subcategory]) {
       grouped[item.category][subcategory] = [];
     }
-    grouped[item.category][subcategory].push(item.value);
+    // Normalize to prevent whitespace/unicode variants from confusing the model
+    grouped[item.category][subcategory].push(normalizeProfileValueText(item.value));
   }
   
   // Format as readable text
@@ -667,8 +669,14 @@ Return JSON object with "items" array:
     console.log("🔍 [Profile Graph AI] Final items array:", JSON.stringify(items, null, 2));
 
     console.log("✅ [Profile Graph AI] Extracted", items.length, "explicit items:", items.map(i => i.value).join(", "));
-    
-    return items;
+
+    // Normalize extracted values to prevent invisible-variant duplicates downstream
+    return items
+      .map((item: any) => ({
+        ...item,
+        value: normalizeProfileValueText(String(item.value ?? "")),
+      }))
+      .filter((item: any) => item.value.length > 0);
   } catch (error) {
     console.error("❌ [Profile Graph AI] Error extracting items:", error);
     return [];
@@ -1163,10 +1171,56 @@ export async function processProfileGraphChatCards(
     console.log("   Text:", parsed.text?.substring(0, 50) + "...");
     console.log("   Cards:", parsed.cards?.length || 0);
 
+    // Normalize value-like fields in card payloads to avoid whitespace/unicode variants
+    const normalizedCards = (parsed.cards || []).map((card: any) => {
+      if (!card || typeof card !== "object") return card;
+
+      if (card.type === "auto_add" && card.data) {
+        return {
+          ...card,
+          data: {
+            ...card.data,
+            value: normalizeProfileValueText(String(card.data.value ?? "")),
+          },
+        };
+      }
+
+      if (card.type === "topic_choice" && card.data) {
+        const options = Array.isArray(card.data.options) ? card.data.options : [];
+        return {
+          ...card,
+          data: {
+            ...card.data,
+            options: options.map((opt: any) => ({
+              ...opt,
+              value: normalizeProfileValueText(String(opt?.value ?? "")),
+            })),
+          },
+        };
+      }
+
+      if (card.type === "related_suggestions" && card.data) {
+        const suggestions = Array.isArray(card.data.suggestions) ? card.data.suggestions : [];
+        return {
+          ...card,
+          data: {
+            ...card.data,
+            primary: normalizeProfileValueText(String(card.data.primary ?? "")),
+            suggestions: suggestions.map((s: any) => ({
+              ...s,
+              value: normalizeProfileValueText(String(s?.value ?? "")),
+            })),
+          },
+        };
+      }
+
+      return card;
+    });
+
     // Add unique IDs to cards
-    const cardsWithIds = (parsed.cards || []).map((card, index) => ({
+    const cardsWithIds = normalizedCards.map((card: any, index: number) => ({
       ...card,
-      id: `card-${Date.now()}-${index}`
+      id: `card-${Date.now()}-${index}`,
     }));
 
     return {

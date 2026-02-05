@@ -24,49 +24,66 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Strategy: Search for airports near the location
-    // First, try to find airports with the query name
-    const searchQuery = query.toLowerCase().includes('airport') 
-      ? query 
-      : `airports near ${query}`;
+    // Strategy: Try multiple search patterns to find airports
+    // 1. If query already has "airport", use as-is
+    // 2. Otherwise try "{query} airport" first (finds specific airport)
+    // 3. Then try "airports near {query}" (finds nearby airports)
     
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
-      searchQuery
-    )}&type=airport&key=${apiKey}`;
-
-    console.log("Calling Google Places API with query:", searchQuery);
-    const response = await fetch(url);
+    const searchQueries: string[] = [];
+    const lowerQuery = query.toLowerCase();
     
-    if (!response.ok) {
-      console.error("Google Places API error:", response.status);
-      return NextResponse.json(
-        { error: "Failed to search airports" },
-        { status: response.status }
-      );
+    if (lowerQuery.includes('airport')) {
+      searchQueries.push(query);
+    } else {
+      // Try specific airport search first (e.g., "lihue airport")
+      searchQueries.push(`${query} airport`);
+      // Then try nearby airports search
+      searchQueries.push(`airports near ${query}`);
     }
+    
+    let allResults: any[] = [];
+    
+    for (const searchQuery of searchQueries) {
+      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+        searchQuery
+      )}&type=airport&key=${apiKey}`;
 
-    const data = await response.json();
+      console.log("Calling Google Places API with query:", searchQuery);
+      const response = await fetch(url);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === "OK" && data.results?.length > 0) {
+          allResults = [...allResults, ...data.results];
+        }
+      }
+    }
+    
+    // Deduplicate by place_id
+    const seenPlaceIds = new Set<string>();
+    const data = {
+      status: allResults.length > 0 ? "OK" : "ZERO_RESULTS",
+      results: allResults.filter((place: any) => {
+        if (seenPlaceIds.has(place.place_id)) return false;
+        seenPlaceIds.add(place.place_id);
+        return true;
+      })
+    };
     
     if (data.status !== "OK") {
       console.warn("Google Places API status:", data.status);
-      if (data.status === "ZERO_RESULTS") {
-        return NextResponse.json({ 
-          airports: [],
-          count: 0,
-          status: "success",
-          source: "google"
-        });
-      }
-      return NextResponse.json(
-        { error: `Google Places API error: ${data.status}` },
-        { status: 500 }
-      );
+      return NextResponse.json({ 
+        airports: [],
+        count: 0,
+        status: "success",
+        source: "google"
+      });
     }
 
     console.log(`Google Places returned ${data.results?.length || 0} results`);
 
     // Format results to match airport structure
-    // Filter for commercial airports (exclude small general aviation)
+    // Filter out non-commercial airports (heliports, airparks, etc.)
     const formattedResults = (data.results || [])
       .filter((place: any) => {
         if (!place.types?.includes('airport')) return false;
@@ -74,21 +91,15 @@ export async function GET(request: NextRequest) {
         // Filter out small general aviation airports by checking name patterns
         const name = place.name.toLowerCase();
         
-        // Exclude known small airports
-        const smallAirportPatterns = [
-          'executive', 'municipal', 'county', 'regional',
-          'airpark', 'airfield', 'heliport'
+        // Exclude non-commercial airports
+        const excludePatterns = [
+          'executive', 'municipal', 'county',
+          'airpark', 'airfield', 'heliport', 'helipad',
+          'general aviation', 'private'
         ];
-        const isSmallAirport = smallAirportPatterns.some(pattern => name.includes(pattern));
+        const isExcluded = excludePatterns.some(pattern => name.includes(pattern));
         
-        if (isSmallAirport) return false;
-        
-        // Include if it has "international" or "intl" in name
-        const isLikelyCommercial = 
-          name.includes('international') || 
-          name.includes('intl');
-        
-        return isLikelyCommercial;
+        return !isExcluded;
       })
       .slice(0, 10)
       .map((place: any) => {
