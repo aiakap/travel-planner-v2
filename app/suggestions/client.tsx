@@ -50,7 +50,7 @@ interface SuggestionsClientProps {
     country: string | null;
   };
   profileItems: ProfileGraphItem[];
-  xmlData: string | null;
+  xmlData: string | null; // Deprecated - no longer used
 }
 
 interface GroupedProfile {
@@ -74,7 +74,6 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
   // Profile state (local updates)
   // graphData is lazily loaded - only populated from API responses when needed
   const [profileItems, setProfileItems] = useState<ProfileGraphItem[]>(initialProfileItems);
-  const [xmlData, setXmlData] = useState<string | null>(initialXmlData);
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
   
   // AI Trip Suggestions state
@@ -169,7 +168,6 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profileItems,
-          xmlData,
           userProfile,
         }),
       });
@@ -186,7 +184,7 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
       clearInterval(messageInterval);
       setLoadingSuggestions(false);
     }
-  }, [profileItems, loadingMessagesData, xmlData, userProfile]);
+  }, [profileItems, loadingMessagesData, userProfile]);
 
   // Handle item deletion - memoized with useCallback
   const handleDeleteItem = useCallback(async (item: ProfileGraphItem) => {
@@ -224,9 +222,6 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
             metadata: n.metadata
           }));
         setProfileItems(updatedItems);
-      }
-      if (data.xmlData) {
-        setXmlData(data.xmlData);
       }
 
       console.log("✅ Item deleted from profile");
@@ -308,9 +303,6 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
             }, 1200);
           }, 100); // Wait for DOM update
         }
-      }
-      if (data.xmlData) {
-        setXmlData(data.xmlData);
       }
 
       console.log("✅ Profile updated via chat");

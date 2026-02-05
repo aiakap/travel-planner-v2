@@ -8,7 +8,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ChatPanelProps, Message, MessageCard } from "./types";
-import { addItemToXml, parseXmlToGraph, createEmptyProfileXml } from "@/lib/profile-graph-xml";
 import * as LucideIcons from "lucide-react";
 import { ChevronLeft } from "lucide-react";
 

@@ -3,19 +3,29 @@
 import { useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PlacesAutocompleteInput } from "@/components/ui/places-autocomplete-input";
 import { updateUserProfile, addMultipleHomeAirports } from "@/lib/actions/profile-actions";
-import { User } from "lucide-react";
+import { User, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { SaveStatusIndicator } from "@/components/ui/save-status-indicator";
+import { UserProfile, Airport, Gender } from "@/lib/types/profile";
+import { COUNTRIES, GENDER_OPTIONS, getCountryName } from "@/lib/data/countries";
+import { Badge } from "@/components/ui/badge";
 
 interface PersonalInfoSectionProps {
   userName: string;
   userEmail: string;
   userImage: string;
-  initialProfile: any;
-  onNearestAirportsFound?: (airports: any[]) => void;
+  initialProfile: UserProfile | null;
+  onNearestAirportsFound?: (airports: Airport[]) => void;
 }
 
 export function PersonalInfoSection({
@@ -35,6 +45,9 @@ export function PersonalInfoSection({
     address: initialProfile?.address || "",
     city: initialProfile?.city || "",
     country: initialProfile?.country || "",
+    gender: (initialProfile?.gender as Gender) || "",
+    citizenship: (initialProfile?.citizenship as string[]) || [],
+    countryOfResidence: initialProfile?.countryOfResidence || "",
   });
 
   // Auto-save handlers for each field
@@ -109,6 +122,57 @@ export function PersonalInfoSection({
     cityAutoSave.saveStatus,
     countryAutoSave.saveStatus,
   ].includes("error") ? "error" : "idle";
+
+  // Handle gender change
+  const handleGenderChange = async (value: string) => {
+    setFormData({ ...formData, gender: value as Gender });
+    try {
+      await updateUserProfile({ gender: value });
+      toast({ title: "Gender updated" });
+    } catch (error) {
+      console.error("Error updating gender:", error);
+      toast({ title: "Error", description: "Failed to update gender", variant: "destructive" });
+    }
+  };
+
+  // Handle country of residence change
+  const handleResidenceChange = async (value: string) => {
+    setFormData({ ...formData, countryOfResidence: value });
+    try {
+      await updateUserProfile({ countryOfResidence: value });
+      toast({ title: "Country of residence updated" });
+    } catch (error) {
+      console.error("Error updating country of residence:", error);
+      toast({ title: "Error", description: "Failed to update", variant: "destructive" });
+    }
+  };
+
+  // Handle adding citizenship
+  const handleAddCitizenship = async (code: string) => {
+    if (formData.citizenship.includes(code)) return;
+    const newCitizenship = [...formData.citizenship, code];
+    setFormData({ ...formData, citizenship: newCitizenship });
+    try {
+      await updateUserProfile({ citizenship: newCitizenship });
+      toast({ title: "Citizenship added" });
+    } catch (error) {
+      console.error("Error adding citizenship:", error);
+      toast({ title: "Error", description: "Failed to add citizenship", variant: "destructive" });
+    }
+  };
+
+  // Handle removing citizenship
+  const handleRemoveCitizenship = async (code: string) => {
+    const newCitizenship = formData.citizenship.filter(c => c !== code);
+    setFormData({ ...formData, citizenship: newCitizenship });
+    try {
+      await updateUserProfile({ citizenship: newCitizenship });
+      toast({ title: "Citizenship removed" });
+    } catch (error) {
+      console.error("Error removing citizenship:", error);
+      toast({ title: "Error", description: "Failed to remove citizenship", variant: "destructive" });
+    }
+  };
 
   // Handle place selection from autocomplete
   const handlePlaceSelect = async (placeDetails: any) => {
@@ -305,16 +369,88 @@ export function PersonalInfoSection({
           </div>
         </div>
 
-        {/* Date of Birth */}
-        <div className="space-y-2">
-          <Label className="text-sm text-gray-600">Date of Birth</Label>
-          <Input
-            type="date"
-            value={formData.dateOfBirth}
-            onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-            onBlur={dateOfBirthAutoSave.saveImmediately}
-            className={inlineInputClass}
-          />
+        <div className="grid grid-cols-2 gap-4">
+          {/* Date of Birth */}
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-600">Date of Birth</Label>
+            <Input
+              type="date"
+              value={formData.dateOfBirth}
+              onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+              onBlur={dateOfBirthAutoSave.saveImmediately}
+              className={inlineInputClass}
+            />
+          </div>
+
+          {/* Gender */}
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-600">Gender</Label>
+            <Select value={formData.gender} onValueChange={handleGenderChange}>
+              <SelectTrigger className="bg-transparent hover:bg-gray-50 border-none">
+                <SelectValue placeholder="Select gender" />
+              </SelectTrigger>
+              <SelectContent>
+                {GENDER_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          {/* Citizenship */}
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-600">Citizenship</Label>
+            <div className="space-y-2">
+              {formData.citizenship.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {formData.citizenship.map((code) => (
+                    <Badge key={code} variant="secondary" className="flex items-center gap-1">
+                      {getCountryName(code)}
+                      <button
+                        onClick={() => handleRemoveCitizenship(code)}
+                        className="ml-1 hover:text-red-500"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <Select onValueChange={handleAddCitizenship}>
+                <SelectTrigger className="bg-transparent hover:bg-gray-50 border-none">
+                  <SelectValue placeholder="Add citizenship" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {COUNTRIES.filter(c => !formData.citizenship.includes(c.code)).map((country) => (
+                    <SelectItem key={country.code} value={country.code}>
+                      {country.flag} {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Country of Residence */}
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-600">Country of Residence</Label>
+            <Select value={formData.countryOfResidence} onValueChange={handleResidenceChange}>
+              <SelectTrigger className="bg-transparent hover:bg-gray-50 border-none">
+                <SelectValue placeholder="Select country" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                {COUNTRIES.map((country) => (
+                  <SelectItem key={country.code} value={country.code}>
+                    {country.flag} {country.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Address - uses autocomplete */}

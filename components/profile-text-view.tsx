@@ -1,8 +1,32 @@
 "use client";
 
 import { GraphData, GRAPH_CATEGORIES, GraphNode } from "@/lib/types/profile-graph";
-import { X } from "lucide-react";
+import { X, Star } from "lucide-react";
 import { useState } from "react";
+
+// Helper to format proficiency level for display
+function formatProficiency(proficiency: string | undefined): string {
+  if (!proficiency) return "";
+  const labels: Record<string, string> = {
+    native: "Native",
+    fluent: "Fluent",
+    conversational: "Conversational",
+    basic: "Basic"
+  };
+  return labels[proficiency] || proficiency;
+}
+
+// Check if an item is a language item based on its metadata
+function isLanguageItem(item: GraphNode): boolean {
+  const subcategory = item.metadata?.subcategory;
+  const rootCategory = item.metadata?.rootCategorySlug;
+  return (
+    subcategory === "primary-languages" ||
+    subcategory === "native-languages" ||
+    subcategory === "conversational-languages" ||
+    rootCategory === "languages"
+  );
+}
 
 interface ProfileTextViewProps {
   graphData: GraphData;
@@ -52,27 +76,44 @@ export function ProfileTextView({ graphData, onNodeDelete }: ProfileTextViewProp
                   {formatSubcategoryName(subcat.name)}
                 </h4>
                 <div className="flex flex-wrap gap-1.5">
-                  {subcat.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="group relative inline-flex items-center"
-                      onMouseEnter={() => setHoveredItem(item.id)}
-                      onMouseLeave={() => setHoveredItem(null)}
-                    >
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-default">
-                        {item.value}
-                      </span>
-                      {hoveredItem === item.id && onNodeDelete && (
-                        <button
-                          onClick={() => handleDelete(item)}
-                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors"
-                          title="Delete"
-                        >
-                          <X className="w-2.5 h-2.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  {subcat.items.map((item, index) => {
+                    const isLanguage = isLanguageItem(item);
+                    const proficiency = item.metadata?.proficiency as string | undefined;
+                    const proficiencyLabel = isLanguage ? formatProficiency(proficiency) : "";
+                    const isNativeOrFluent = proficiency === "native" || proficiency === "fluent";
+                    
+                    return (
+                      <div
+                        key={`${category.id}-${subcat.name}-${item.id}-${index}`}
+                        className="group relative inline-flex items-center"
+                        onMouseEnter={() => setHoveredItem(item.id)}
+                        onMouseLeave={() => setHoveredItem(null)}
+                      >
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs transition-colors cursor-default ${
+                          isLanguage && isNativeOrFluent
+                            ? "bg-violet-100 text-violet-800 hover:bg-violet-200"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        }`}>
+                          {isLanguage && proficiency === "native" && (
+                            <Star className="w-3 h-3 mr-1 fill-amber-400 text-amber-400" />
+                          )}
+                          {item.value}
+                          {isLanguage && proficiencyLabel && (
+                            <span className="ml-1 opacity-70">({proficiencyLabel})</span>
+                          )}
+                        </span>
+                        {hoveredItem === item.id && onNodeDelete && (
+                          <button
+                            onClick={() => handleDelete(item)}
+                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors"
+                            title="Delete"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -80,27 +121,44 @@ export function ProfileTextView({ graphData, onNodeDelete }: ProfileTextViewProp
             {category.uncategorizedItems.length > 0 && (
               <div className="mb-2">
                 <div className="flex flex-wrap gap-1.5">
-                  {category.uncategorizedItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="group relative inline-flex items-center"
-                      onMouseEnter={() => setHoveredItem(item.id)}
-                      onMouseLeave={() => setHoveredItem(null)}
-                    >
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-default">
-                        {item.value}
-                      </span>
-                      {hoveredItem === item.id && onNodeDelete && (
-                        <button
-                          onClick={() => handleDelete(item)}
-                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors"
-                          title="Delete"
-                        >
-                          <X className="w-2.5 h-2.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  {category.uncategorizedItems.map((item, index) => {
+                    const isLanguage = isLanguageItem(item);
+                    const proficiency = item.metadata?.proficiency as string | undefined;
+                    const proficiencyLabel = isLanguage ? formatProficiency(proficiency) : "";
+                    const isNativeOrFluent = proficiency === "native" || proficiency === "fluent";
+                    
+                    return (
+                      <div
+                        key={`${category.id}-uncategorized-${item.id}-${index}`}
+                        className="group relative inline-flex items-center"
+                        onMouseEnter={() => setHoveredItem(item.id)}
+                        onMouseLeave={() => setHoveredItem(null)}
+                      >
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs transition-colors cursor-default ${
+                          isLanguage && isNativeOrFluent
+                            ? "bg-violet-100 text-violet-800 hover:bg-violet-200"
+                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        }`}>
+                          {isLanguage && proficiency === "native" && (
+                            <Star className="w-3 h-3 mr-1 fill-amber-400 text-amber-400" />
+                          )}
+                          {item.value}
+                          {isLanguage && proficiencyLabel && (
+                            <span className="ml-1 opacity-70">({proficiencyLabel})</span>
+                          )}
+                        </span>
+                        {hoveredItem === item.id && onNodeDelete && (
+                          <button
+                            onClick={() => handleDelete(item)}
+                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm transition-colors"
+                            title="Delete"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

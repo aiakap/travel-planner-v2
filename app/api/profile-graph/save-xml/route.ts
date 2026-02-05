@@ -1,13 +1,11 @@
 /**
  * Profile Graph Save XML API Route
  * 
- * Saves XML data to the database and returns the saved result
+ * @deprecated XML storage is no longer used. Use addGraphItem/removeGraphItem APIs instead.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
 
 export const maxDuration = 60;
 
@@ -22,45 +20,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse request body
-    const body = await req.json();
-    const { xmlData } = body;
+    console.warn("⚠️ [Save XML API] DEPRECATED: XML storage is no longer supported");
 
-    // Validate required field
-    if (!xmlData) {
-      return NextResponse.json(
-        { error: "XML data is required" },
-        { status: 400 }
-      );
-    }
-
-    console.log("💾 [Save XML API] Saving XML for user:", session.user.id);
-
-    // Save to database
-    const result = await prisma.userProfileGraph.upsert({
-      where: { userId: session.user.id },
-      update: { graphData: xmlData },
-      create: { userId: session.user.id, graphData: xmlData }
-    });
-
-    console.log("✅ [Save XML API] XML saved successfully, length:", result.graphData?.length || 0);
-
-    // Revalidate paths so other pages see the changes
-    revalidatePath("/profile/graph");
-    revalidatePath("/object/profile_attribute");
-
-    // Return the saved XML from database
-    return NextResponse.json({
-      success: true,
-      xmlData: result.graphData
-    });
+    // Return deprecation error
+    return NextResponse.json(
+      { 
+        error: "XML storage is deprecated",
+        message: "Profile data is now stored in relational tables. Use /api/profile-graph/add-item or /api/profile-graph/delete-item instead."
+      },
+      { status: 410 } // 410 Gone
+    );
 
   } catch (error) {
     console.error("❌ [Save XML API] Error:", error);
     
     return NextResponse.json(
       { 
-        error: "Failed to save XML",
+        error: "Failed to process request",
         details: error instanceof Error ? error.message : "Unknown error"
       },
       { status: 500 }

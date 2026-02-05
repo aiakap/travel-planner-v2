@@ -477,6 +477,7 @@ const CATEGORY_SEEDS: CategorySeed[] = [
         level: 1,
         sortOrder: 2,
         children: [
+          { name: "No Restrictions (I eat everything)", slug: "no-dietary-restrictions", level: 2, sortOrder: 0 },
           { name: "Vegetarian", slug: "vegetarian", level: 2, sortOrder: 1 },
           { name: "Vegan", slug: "vegan", level: 2, sortOrder: 2 },
           { name: "Gluten-Free", slug: "gluten-free", level: 2, sortOrder: 3 },
@@ -718,6 +719,105 @@ const CATEGORY_SEEDS: CategorySeed[] = [
           { name: "Checked Bag", slug: "checked-bag", level: 2, sortOrder: 2 },
           { name: "Minimalist", slug: "minimalist", level: 2, sortOrder: 3 },
           { name: "Over-Packer", slug: "over-packer", level: 2, sortOrder: 4 }
+        ]
+      }
+    ]
+  },
+  {
+    name: "Accessibility & Mobility",
+    slug: "accessibility",
+    description: "Mobility and accessibility needs for travel",
+    icon: "Accessibility",
+    color: "#0891b2",
+    level: 0,
+    sortOrder: 11,
+    children: [
+      {
+        name: "General",
+        slug: "accessibility-general",
+        description: "General accessibility status",
+        level: 1,
+        sortOrder: 0,
+        children: [
+          { name: "No Special Needs", slug: "no-accessibility-needs", level: 2, sortOrder: 0 }
+        ]
+      },
+      {
+        name: "Mobility Needs",
+        slug: "mobility-needs",
+        description: "Physical mobility requirements",
+        level: 1,
+        sortOrder: 1,
+        children: [
+          { name: "Wheelchair User", slug: "wheelchair", level: 2, sortOrder: 1 },
+          { name: "Limited Walking", slug: "limited-walking", level: 2, sortOrder: 2 },
+          { name: "Cane or Walker", slug: "cane-walker", level: 2, sortOrder: 3 },
+          { name: "Scooter User", slug: "scooter-user", level: 2, sortOrder: 4 }
+        ]
+      },
+      {
+        name: "Sensory Needs",
+        slug: "sensory-needs",
+        description: "Visual and hearing requirements",
+        level: 1,
+        sortOrder: 2,
+        children: [
+          { name: "Visual Impairment", slug: "visual-impairment", level: 2, sortOrder: 1 },
+          { name: "Hearing Impairment", slug: "hearing-impairment", level: 2, sortOrder: 2 },
+          { name: "Service Animal", slug: "service-animal", level: 2, sortOrder: 3 }
+        ]
+      },
+      {
+        name: "Accommodation Needs",
+        slug: "accommodation-needs",
+        description: "Special accommodation requirements",
+        level: 1,
+        sortOrder: 3,
+        children: [
+          { name: "Ground Floor Room", slug: "ground-floor-room", level: 2, sortOrder: 1 },
+          { name: "Roll-in Shower", slug: "roll-in-shower", level: 2, sortOrder: 2 },
+          { name: "Grab Bars", slug: "grab-bars", level: 2, sortOrder: 3 },
+          { name: "Wide Doorways", slug: "wide-doorways", level: 2, sortOrder: 4 }
+        ]
+      }
+    ]
+  },
+  {
+    name: "Languages Spoken",
+    slug: "languages",
+    description: "Languages you speak for travel communication",
+    icon: "Languages",
+    color: "#7c3aed",
+    level: 0,
+    sortOrder: 12,
+    children: [
+      {
+        name: "Primary Languages",
+        slug: "primary-languages",
+        description: "Languages you speak fluently",
+        level: 1,
+        sortOrder: 1,
+        children: [
+          { name: "English", slug: "lang-en", level: 2, sortOrder: 1 },
+          { name: "Spanish", slug: "lang-es", level: 2, sortOrder: 2 },
+          { name: "French", slug: "lang-fr", level: 2, sortOrder: 3 },
+          { name: "German", slug: "lang-de", level: 2, sortOrder: 4 },
+          { name: "Italian", slug: "lang-it", level: 2, sortOrder: 5 },
+          { name: "Portuguese", slug: "lang-pt", level: 2, sortOrder: 6 },
+          { name: "Dutch", slug: "lang-nl", level: 2, sortOrder: 7 },
+          { name: "Russian", slug: "lang-ru", level: 2, sortOrder: 8 },
+          { name: "Mandarin Chinese", slug: "lang-zh", level: 2, sortOrder: 9 },
+          { name: "Japanese", slug: "lang-ja", level: 2, sortOrder: 10 },
+          { name: "Korean", slug: "lang-ko", level: 2, sortOrder: 11 },
+          { name: "Arabic", slug: "lang-ar", level: 2, sortOrder: 12 },
+          { name: "Hindi", slug: "lang-hi", level: 2, sortOrder: 13 },
+          { name: "Turkish", slug: "lang-tr", level: 2, sortOrder: 14 },
+          { name: "Polish", slug: "lang-pl", level: 2, sortOrder: 15 },
+          { name: "Vietnamese", slug: "lang-vi", level: 2, sortOrder: 16 },
+          { name: "Thai", slug: "lang-th", level: 2, sortOrder: 17 },
+          { name: "Greek", slug: "lang-el", level: 2, sortOrder: 18 },
+          { name: "Hebrew", slug: "lang-he", level: 2, sortOrder: 19 },
+          { name: "Swedish", slug: "lang-sv", level: 2, sortOrder: 20 }
         ]
       }
     ]

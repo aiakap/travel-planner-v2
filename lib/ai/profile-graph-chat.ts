@@ -931,3 +931,272 @@ export async function generateNewTopicSuggestion(
   // Same logic as idle prompt
   return generateIdlePrompt(currentGraphData, conversationHistory, currentProfileItems);
 }
+
+// ============================================================================
+// CARD-BASED (OBJECT STYLE) CHAT PROCESSING
+// ============================================================================
+
+const CARD_BASED_SYSTEM_PROMPT = `You are an expert travel concierge helping users build their personal profile graph.
+Your goal is to extract personal information from conversational input and present it using interactive cards.
+
+## Categories
+1. travel-preferences: Airlines, hotels, travel class, loyalty programs, transportation, amenities
+2. family: Spouse, children, parents, siblings, friends, travel companions
+3. hobbies: Sports, arts, outdoor activities, culinary interests, entertainment
+4. spending-priorities: Budget allocation, what they prioritize spending on
+5. travel-style: Solo vs group, luxury vs budget, adventure vs relaxation
+6. destinations: Places visited, wishlist, favorite destinations
+7. other: Anything that doesn't fit the above categories
+
+## Subcategories
+- travel-preferences: airlines, hotels, travel-class, loyalty-programs, transportation, amenities
+- family: spouse, children, parents, siblings, friends
+- hobbies: sports, arts, outdoor, culinary, entertainment
+- spending-priorities: budget-allocation, priorities
+- travel-style: solo-vs-group, luxury-vs-budget, adventure-vs-relaxation
+- destinations: visited, wishlist, favorites
+- other: general
+
+## Response Format
+Return valid JSON with this structure:
+{
+  "text": "Brief acknowledgment text (1-2 sentences)",
+  "cards": [
+    // AUTO_ADD cards for items explicitly stated by user
+    {
+      "type": "auto_add",
+      "data": {
+        "category": "hobbies",
+        "subcategory": "sports",
+        "value": "Swimming"
+      }
+    },
+    // TOPIC_CHOICE cards for follow-up questions with options
+    {
+      "type": "topic_choice",
+      "data": {
+        "topic": "Swimming Preferences",
+        "question": "What type of swimming do you prefer?",
+        "category": "hobbies",
+        "subcategory": "sports",
+        "options": [
+          {"value": "Open Ocean", "icon": "🌊"},
+          {"value": "Pool", "icon": "🏊"},
+          {"value": "Lake/River", "icon": "🏞️"}
+        ],
+        "allowMultiple": true
+      }
+    },
+    // RELATED_SUGGESTIONS cards for related items
+    {
+      "type": "related_suggestions",
+      "data": {
+        "primary": "Swimming",
+        "suggestions": [
+          {"value": "Snorkeling", "category": "hobbies", "subcategory": "outdoor"},
+          {"value": "Direct Beach Access", "category": "travel-preferences", "subcategory": "amenities"},
+          {"value": "Beach Resorts", "category": "travel-style", "subcategory": "luxury-vs-budget"}
+        ]
+      }
+    }
+  ]
+}
+
+## Rules
+1. For explicit statements (e.g., "I like swimming"), include an AUTO_ADD card
+2. Follow up with TOPIC_CHOICE to drill deeper (e.g., type of swimming)
+3. Include RELATED_SUGGESTIONS for related preferences they might have
+4. Keep text brief - let cards do the heavy lifting
+5. Provide 3-6 options per TOPIC_CHOICE card
+6. Include 3-5 suggestions per RELATED_SUGGESTIONS card
+7. Use appropriate emojis for option icons
+8. Don't suggest items already in the user's profile
+
+## Examples
+
+Input: "I like to swim"
+Output:
+{
+  "text": "Swimming is a great way to stay active while traveling! Let me capture that and explore your preferences.",
+  "cards": [
+    {
+      "type": "auto_add",
+      "data": {"category": "hobbies", "subcategory": "sports", "value": "Swimming"}
+    },
+    {
+      "type": "topic_choice",
+      "data": {
+        "topic": "Swimming Environment",
+        "question": "What's your preferred swimming environment?",
+        "category": "hobbies",
+        "subcategory": "outdoor",
+        "options": [
+          {"value": "Open Ocean", "icon": "🌊"},
+          {"value": "Pool", "icon": "🏊"},
+          {"value": "Lake/River", "icon": "🏞️"},
+          {"value": "Lap Swimming", "icon": "🏊‍♂️"}
+        ],
+        "allowMultiple": true
+      }
+    },
+    {
+      "type": "related_suggestions",
+      "data": {
+        "primary": "Swimming",
+        "suggestions": [
+          {"value": "Snorkeling", "category": "hobbies", "subcategory": "outdoor"},
+          {"value": "Direct Beach Access", "category": "travel-preferences", "subcategory": "amenities"},
+          {"value": "Water Sports", "category": "hobbies", "subcategory": "sports"}
+        ]
+      }
+    }
+  ]
+}
+
+Input: "I'm traveling with my toddler"
+Output:
+{
+  "text": "Traveling with little ones requires special planning! Let me note that and help you prepare.",
+  "cards": [
+    {
+      "type": "auto_add",
+      "data": {"category": "family", "subcategory": "children", "value": "Toddler"}
+    },
+    {
+      "type": "topic_choice",
+      "data": {
+        "topic": "Toddler Travel Needs",
+        "question": "What matters most when traveling with your toddler?",
+        "category": "travel-preferences",
+        "subcategory": "amenities",
+        "options": [
+          {"value": "Direct Flights", "icon": "✈️"},
+          {"value": "Kitchenette", "icon": "🍳"},
+          {"value": "Kids Club", "icon": "🧸"},
+          {"value": "Pool with Shallow End", "icon": "🏊"},
+          {"value": "Cribs Available", "icon": "🛏️"}
+        ],
+        "allowMultiple": true
+      }
+    },
+    {
+      "type": "related_suggestions",
+      "data": {
+        "primary": "Toddler",
+        "suggestions": [
+          {"value": "Family Friendly Hotels", "category": "travel-preferences", "subcategory": "hotels"},
+          {"value": "Private Transfers", "category": "travel-preferences", "subcategory": "transportation"},
+          {"value": "Babysitting Services", "category": "travel-preferences", "subcategory": "amenities"}
+        ]
+      }
+    }
+  ]
+}
+
+Remember: Keep text minimal, use cards for interaction, and make each card actionable.`;
+
+export interface CardData {
+  type: "auto_add" | "topic_choice" | "related_suggestions";
+  data: any;
+}
+
+export interface CardBasedResponse {
+  text: string;
+  cards: CardData[];
+}
+
+/**
+ * Process user input and return card-based response for Object Style chat
+ */
+export async function processProfileGraphChatCards(
+  userMessage: string,
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>,
+  currentProfileItems?: ProfileGraphItem[]
+): Promise<CardBasedResponse> {
+  console.log("🎴 [Profile Graph AI] Processing message for card-based response:", userMessage);
+  console.log("📊 [Profile Graph AI] Current profile items:", currentProfileItems?.length || 0);
+
+  // Format profile context
+  const profileContext = formatProfileItemsForAI(currentProfileItems || []);
+  
+  // Build conversation context
+  let prompt = userMessage;
+  if (conversationHistory && conversationHistory.length > 0) {
+    const historyText = conversationHistory
+      .slice(-6) // Last 3 exchanges
+      .map(msg => `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`)
+      .join("\n");
+    prompt = `${profileContext}\n\n${historyText}\n\nUser: ${userMessage}`;
+  } else {
+    prompt = `${profileContext}\n\nUser: ${userMessage}`;
+  }
+
+  try {
+    const result = await generateText({
+      model: openai("gpt-4o-2024-11-20"),
+      system: CARD_BASED_SYSTEM_PROMPT,
+      prompt: prompt,
+      temperature: 0.7,
+      maxTokens: 2000,
+      experimental_providerMetadata: {
+        openai: {
+          response_format: { type: "json_object" },
+        },
+      },
+    });
+
+    // Clean response - remove markdown code fences if present
+    let cleanedText = result.text.trim();
+    
+    if (cleanedText.startsWith('```json')) {
+      cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    cleanedText = cleanedText.trim();
+
+    // Parse JSON response
+    const parsed: CardBasedResponse = JSON.parse(cleanedText);
+
+    console.log("🎴 [Profile Graph AI] Card-based response:");
+    console.log("   Text:", parsed.text?.substring(0, 50) + "...");
+    console.log("   Cards:", parsed.cards?.length || 0);
+
+    // Add unique IDs to cards
+    const cardsWithIds = (parsed.cards || []).map((card, index) => ({
+      ...card,
+      id: `card-${Date.now()}-${index}`
+    }));
+
+    return {
+      text: parsed.text || "I've captured that. Let me suggest some related options.",
+      cards: cardsWithIds
+    };
+  } catch (error) {
+    console.error("❌ [Profile Graph AI] Error in card-based processing:", error);
+    
+    // Fallback response with a topic choice card
+    return {
+      text: "I'd love to learn more about your travel preferences. What would you like to explore?",
+      cards: [
+        {
+          type: "topic_choice",
+          data: {
+            topic: "Getting Started",
+            question: "What aspect of travel would you like to discuss?",
+            category: "travel-style",
+            subcategory: "adventure-vs-relaxation",
+            options: [
+              { value: "Destinations", icon: "🌍" },
+              { value: "Accommodations", icon: "🏨" },
+              { value: "Activities", icon: "🎯" },
+              { value: "Travel Style", icon: "✈️" }
+            ],
+            allowMultiple: true
+          }
+        }
+      ]
+    };
+  }
+}

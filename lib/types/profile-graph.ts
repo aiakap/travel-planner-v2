@@ -17,6 +17,16 @@ export type GraphCategory =
   | "spending-priorities"
   | "travel-style"
   | "destinations"
+  | "activities"
+  | "accommodations"
+  | "transportation"
+  | "dining"
+  | "culinary-preferences"
+  | "budget"
+  | "companions"
+  | "timing"
+  | "native-language"
+  | "other-languages"
   | "other";
 
 export interface GraphNode {
@@ -203,6 +213,18 @@ export const GRAPH_CATEGORIES: CategoryConfig[] = [
     label: "Destinations",
     color: "#06b6d4", // cyan
     subcategories: ["visited", "wishlist", "favorites"]
+  },
+  {
+    id: "native-language",
+    label: "Native Language",
+    color: "#8b5cf6", // violet
+    subcategories: ["primary-languages"]
+  },
+  {
+    id: "other-languages",
+    label: "Other Languages",
+    color: "#a78bfa", // lighter violet
+    subcategories: ["primary-languages"]
   },
   {
     id: "other",

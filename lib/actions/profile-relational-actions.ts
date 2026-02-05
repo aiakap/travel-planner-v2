@@ -56,7 +56,13 @@ export async function getCategoryBySlug(slug: string) {
       parent: true,
       children: {
         where: { isActive: true },
-        orderBy: { sortOrder: 'asc' }
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          children: {
+            where: { isActive: true },
+            orderBy: { sortOrder: 'asc' }
+          }
+        }
       }
     }
   });
@@ -128,6 +134,9 @@ export async function getUserProfileValuesByCategory(userId: string) {
 /**
  * Add a profile value for a user
  * Creates the value if it doesn't exist, then links it to the user
+ * 
+ * Uses a Serializable transaction to prevent race conditions where
+ * two concurrent requests could both pass the duplicate check before either inserts.
  */
 export async function addProfileValue(
   userId: string,
@@ -136,65 +145,110 @@ export async function addProfileValue(
   metadata?: any
 ) {
   try {
-    // Find the category
-    const category = await prisma.profileCategory.findUnique({
-      where: { slug: categorySlug }
-    });
-
-    if (!category) {
-      throw new Error(`Category not found: ${categorySlug}`);
-    }
-
-    // Find or create the profile value
-    const profileValue = await prisma.profileValue.upsert({
-      where: {
-        value_categoryId: {
-          value: value,
-          categoryId: category.id
-        }
-      },
-      create: {
-        value: value,
-        categoryId: category.id
-      },
-      update: {}
-    });
-
-    // Check if user already has this value
-    const existing = await prisma.userProfileValue.findUnique({
-      where: {
-        userId_valueId: {
+    // Use a serializable transaction to prevent race conditions
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Check for existing value (case-insensitive) in ANY category first
+      // This is the primary duplicate prevention check
+      const existingByValue = await tx.userProfileValue.findFirst({
+        where: {
           userId,
-          valueId: profileValue.id
-        }
-      }
-    });
-
-    if (existing) {
-      return { success: false, error: 'Value already exists for this user' };
-    }
-
-    // Link value to user
-    const userValue = await prisma.userProfileValue.create({
-      data: {
-        userId,
-        valueId: profileValue.id,
-        metadata: metadata || { source: 'manual', addedAt: new Date().toISOString() }
-      },
-      include: {
-        value: {
-          include: {
-            category: true
+          value: {
+            value: { equals: value, mode: 'insensitive' }
+          }
+        },
+        include: {
+          value: {
+            include: {
+              category: true
+            }
           }
         }
+      });
+
+      if (existingByValue) {
+        console.log(`[addProfileValue] Skipping duplicate value "${value}" - already exists in category "${existingByValue.value.category.slug}"`);
+        return { success: false, error: 'Value already exists for this user', isDuplicate: true };
       }
+
+      // 2. Find the category
+      const category = await tx.profileCategory.findUnique({
+        where: { slug: categorySlug }
+      });
+
+      if (!category) {
+        throw new Error(`Category not found: ${categorySlug}`);
+      }
+
+      // 3. Find or create the profile value in the master table
+      const profileValue = await tx.profileValue.upsert({
+        where: {
+          value_categoryId: {
+            value: value,
+            categoryId: category.id
+          }
+        },
+        create: {
+          value: value,
+          categoryId: category.id
+        },
+        update: {}
+      });
+
+      // 4. Check if user already has this exact valueId (redundant safety check)
+      const existingExact = await tx.userProfileValue.findUnique({
+        where: {
+          userId_valueId: {
+            userId,
+            valueId: profileValue.id
+          }
+        }
+      });
+
+      if (existingExact) {
+        console.log(`[addProfileValue] Skipping - user already has exact valueId for "${value}"`);
+        return { success: false, error: 'Value already exists for this user', isDuplicate: true };
+      }
+
+      // 5. Create the UserProfileValue link
+      const userValue = await tx.userProfileValue.create({
+        data: {
+          userId,
+          valueId: profileValue.id,
+          metadata: metadata || { source: 'manual', addedAt: new Date().toISOString() }
+        },
+        include: {
+          value: {
+            include: {
+              category: true
+            }
+          }
+        }
+      });
+
+      console.log(`[addProfileValue] Successfully added "${value}" to category "${categorySlug}" for user ${userId}`);
+      return { success: true, data: userValue };
+    }, {
+      // Serializable isolation level prevents phantom reads and race conditions
+      // This ensures that if two requests try to add the same value simultaneously,
+      // one will succeed and the other will either see the existing value or retry
+      isolationLevel: 'Serializable',
+      timeout: 10000 // 10 second timeout
     });
 
-    revalidatePath('/object/profile_attribute');
+    // Revalidate paths outside the transaction
+    if (result.success) {
+      revalidatePath('/object/profile_attribute');
+    }
     
-    return { success: true, data: userValue };
+    return result;
   } catch (error: any) {
-    console.error('Error adding profile value:', error);
+    // Handle serialization failures gracefully - they indicate a race condition was prevented
+    if (error.code === 'P2034' || error.message?.includes('could not serialize')) {
+      console.log(`[addProfileValue] Transaction serialization conflict for "${value}" - likely duplicate prevented`);
+      return { success: false, error: 'Value may already exist (concurrent request)' };
+    }
+    
+    console.error('[addProfileValue] Error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -321,4 +375,24 @@ export async function getCategoryPath(categoryId: string): Promise<string[]> {
   }
 
   return path;
+}
+
+/**
+ * Clean up duplicate UserProfileValue entries
+ * This is called asynchronously when duplicates are detected during graph display
+ */
+export async function cleanupDuplicateUserValues(duplicateIds: string[]) {
+  if (duplicateIds.length === 0) return;
+  
+  try {
+    const result = await prisma.userProfileValue.deleteMany({
+      where: { id: { in: duplicateIds } }
+    });
+    
+    console.log(`[cleanupDuplicateUserValues] Cleaned up ${result.count} duplicate profile values`);
+    return { success: true, deletedCount: result.count };
+  } catch (error) {
+    console.error('[cleanupDuplicateUserValues] Error cleaning up duplicates:', error);
+    return { success: false, error: String(error) };
+  }
 }

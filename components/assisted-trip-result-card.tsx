@@ -17,6 +17,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import type { AssistedTripResult, TripAlternative } from "@/lib/types/assisted-wizard";
 import type { AITripSuggestion } from "@/lib/ai/generate-trip-suggestions";
@@ -24,6 +25,8 @@ import type { AITripSuggestion } from "@/lib/ai/generate-trip-suggestions";
 interface AssistedTripResultCardProps {
   result: AssistedTripResult;
   onReset: () => void;
+  onSelectAlternative?: (alternative: TripAlternative) => Promise<void>;
+  expandingAlternativeIndex?: number | null;
   userProfile: {
     name: string;
     dateOfBirth: Date | null;
@@ -43,6 +46,8 @@ const TRIP_TYPE_LABELS = {
 export function AssistedTripResultCard({
   result,
   onReset,
+  onSelectAlternative,
+  expandingAlternativeIndex,
   userProfile,
 }: AssistedTripResultCardProps) {
   const { mainSuggestion, alternatives } = result;
@@ -226,10 +231,21 @@ export function AssistedTripResultCard({
         <div className="border-t bg-slate-50 p-6">
           <h3 className="font-semibold text-slate-700 mb-4">
             Other Options You Might Like
+            {onSelectAlternative && (
+              <span className="text-xs font-normal text-slate-500 ml-2">
+                (click to explore)
+              </span>
+            )}
           </h3>
           <div className="grid gap-3">
             {alternatives.map((alt, idx) => (
-              <AlternativeCard key={idx} alternative={alt} />
+              <AlternativeCard
+                key={idx}
+                alternative={alt}
+                onClick={onSelectAlternative ? () => onSelectAlternative(alt) : undefined}
+                isLoading={expandingAlternativeIndex === idx}
+                isDisabled={expandingAlternativeIndex !== null && expandingAlternativeIndex !== idx}
+              />
             ))}
           </div>
         </div>
@@ -239,17 +255,33 @@ export function AssistedTripResultCard({
 }
 
 // Alternative suggestion card
-function AlternativeCard({ alternative }: { alternative: TripAlternative }) {
+interface AlternativeCardProps {
+  alternative: TripAlternative;
+  onClick?: () => void;
+  isLoading?: boolean;
+  isDisabled?: boolean;
+}
+
+function AlternativeCard({ alternative, onClick, isLoading, isDisabled }: AlternativeCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      className="bg-white rounded-lg border border-slate-200 p-4 hover:border-purple-300 hover:shadow-sm transition-all cursor-pointer"
+      onClick={!isDisabled && !isLoading ? onClick : undefined}
+      className={`bg-white rounded-lg border p-4 transition-all ${
+        isLoading
+          ? "border-purple-400 shadow-md"
+          : isDisabled
+          ? "border-slate-100 opacity-50 cursor-not-allowed"
+          : onClick
+          ? "border-slate-200 hover:border-purple-300 hover:shadow-sm cursor-pointer"
+          : "border-slate-200"
+      }`}
     >
       <div className="flex items-start justify-between">
-        <div>
+        <div className="flex-1">
           <h4 className="font-medium text-slate-800">{alternative.title}</h4>
-          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
+          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 flex-wrap">
             <span className="flex items-center gap-1">
               <MapPin className="h-3 w-3" />
               {alternative.destination}
@@ -265,8 +297,19 @@ function AlternativeCard({ alternative }: { alternative: TripAlternative }) {
           </div>
           <p className="text-xs text-purple-600 mt-2">{alternative.whyDifferent}</p>
         </div>
-        <ChevronRight className="h-5 w-5 text-slate-400" />
+        <div className="ml-2 flex-shrink-0">
+          {isLoading ? (
+            <Loader2 className="h-5 w-5 text-purple-500 animate-spin" />
+          ) : onClick ? (
+            <ChevronRight className="h-5 w-5 text-slate-400" />
+          ) : null}
+        </div>
       </div>
+      {isLoading && (
+        <div className="mt-3 text-xs text-purple-600 text-center">
+          Generating full trip details...
+        </div>
+      )}
     </motion.div>
   );
 }

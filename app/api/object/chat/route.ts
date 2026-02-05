@@ -32,26 +32,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // For profile_attribute, get current XML to pass to AI
-    let currentXml = "";
+    // For profile_attribute, get current profile context to pass to AI
+    let profileContext = "";
     if (objectType === "profile_attribute") {
       try {
         const profileGraph = await getUserProfileGraph(userId);
-        currentXml = profileGraph.xmlData || "";
-        console.log("📋 [Object Chat API] Fetched current XML for AI analysis");
+        // Format profile items for AI context
+        const items = profileGraph.graphData.nodes
+          .filter(n => n.type === 'item')
+          .map(n => `- ${n.category}: ${n.value}`)
+          .join('\n');
+        profileContext = items || "No profile items yet";
+        console.log("📋 [Object Chat API] Fetched current profile context for AI analysis");
       } catch (error) {
-        console.error("Error fetching profile XML:", error);
+        console.error("Error fetching profile context:", error);
       }
     }
 
-    // Build system prompt with variables and XML context
+    // Build system prompt with variables and profile context
     let systemPrompt = config.promptVariables
       ? injectVariables(config.systemPrompt, config.promptVariables)
       : config.systemPrompt;
     
-    // Append current XML for profile_attribute
-    if (objectType === "profile_attribute" && currentXml) {
-      systemPrompt += `\n\nCURRENT USER PROFILE XML:\n${currentXml}`;
+    // Append current profile context for profile_attribute
+    if (objectType === "profile_attribute" && profileContext) {
+      systemPrompt += `\n\nCURRENT USER PROFILE ITEMS:\n${profileContext}`;
     }
 
     // Call AI

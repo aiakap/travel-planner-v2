@@ -1,34 +1,17 @@
 /**
- * Profile Graph Page
+ * Profile Graph Page - Redirect
  * 
- * Server component that fetches initial graph data
+ * This page has been merged into the unified profile page.
+ * Redirects to /profile#dossier for backward compatibility.
  */
 
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getUserProfileGraph } from "@/lib/actions/profile-graph-actions";
-import { ProfileGraphClient } from "./client";
 
 export const metadata = {
-  title: "Profile Graph Builder",
-  description: "Build your interactive profile graph"
+  title: "Redirecting...",
+  description: "Redirecting to profile page"
 };
 
-export default async function ProfileGraphPage() {
-  const session = await auth();
-  
-  if (!session?.user?.id) {
-    redirect("/auth-landing");
-  }
-
-  // Fetch initial profile graph data
-  const profileGraph = await getUserProfileGraph(session.user.id);
-
-  return (
-    <ProfileGraphClient
-      initialGraphData={profileGraph.graphData}
-      initialXmlData={profileGraph.xmlData || null}
-      user={profileGraph.user}
-    />
-  );
+export default function ProfileGraphPage() {
+  redirect("/profile#dossier");
 }

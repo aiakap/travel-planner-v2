@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "prisma db seed",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "check-orphaned": "ts-node --project tsconfig.json scripts/check-orphaned-records.ts",
     "cleanup-orphaned": "ts-node --project tsconfig.json scripts/cleanup-orphaned-records.ts",
@@ -100,11 +103,13 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.177.0",
     "@types/uuid": "^10.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
     "prisma": "^6.4.1",
     "tailwindcss": "^4.1.18",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

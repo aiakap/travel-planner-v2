@@ -11,7 +11,8 @@ import {
   UserContextDisplay,
   MinimalUserContext
 } from "@/lib/types/user-context";
-import { extractItemsFromXml } from "@/lib/profile-graph-xml";
+import { getUserProfileValues } from "@/lib/actions/profile-relational-actions";
+import { getProfileSummary, UserProfileValueWithRelations } from "@/lib/profile-relational-adapter";
 
 /**
  * Get complete user context including OAuth, profile, and graph data
@@ -206,54 +207,38 @@ async function getUserProfileData(userId: string): Promise<UserProfileData> {
 
 /**
  * Get profile graph summary
+ * Now uses relational data instead of XML
  */
 async function getUserProfileGraphSummary(userId: string): Promise<ProfileGraphSummary> {
-  console.log("🕸️ [getUserProfileGraphSummary] Fetching graph for user:", userId);
+  console.log("🕸️ [getUserProfileGraphSummary] Fetching profile values for user:", userId);
   
-  const profileGraph = await prisma.userProfileGraph.findUnique({
-    where: { userId },
-    select: {
-      graphData: true,
-      updatedAt: true
-    }
-  });
-  
-  if (!profileGraph || !profileGraph.graphData) {
-    console.log("⚠️ [getUserProfileGraphSummary] No graph data found");
+  try {
+    // Fetch user profile values from relational tables
+    const userValues = await getUserProfileValues(userId) as UserProfileValueWithRelations[];
+    
+    // Use adapter to get summary
+    const summary = getProfileSummary(userValues);
+    
+    console.log("✅ [getUserProfileGraphSummary] Profile summary:", {
+      hasData: summary.hasData,
+      itemCount: summary.itemCount,
+      categoriesCount: summary.categories.length,
+      lastUpdated: summary.lastUpdated,
+    });
+    
+    return {
+      hasGraph: summary.hasData,
+      itemCount: summary.itemCount,
+      categories: summary.categories,
+      lastUpdated: summary.lastUpdated
+    };
+  } catch (error) {
+    console.error("❌ [getUserProfileGraphSummary] Error:", error);
     return {
       hasGraph: false,
       itemCount: 0,
       categories: [],
       lastUpdated: null
-    };
-  }
-  
-  try {
-    // Extract items from XML
-    const items = extractItemsFromXml(profileGraph.graphData);
-    
-    // Get unique categories
-    const categories = Array.from(new Set(items.map(item => item.category)));
-    
-    console.log("✅ [getUserProfileGraphSummary] Graph parsed:", {
-      itemCount: items.length,
-      categoriesCount: categories.length,
-      lastUpdated: profileGraph.updatedAt,
-    });
-    
-    return {
-      hasGraph: true,
-      itemCount: items.length,
-      categories,
-      lastUpdated: profileGraph.updatedAt
-    };
-  } catch (error) {
-    console.error("❌ [getUserProfileGraphSummary] Error parsing graph:", error);
-    return {
-      hasGraph: false,
-      itemCount: 0,
-      categories: [],
-      lastUpdated: profileGraph.updatedAt
     };
   }
 }

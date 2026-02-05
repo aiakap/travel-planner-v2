@@ -150,6 +150,9 @@ export async function updateUserProfile(data: {
   loyaltyPrograms?: any;
   homeAirports?: any;
   preferredAirports?: any;
+  gender?: string;
+  citizenship?: string[];
+  countryOfResidence?: string;
 }) {
   const session = await auth();
   if (!session?.user?.id) {

@@ -24,7 +24,7 @@ export function ChatLayout({
   params 
 }: ChatLayoutProps) {
   const [data, setData] = useState(initialData);
-  const [xmlData, setXmlData] = useState<string>(initialData?.xmlData || '');
+  // Note: xmlData state is deprecated - relational storage is used now
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [panelState, setPanelState] = useState<PanelState>(DEFAULT_PANEL_STATE);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -87,36 +87,12 @@ export function ChatLayout({
     setPanelState(prev => ({ ...prev, isRightCollapsed: !prev.isRightCollapsed }));
   };
 
-  // Save handler - writes XML to DB and refreshes
+  // Save handler - deprecated as data is now saved automatically via relational actions
   const handleSave = async () => {
-    try {
-      console.log('💾 Saving XML to database...');
-      
-      // Save XML to database
-      const response = await fetch("/api/profile-graph/save-xml", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ xmlData })
-      });
-
-      if (!response.ok) throw new Error("Save failed");
-
-      const result = await response.json();
-      
-      // Update with fresh data from DB
-      setXmlData(result.xmlData);
-      
-      // Parse and update graph data
-      const { parseXmlToGraph } = await import("@/lib/profile-graph-xml");
-      const graphData = parseXmlToGraph(result.xmlData, userId);
-      setData({ graphData, xmlData: result.xmlData });
-      setHasUnsavedChanges(false);
-      
-      console.log("✅ Saved to database successfully");
-    } catch (error) {
-      console.error("❌ Save failed:", error);
-      alert("Failed to save. Please try again.");
-    }
+    console.log('💾 Save triggered - data is auto-saved via relational storage');
+    setHasUnsavedChanges(false);
+    // Refresh data from database
+    setRefreshTrigger(prev => prev + 1);
   };
 
   // Delete handler - refreshes data without reloading page
@@ -160,9 +136,10 @@ export function ChatLayout({
             config={config}
             userId={userId}
             params={params}
-            xmlData={xmlData}
+            xmlData="" // Deprecated - relational storage is used
             onCollapse={toggleLeftPanel}
-            onDataUpdate={(update) => {              console.log('🟣 [CHAT LAYOUT] onDataUpdate received:', {
+            onDataUpdate={(update) => {
+              console.log('🟣 [CHAT LAYOUT] onDataUpdate received:', {
                 type: typeof update,
                 hasAction: update && 'action' in update,
                 action: update?.action,
@@ -176,7 +153,8 @@ export function ChatLayout({
               } else if (update && typeof update === 'object' && 'action' in update) {
                 // Handle action-based updates
                 console.log('🟣 [CHAT LAYOUT] Handling action:', update.action);
-                if (update.action === 'refresh_profile' || update.action === 'reload_data') {                  console.log('🔄 [CHAT LAYOUT] Reloading data from database...');
+                if (update.action === 'refresh_profile' || update.action === 'reload_data') {
+                  console.log('🔄 [CHAT LAYOUT] Reloading data from database...');
                   setRefreshTrigger(prev => prev + 1);
                 }
               } else if (update && update.graphData) {
@@ -188,13 +166,6 @@ export function ChatLayout({
                   graphData: update.graphData,
                   hasData: update.graphData.nodes?.length > 1
                 });
-                
-                // Update XML data and mark as unsaved if XML is provided
-                if (update.xmlData) {
-                  setXmlData(update.xmlData);
-                  setHasUnsavedChanges(true);
-                  console.log('🟣 [CHAT LAYOUT] XML updated, marked as unsaved');
-                }
               } else {
                 // Fallback for other update types
                 console.log('🟣 [CHAT LAYOUT] Setting data directly');
@@ -263,10 +234,6 @@ export function ChatLayout({
                   graphData: update.graphData,
                   hasData: update.graphData.nodes?.length > 1
                 });
-                if (update.xmlData) {
-                  setXmlData(update.xmlData);
-                  setHasUnsavedChanges(true);
-                }
               }
             }}
           />

@@ -111,7 +111,7 @@ export function ProfileView({
                         
                         return (
                           <div
-                            key={`${item.id}-${index}`}
+                            key={`${category}-${subcategory}-${item.id}-${index}`}
                             style={{
                               display: "inline-flex",
                               alignItems: "center",

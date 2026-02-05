@@ -5,13 +5,7 @@ import { AirportAutocompleteInput } from "@/components/ui/airport-autocomplete-i
 import { addHomeAirport, removeHomeAirport, addPreferredAirport, removePreferredAirport } from "@/lib/actions/profile-actions";
 import { X, Home, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface Airport {
-  iataCode: string;
-  name: string;
-  city: string;
-  country: string;
-}
+import { Airport } from "@/lib/types/profile";
 
 interface UnifiedAirportSectionProps {
   initialHomeAirports: Airport[];

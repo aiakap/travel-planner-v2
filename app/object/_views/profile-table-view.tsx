@@ -138,7 +138,7 @@ export function ProfileTableView({
 
             return (
               <tr
-                key={`${item.id}-${index}`}
+                key={`${item.category}-${item.subcategory}-${item.id}-${index}`}
                 style={{
                   background: isDeleting ? "#fee2e2" : (isEvenRow ? "white" : "#f9fafb"),
                   borderBottom: "1px solid #e5e7eb",

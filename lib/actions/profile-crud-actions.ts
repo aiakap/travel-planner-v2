@@ -4,23 +4,32 @@
  * Profile CRUD Server Actions
  * 
  * Specialized, testable server actions for profile graph operations
- * Used by both the generic object system and direct API calls
+ * Now uses relational storage (ProfileCategory/ProfileValue/UserProfileValue)
  */
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { 
-  addItemToXml, 
-  removeItemFromXml, 
-  parseXmlToGraph, 
-  createEmptyProfileXml 
-} from "@/lib/profile-graph-xml";
-import { getUserProfileGraph } from "@/lib/actions/profile-graph-actions";
+  addGraphItem, 
+  removeGraphItem, 
+  getUserProfileGraph 
+} from "@/lib/actions/profile-graph-actions";
+import { 
+  addProfileValue, 
+  removeProfileValue, 
+  getUserProfileValues,
+  cleanupDuplicateUserValues 
+} from "@/lib/actions/profile-relational-actions";
+import { 
+  convertUserValuesToGraphData, 
+  mapXmlCategoryToRelationalSlug,
+  UserProfileValueWithRelations 
+} from "@/lib/profile-relational-adapter";
 import { revalidatePath } from "next/cache";
 
 /**
  * Upsert a profile item
- * Adds or updates an item in the user's profile graph
+ * Adds or updates an item in the user's profile using relational storage
  */
 export async function upsertProfileItem(params: {
   category: string;
@@ -35,76 +44,68 @@ export async function upsertProfileItem(params: {
 
   console.log("🔵 [upsertProfileItem] Starting:", params);
 
-  // #region agent log
-  const fs = require('fs');
-  fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'profile-crud-actions.ts:36',message:'upsertProfileItem called',data:{category:params.category,subcategory:params.subcategory,value:params.value,userId:session.user.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H6'})+'\n');
-  // #endregion
-
   try {
-    // Get current XML
-    let profileGraph = await prisma.userProfileGraph.findUnique({
-      where: { userId: session.user.id }
-    });
+    // Map category/subcategory to relational slug
+    const categorySlug = mapXmlCategoryToRelationalSlug(params.category, params.subcategory);
     
-    const currentXml = profileGraph?.graphData || createEmptyProfileXml();
+    console.log("🔵 [upsertProfileItem] Mapped to slug:", categorySlug);
     
-    // #region agent log
-    fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'profile-crud-actions.ts:47',message:'Current XML fetched',data:{hasProfileGraph:!!profileGraph,xmlLength:currentXml.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H6'})+'\n');
-    // #endregion
-    
-    // Add item to XML
-    const updatedXml = addItemToXml(
-      currentXml,
-      params.category,
-      params.subcategory,
+    // Add to relational storage
+    const result = await addProfileValue(
+      session.user.id,
       params.value,
-      params.metadata
+      categorySlug,
+      {
+        source: 'crud',
+        originalCategory: params.category,
+        originalSubcategory: params.subcategory,
+        addedAt: new Date().toISOString(),
+        ...params.metadata
+      }
     );
     
-    // #region agent log
-    fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'profile-crud-actions.ts:59',message:'XML updated',data:{oldLength:currentXml.length,newLength:updatedXml.length,changed:currentXml!==updatedXml},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H8'})+'\n');
-    // #endregion
+    if (!result.success) {
+      console.log("🔵 [upsertProfileItem] Value may already exist:", result.error);
+    }
     
-    console.log("🔵 [upsertProfileItem] XML updated, saving to DB...");
+    console.log("🟢 [upsertProfileItem] Saved to DB");
     
-    // Save to DB
-    profileGraph = await prisma.userProfileGraph.upsert({
-      where: { userId: session.user.id },
-      update: { graphData: updatedXml },
-      create: { userId: session.user.id, graphData: updatedXml }
-    });
+    // Fetch updated values and convert to graph
+    const userValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
     
-    // #region agent log
-    fs.appendFileSync('/Users/alexkaplinsky/Desktop/Dev site/travel-planner-v2/.cursor/debug.log', JSON.stringify({location:'profile-crud-actions.ts:72',message:'Saved to DB',data:{profileGraphId:profileGraph.id,xmlLength:profileGraph.graphData.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H8'})+'\n');
-    // #endregion
-    
-    console.log("🟢 [upsertProfileItem] Saved to DB:", profileGraph.id);
-    
-    // Parse for return
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { name: true }
     });
     
-    const graphData = parseXmlToGraph(
-      profileGraph.graphData,
+    const { graphData, duplicateIds } = convertUserValuesToGraphData(
+      userValues,
       session.user.id,
       user?.name || undefined
     );
     
     console.log("🟢 [upsertProfileItem] Parsed graph:", {
       nodeCount: graphData.nodes.length,
-      edgeCount: graphData.edges.length
+      edgeCount: graphData.edges.length,
+      duplicatesFound: duplicateIds.length
     });
+    
+    // Fire-and-forget cleanup of duplicates
+    if (duplicateIds.length > 0) {
+      cleanupDuplicateUserValues(duplicateIds).catch(err => {
+        console.error('[upsertProfileItem] Background cleanup failed:', err);
+      });
+    }
     
     // Revalidate paths
     revalidatePath("/profile/graph");
+    revalidatePath("/profile");
     revalidatePath("/object/profile_attribute");
     
     return {
       success: true,
       graphData,
-      xmlData: profileGraph.graphData
+      xmlData: null // No longer using XML
     };
   } catch (error) {
     console.error("🔴 [upsertProfileItem] Error:", error);
@@ -114,7 +115,7 @@ export async function upsertProfileItem(params: {
 
 /**
  * Delete a profile item
- * Removes an item from the user's profile graph
+ * Removes an item from the user's profile using relational storage
  */
 export async function deleteProfileItem(params: {
   category: string;
@@ -129,57 +130,118 @@ export async function deleteProfileItem(params: {
   console.log("🔵 [deleteProfileItem] Starting:", params);
 
   try {
-    const profileGraph = await prisma.userProfileGraph.findUnique({
-      where: { userId: session.user.id }
-    });
+    // Find the user profile value by value text
+    const userValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
     
-    if (!profileGraph) {
-      throw new Error("Profile not found");
+    const matchingValue = userValues.find(uv => uv.value.value === params.value);
+    
+    if (!matchingValue) {
+      console.log("🔵 [deleteProfileItem] Value not found:", params.value);
+    } else {
+      // Remove from relational storage
+      await removeProfileValue(session.user.id, matchingValue.id);
+      console.log("🟢 [deleteProfileItem] Removed from DB:", matchingValue.id);
     }
     
-    const updatedXml = removeItemFromXml(
-      profileGraph.graphData,
-      params.category,
-      params.subcategory,
-      params.value
-    );
-    
-    console.log("🔵 [deleteProfileItem] XML updated, saving to DB...");
-    
-    const updated = await prisma.userProfileGraph.update({
-      where: { userId: session.user.id },
-      data: { graphData: updatedXml }
-    });
-    
-    console.log("🟢 [deleteProfileItem] Saved to DB:", updated.id);
+    // Fetch updated values and convert to graph
+    const updatedValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
     
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { name: true }
     });
     
-    const graphData = parseXmlToGraph(
-      updated.graphData,
+    const { graphData, duplicateIds } = convertUserValuesToGraphData(
+      updatedValues,
       session.user.id,
       user?.name || undefined
     );
     
     console.log("🟢 [deleteProfileItem] Parsed graph:", {
       nodeCount: graphData.nodes.length,
-      edgeCount: graphData.edges.length
+      edgeCount: graphData.edges.length,
+      duplicatesFound: duplicateIds.length
     });
+    
+    // Fire-and-forget cleanup of duplicates
+    if (duplicateIds.length > 0) {
+      cleanupDuplicateUserValues(duplicateIds).catch(err => {
+        console.error('[deleteProfileItem] Background cleanup failed:', err);
+      });
+    }
     
     // Revalidate paths
     revalidatePath("/profile/graph");
+    revalidatePath("/profile");
     revalidatePath("/object/profile_attribute");
     
     return {
       success: true,
       graphData,
-      xmlData: updated.graphData
+      xmlData: null // No longer using XML
     };
   } catch (error) {
     console.error("🔴 [deleteProfileItem] Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a profile item by its UserProfileValue ID
+ * More direct method for removal
+ */
+export async function deleteProfileItemById(userProfileValueId: string) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Not authenticated");
+  }
+
+  console.log("🔵 [deleteProfileItemById] Starting:", userProfileValueId);
+
+  try {
+    // Remove from relational storage
+    await removeProfileValue(session.user.id, userProfileValueId);
+    console.log("🟢 [deleteProfileItemById] Removed from DB");
+    
+    // Fetch updated values and convert to graph
+    const userValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
+    
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true }
+    });
+    
+    const { graphData, duplicateIds } = convertUserValuesToGraphData(
+      userValues,
+      session.user.id,
+      user?.name || undefined
+    );
+    
+    console.log("🟢 [deleteProfileItemById] Parsed graph:", {
+      nodeCount: graphData.nodes.length,
+      edgeCount: graphData.edges.length,
+      duplicatesFound: duplicateIds.length
+    });
+    
+    // Fire-and-forget cleanup of duplicates
+    if (duplicateIds.length > 0) {
+      cleanupDuplicateUserValues(duplicateIds).catch(err => {
+        console.error('[deleteProfileItemById] Background cleanup failed:', err);
+      });
+    }
+    
+    // Revalidate paths
+    revalidatePath("/profile/graph");
+    revalidatePath("/profile");
+    revalidatePath("/object/profile_attribute");
+    
+    return {
+      success: true,
+      graphData,
+      xmlData: null
+    };
+  } catch (error) {
+    console.error("🔴 [deleteProfileItemById] Error:", error);
     throw error;
   }
 }
@@ -198,7 +260,7 @@ export async function readProfileData(userId?: string) {
   
   console.log("🔵 [readProfileData] Reading for userId:", targetUserId);
   
-  // Reuse existing getUserProfileGraph
+  // Reuse existing getUserProfileGraph (now uses relational data)
   const result = await getUserProfileGraph(targetUserId);
   
   console.log("🟢 [readProfileData] Fetched:", {

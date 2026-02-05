@@ -31,13 +31,14 @@ const MainSuggestionSchema = z.object({
   })).describe("For multi-destination trips, provide 2-4 key stops"),
 });
 
-// Schema for alternatives
+// Schema for alternatives - includes tripType for expansion
 const AlternativeSchema = z.object({
   title: z.string().describe("Trip title"),
   destination: z.string().describe("Destination"),
   duration: z.string().describe("Duration"),
   estimatedBudget: z.string().describe("Budget range"),
   whyDifferent: z.string().describe("Brief explanation of how this differs (e.g., 'Lower budget option', 'Different destination style', 'Shorter trip')"),
+  tripType: z.enum(["local_experience", "road_trip", "single_destination", "multi_destination"]).describe("Type of trip for this alternative"),
 });
 
 // Combined response schema
@@ -57,46 +58,66 @@ export interface AssistedTripInput {
   };
 }
 
-// Helper to format wizard answers into readable text
-function formatAnswers(answers: WizardAnswers): string {
+// Generic destination types that are preferences, not specific places
+const GENERIC_DESTINATION_TYPES = [
+  "beach", "beach & sun", "city", "city break", "mountains", 
+  "europe", "asia", "surprise", "surprise me", "anywhere",
+  "tropical", "coastal", "rural", "urban"
+];
+
+// Helper to check if destination is a specific place vs general preference
+function isSpecificDestination(value: string): boolean {
+  const normalized = value.toLowerCase().trim();
+  return !GENERIC_DESTINATION_TYPES.some(generic => 
+    normalized === generic || normalized.includes(generic)
+  );
+}
+
+// Helper to format wizard answers into readable text with mandatory flags
+function formatAnswers(answers: WizardAnswers): { formatted: string; hasSpecificDestination: boolean } {
   const parts: string[] = [];
+  let hasSpecificDestination = false;
 
-  // When
+  // When - REQUIRED
   if (answers.when.customValue) {
-    parts.push(`**When**: ${answers.when.customValue}`);
+    parts.push(`**TIMING (REQUIRED)**: ${answers.when.customValue}`);
   } else if (answers.when.selectedChips.length > 0) {
-    parts.push(`**When**: ${answers.when.selectedChips.join(", ")}`);
+    parts.push(`**TIMING (REQUIRED)**: ${answers.when.selectedChips.join(", ")}`);
   }
 
-  // Where
-  if (answers.where.customValue) {
-    parts.push(`**Where**: ${answers.where.customValue}`);
-  } else if (answers.where.selectedChips.length > 0) {
-    parts.push(`**Where**: ${answers.where.selectedChips.join(", ")}`);
+  // Where - Check if specific destination or general preference
+  const whereValue = answers.where.customValue || answers.where.selectedChips.join(", ");
+  if (whereValue) {
+    if (isSpecificDestination(whereValue)) {
+      hasSpecificDestination = true;
+      parts.push(`**DESTINATION (MANDATORY - DO NOT CHANGE)**: ${whereValue} - The trip MUST be to this EXACT location. Do NOT substitute with a different city, region, or country.`);
+    } else {
+      parts.push(`**Destination Style**: ${whereValue} (you may suggest a specific destination matching this style)`);
+    }
   }
 
-  // Budget
+  // Budget - REQUIRED
   if (answers.budget.customValue) {
-    parts.push(`**Budget**: ${answers.budget.customValue}`);
+    parts.push(`**BUDGET (REQUIRED)**: ${answers.budget.customValue}`);
   } else if (answers.budget.selectedChips.length > 0) {
-    parts.push(`**Budget**: ${answers.budget.selectedChips.join(", ")}`);
+    parts.push(`**BUDGET (REQUIRED)**: ${answers.budget.selectedChips.join(", ")}`);
   }
 
-  // Who
+  // Who - REQUIRED
   if (answers.who.customValue) {
-    parts.push(`**Traveling with**: ${answers.who.customValue}`);
+    parts.push(`**TRAVELERS (REQUIRED)**: ${answers.who.customValue}`);
   } else if (answers.who.selectedChips.length > 0) {
-    parts.push(`**Traveling with**: ${answers.who.selectedChips.join(", ")}`);
+    parts.push(`**TRAVELERS (REQUIRED)**: ${answers.who.selectedChips.join(", ")}`);
   }
 
-  // What (trip style/interests)
+  // What (trip style/interests) - REQUIRED
   if (answers.what.customValue) {
-    parts.push(`**Trip style**: ${answers.what.customValue}`);
+    parts.push(`**TRIP STYLE (REQUIRED)**: ${answers.what.customValue}`);
   } else if (answers.what.selectedChips.length > 0) {
-    parts.push(`**Trip style**: ${answers.what.selectedChips.join(", ")}`);
+    parts.push(`**TRIP STYLE (REQUIRED)**: ${answers.what.selectedChips.join(", ")}`);
   }
 
-  return parts.join("\n");
+  return { formatted: parts.join("\n"), hasSpecificDestination };
 }
 
 // Helper to extract profile context
@@ -138,8 +159,19 @@ export async function generateAssistedTripSuggestion(
     ? `${userProfile.city}${userProfile.country ? `, ${userProfile.country}` : ""}`
     : "Unknown";
 
-  const formattedAnswers = formatAnswers(answers);
+  const { formatted: formattedAnswers, hasSpecificDestination } = formatAnswers(answers);
   const profileContext = formatProfileContext(profileItems);
+
+  // Build destination constraint text based on whether a specific place was selected
+  const destinationConstraint = hasSpecificDestination
+    ? `
+## CRITICAL - MANDATORY DESTINATION CONSTRAINT
+The user has selected a SPECIFIC destination. You MUST plan the trip to that EXACT location.
+- Do NOT substitute with a similar city, country, or region
+- Do NOT suggest an alternative location for the main suggestion
+- The destination field MUST match exactly what they specified
+- For alternatives, you may suggest different trips but clearly explain the difference`
+    : "";
 
   const prompt = `Generate a personalized trip suggestion based on the traveler's specific preferences:
 
@@ -151,40 +183,45 @@ ${formattedAnswers}
 
 ## Additional Profile Context:
 ${profileContext || "No additional profile data available"}
+${destinationConstraint}
 
 ---
 
-INSTRUCTIONS:
+## CRITICAL REQUIREMENTS - ALL ARE NON-NEGOTIABLE:
 
-1. **Main Suggestion**: Create ONE highly personalized trip that perfectly matches ALL their stated preferences:
-   - Match the EXACT timing they specified
-   - Match the destination type/region they want
-   - Stay within their budget range
-   - Accommodate who they're traveling with
-   - Incorporate their desired trip style/experiences
-   - Use REAL, bookable destinations with accurate coordinates
-   - Provide a compelling "why" that references their specific preferences
+1. **DESTINATION**: If marked as "MANDATORY - DO NOT CHANGE", the trip MUST be to that EXACT city/place. 
+   For example, if they said "Hong Kong", the destination MUST be "Hong Kong" - not Tokyo, Singapore, or "Asia".
 
-2. **Two Alternatives**: Provide 2 brief alternatives that offer variety:
-   - Alternative 1: A different budget tier (higher or lower)
-   - Alternative 2: A different destination style or region
-   - Each alternative should still respect most of their preferences but offer a meaningful difference
+2. **TIMING**: Use their exact dates or timeframe as specified.
 
-3. **Trip Type Selection**:
-   - "local_experience": Under 8 hours, close to home
-   - "road_trip": 2-7 days, driving distance
-   - "single_destination": Fly to one place
-   - "multi_destination": Multiple cities/countries
+3. **BUDGET**: Stay within their specified budget range.
 
-4. **Be Specific**:
-   - Use actual place names, not generic descriptions
-   - Provide accurate GPS coordinates
-   - Include specific activities and experiences
-   - Make the highlights actionable and bookable
+4. **TRAVELERS**: Plan activities appropriate for their travel group.
 
-5. **Image Query**:
-   - Use the most recognizable landmark or scene at the destination
-   - Be specific (e.g., "Eiffel Tower Paris" not just "Paris")`;
+5. **TRIP STYLE**: Incorporate ALL their selected experiences/interests.
+
+---
+
+## MAIN SUGGESTION:
+Create ONE trip that satisfies ALL the above requirements:
+- Use REAL, bookable destinations with accurate GPS coordinates
+- Provide a compelling "why" that references their specific preferences
+- Include 3-5 specific, actionable highlights
+
+## TWO ALTERNATIVES:
+Provide 2 alternatives that offer meaningful variety while ${hasSpecificDestination ? "keeping the same destination" : "respecting their preferences"}:
+- Alternative 1: Different budget tier (higher or lower) ${hasSpecificDestination ? "in the same destination" : ""}
+- Alternative 2: Different trip duration or style ${hasSpecificDestination ? "in the same destination" : "or a different destination"}
+- Each must clearly explain how it differs
+
+## TRIP TYPE SELECTION:
+- "local_experience": Under 8 hours, close to home
+- "road_trip": 2-7 days, driving distance  
+- "single_destination": Fly to one place
+- "multi_destination": Multiple cities/countries
+
+## IMAGE QUERY:
+Use the most recognizable landmark at the destination (e.g., "Victoria Peak Hong Kong" not just "Hong Kong")`;
 
   const result = await generateObject({
     model: openai("gpt-4o"),
@@ -196,4 +233,85 @@ INSTRUCTIONS:
     mainSuggestion: result.object.mainSuggestion as AITripSuggestion,
     alternatives: result.object.alternatives as TripAlternative[],
   };
+}
+
+// Input for expanding an alternative to a full suggestion
+export interface ExpandAlternativeInput {
+  alternative: TripAlternative;
+  originalAnswers: WizardAnswers;
+  profileItems: ProfileGraphItem[];
+  userProfile: {
+    name: string;
+    dateOfBirth: Date | string | null;
+    city: string | null;
+    country: string | null;
+  };
+}
+
+/**
+ * Expands a brief alternative suggestion into a full AITripSuggestion
+ */
+export async function expandAlternativeToFullSuggestion(
+  input: ExpandAlternativeInput
+): Promise<AITripSuggestion> {
+  const { alternative, originalAnswers, profileItems, userProfile } = input;
+
+  // Calculate age if available
+  let ageInfo = "";
+  if (userProfile.dateOfBirth) {
+    const dob = new Date(userProfile.dateOfBirth);
+    const today = new Date();
+    const age = today.getFullYear() - dob.getFullYear();
+    ageInfo = ` (Age: ${age})`;
+  }
+
+  const travelerName = userProfile.name || "Traveler";
+  const homeLocation = userProfile.city
+    ? `${userProfile.city}${userProfile.country ? `, ${userProfile.country}` : ""}`
+    : "Unknown";
+
+  const { formatted: formattedAnswers } = formatAnswers(originalAnswers);
+  const profileContext = formatProfileContext(profileItems);
+
+  const prompt = `Expand this alternative trip suggestion into a full, detailed trip plan:
+
+## Alternative to Expand:
+- **Title**: ${alternative.title}
+- **Destination**: ${alternative.destination}
+- **Duration**: ${alternative.duration}
+- **Budget**: ${alternative.estimatedBudget}
+- **Trip Type**: ${alternative.tripType}
+- **Why Different**: ${alternative.whyDifferent}
+
+## Traveler Info:
+**Name**: ${travelerName}${ageInfo}
+**Home Location**: ${homeLocation}
+
+## Original Preferences (from wizard):
+${formattedAnswers}
+
+## Profile Context:
+${profileContext || "No additional profile data available"}
+
+---
+
+## INSTRUCTIONS:
+
+Create a FULL trip suggestion based on the alternative above. The trip MUST:
+1. Use the EXACT destination, duration, and budget from the alternative
+2. Match the trip type specified
+3. Incorporate the traveler's interests and preferences where possible
+4. Provide REAL, bookable experiences with accurate GPS coordinates
+5. Include 3-5 specific, actionable highlights
+6. Use a recognizable landmark for the image query
+
+The "why" explanation should reference both why this alternative differs AND how it still suits the traveler's interests.`;
+
+  const result = await generateObject({
+    model: openai("gpt-4o"),
+    schema: MainSuggestionSchema,
+    prompt,
+  });
+
+  return result.object as AITripSuggestion;
 }

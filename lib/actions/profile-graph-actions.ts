@@ -4,23 +4,24 @@
  * Profile Graph Server Actions
  * 
  * Server actions for managing the profile graph data
+ * Now uses relational storage (ProfileCategory/ProfileValue/UserProfileValue)
  */
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { 
-  parseXmlToGraph, 
-  createEmptyProfileXml, 
-  addItemToXml, 
-  removeItemFromXml,
-  extractItemsFromXml,
-  validateXml
-} from "@/lib/profile-graph-xml";
+  convertUserValuesToGraphData, 
+  convertUserValuesToProfileItems,
+  mapXmlCategoryToRelationalSlug,
+  UserProfileValueWithRelations
+} from "@/lib/profile-relational-adapter";
+import { getUserProfileValues, addProfileValue, removeProfileValue, cleanupDuplicateUserValues } from "@/lib/actions/profile-relational-actions";
 import { GraphData, ProfileGraphItem } from "@/lib/types/profile-graph";
 import { revalidatePath } from "next/cache";
 
 /**
  * Get user's profile graph data
+ * Now reads from relational tables instead of XML
  */
 export async function getUserProfileGraph(userId?: string) {
   const session = await auth();
@@ -36,26 +37,12 @@ export async function getUserProfileGraph(userId?: string) {
   }
   
   try {
-    let profileGraph = await prisma.userProfileGraph.findUnique({
-      where: { userId: targetUserId }
-    });
+    // Fetch user profile values from relational tables
+    const userValues = await getUserProfileValues(targetUserId) as UserProfileValueWithRelations[];
     
     console.log('📖 [getUserProfileGraph] Reading for userId:', targetUserId, {
-      found: !!profileGraph,
-      id: profileGraph?.id,
-      xmlLength: profileGraph?.graphData?.length
+      valueCount: userValues.length
     });
-    
-    // Create profile graph if it doesn't exist
-    if (!profileGraph) {
-      profileGraph = await prisma.userProfileGraph.create({
-        data: {
-          userId: targetUserId,
-          graphData: createEmptyProfileXml()
-        }
-      });
-      console.log('📖 [getUserProfileGraph] Created new record:', profileGraph.id);
-    }
     
     // Fetch user with profile
     const user = await prisma.user.findUnique({
@@ -75,26 +62,35 @@ export async function getUserProfileGraph(userId?: string) {
       }
     });
     
-    // Parse XML to graph data
-    const graphData = parseXmlToGraph(
-      profileGraph.graphData,
+    // Convert to graph data using adapter
+    const { graphData, duplicateIds } = convertUserValuesToGraphData(
+      userValues,
       targetUserId,
       user?.name || undefined
     );
     
-    console.log('📖 [getUserProfileGraph] Parsed graph:', {
+    console.log('📖 [getUserProfileGraph] Converted to graph:', {
       nodeCount: graphData.nodes.length,
-      edgeCount: graphData.edges.length
+      edgeCount: graphData.edges.length,
+      duplicatesFound: duplicateIds.length
     });
     
+    // Fire-and-forget: Clean up duplicate entries in the background
+    // This doesn't block the response but cleans up the database
+    if (duplicateIds.length > 0) {
+      cleanupDuplicateUserValues(duplicateIds).catch(err => {
+        console.error('[getUserProfileGraph] Background cleanup failed:', err);
+      });
+    }
+    
     return {
-      id: profileGraph.id,
-      userId: profileGraph.userId,
+      id: `profile-${targetUserId}`, // Generate a stable ID
+      userId: targetUserId,
       graphData,
-      xmlData: profileGraph.graphData,
+      xmlData: null, // No longer using XML
       user: user || { id: targetUserId, name: null, email: null, image: null },
-      createdAt: profileGraph.createdAt,
-      updatedAt: profileGraph.updatedAt
+      createdAt: new Date(), // Would need to track this differently if needed
+      updatedAt: new Date()
     };
   } catch (error) {
     console.error("Error fetching profile graph:", error);
@@ -104,45 +100,16 @@ export async function getUserProfileGraph(userId?: string) {
 
 /**
  * Update profile graph XML data
+ * @deprecated - XML storage is no longer used. Use addGraphItem/removeGraphItem instead.
  */
 export async function updateProfileGraphXml(xmlData: string) {
-  const session = await auth();
-  
-  if (!session?.user?.id) {
-    throw new Error("User not authenticated");
-  }
-  
-  // Validate XML
-  if (!validateXml(xmlData)) {
-    throw new Error("Invalid XML data");
-  }
-  
-  try {
-    const profileGraph = await prisma.userProfileGraph.upsert({
-      where: { userId: session.user.id },
-      update: {
-        graphData: xmlData
-      },
-      create: {
-        userId: session.user.id,
-        graphData: xmlData
-      }
-    });
-    
-    revalidatePath("/profile/graph");
-    
-    return {
-      success: true,
-      id: profileGraph.id
-    };
-  } catch (error) {
-    console.error("Error updating profile graph:", error);
-    throw new Error("Failed to update profile graph");
-  }
+  console.warn('[DEPRECATED] updateProfileGraphXml is no longer supported. Use addGraphItem/removeGraphItem instead.');
+  throw new Error("XML storage is no longer supported. Use addGraphItem/removeGraphItem instead.");
 }
 
 /**
  * Add an item to the profile graph
+ * Now writes to relational tables
  */
 export async function addGraphItem(
   category: string,
@@ -157,27 +124,37 @@ export async function addGraphItem(
   }
   
   try {
-    // Get current profile graph
-    let profileGraph = await prisma.userProfileGraph.findUnique({
-      where: { userId: session.user.id }
+    // Map old XML category/subcategory to relational slug
+    const categorySlug = mapXmlCategoryToRelationalSlug(category, subcategory);
+    
+    console.log('✏️ [addGraphItem] Adding item:', {
+      category,
+      subcategory,
+      value,
+      mappedSlug: categorySlug
     });
     
-    let currentXml = profileGraph?.graphData || createEmptyProfileXml();
-    
-    // Add item to XML
-    const updatedXml = addItemToXml(currentXml, category, subcategory, value, metadata);
-    
-    // Update database
-    profileGraph = await prisma.userProfileGraph.upsert({
-      where: { userId: session.user.id },
-      update: {
-        graphData: updatedXml
-      },
-      create: {
-        userId: session.user.id,
-        graphData: updatedXml
+    // Add to relational storage
+    const result = await addProfileValue(
+      session.user.id,
+      value,
+      categorySlug,
+      {
+        source: 'chat',
+        originalCategory: category,
+        originalSubcategory: subcategory,
+        addedAt: new Date().toISOString(),
+        ...metadata
       }
-    });
+    );
+    
+    if (!result.success) {
+      console.log('✏️ [addGraphItem] Value already exists or error:', result.error);
+      // If it already exists, that's fine - just return current data
+    }
+    
+    // Fetch updated profile values
+    const userValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
     
     // Fetch user for name
     const user = await prisma.user.findUnique({
@@ -185,19 +162,27 @@ export async function addGraphItem(
       select: { name: true }
     });
     
-    // Parse to graph data
-    const graphData = parseXmlToGraph(
-      profileGraph.graphData,
+    // Convert to graph data
+    const { graphData, duplicateIds } = convertUserValuesToGraphData(
+      userValues,
       session.user.id,
       user?.name || undefined
     );
     
+    // Fire-and-forget cleanup of duplicates
+    if (duplicateIds.length > 0) {
+      cleanupDuplicateUserValues(duplicateIds).catch(err => {
+        console.error('[addGraphItem] Background cleanup failed:', err);
+      });
+    }
+    
     revalidatePath("/profile/graph");
+    revalidatePath("/profile");
     
     return {
       success: true,
       graphData,
-      xmlData: profileGraph.graphData
+      xmlData: null // No longer using XML
     };
   } catch (error) {
     console.error("Error adding graph item:", error);
@@ -207,6 +192,7 @@ export async function addGraphItem(
 
 /**
  * Remove an item from the profile graph
+ * Now removes from relational tables
  */
 export async function removeGraphItem(
   category: string,
@@ -220,30 +206,48 @@ export async function removeGraphItem(
   }
   
   try {
-    // Get current profile graph
-    const profileGraph = await prisma.userProfileGraph.findUnique({
-      where: { userId: session.user.id }
-    });
+    console.log('🗑️ [removeGraphItem] Removing item:', { category, subcategory, value });
     
-    if (!profileGraph) {
-      throw new Error("Profile graph not found");
+    // Find the UserProfileValue to remove
+    // We need to find by value and category hierarchy
+    const userValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
+    
+    // Find the matching value
+    const matchingValue = userValues.find(uv => uv.value.value === value);
+    
+    if (!matchingValue) {
+      console.log('🗑️ [removeGraphItem] Value not found:', value);
+      // Return current data anyway
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { name: true }
+      });
+      
+      const { graphData, duplicateIds } = convertUserValuesToGraphData(
+        userValues,
+        session.user.id,
+        user?.name || undefined
+      );
+      
+      // Fire-and-forget cleanup of duplicates
+      if (duplicateIds.length > 0) {
+        cleanupDuplicateUserValues(duplicateIds).catch(err => {
+          console.error('[removeGraphItem] Background cleanup failed:', err);
+        });
+      }
+      
+      return {
+        success: true,
+        graphData,
+        xmlData: null
+      };
     }
     
-    // Remove item from XML
-    const updatedXml = removeItemFromXml(
-      profileGraph.graphData,
-      category,
-      subcategory,
-      value
-    );
+    // Remove from relational storage
+    await removeProfileValue(session.user.id, matchingValue.id);
     
-    // Update database
-    const updated = await prisma.userProfileGraph.update({
-      where: { userId: session.user.id },
-      data: {
-        graphData: updatedXml
-      }
-    });
+    // Fetch updated profile values
+    const updatedValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
     
     // Fetch user for name
     const user = await prisma.user.findUnique({
@@ -251,19 +255,27 @@ export async function removeGraphItem(
       select: { name: true }
     });
     
-    // Parse to graph data
-    const graphData = parseXmlToGraph(
-      updated.graphData,
+    // Convert to graph data
+    const { graphData, duplicateIds } = convertUserValuesToGraphData(
+      updatedValues,
       session.user.id,
       user?.name || undefined
     );
     
+    // Fire-and-forget cleanup of duplicates
+    if (duplicateIds.length > 0) {
+      cleanupDuplicateUserValues(duplicateIds).catch(err => {
+        console.error('[removeGraphItem] Background cleanup failed:', err);
+      });
+    }
+    
     revalidatePath("/profile/graph");
+    revalidatePath("/profile");
     
     return {
       success: true,
       graphData,
-      xmlData: updated.graphData
+      xmlData: null
     };
   } catch (error) {
     console.error("Error removing graph item:", error);
@@ -272,7 +284,62 @@ export async function removeGraphItem(
 }
 
 /**
+ * Remove an item by its UserProfileValue ID
+ * More direct method for removal
+ */
+export async function removeGraphItemById(userProfileValueId: string) {
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    throw new Error("User not authenticated");
+  }
+  
+  try {
+    console.log('🗑️ [removeGraphItemById] Removing item:', userProfileValueId);
+    
+    // Remove from relational storage
+    await removeProfileValue(session.user.id, userProfileValueId);
+    
+    // Fetch updated profile values
+    const userValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
+    
+    // Fetch user for name
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true }
+    });
+    
+    // Convert to graph data
+    const { graphData, duplicateIds } = convertUserValuesToGraphData(
+      userValues,
+      session.user.id,
+      user?.name || undefined
+    );
+    
+    // Fire-and-forget cleanup of duplicates
+    if (duplicateIds.length > 0) {
+      cleanupDuplicateUserValues(duplicateIds).catch(err => {
+        console.error('[removeGraphItemById] Background cleanup failed:', err);
+      });
+    }
+    
+    revalidatePath("/profile/graph");
+    revalidatePath("/profile");
+    
+    return {
+      success: true,
+      graphData,
+      xmlData: null
+    };
+  } catch (error) {
+    console.error("Error removing graph item by ID:", error);
+    throw new Error("Failed to remove item from profile graph");
+  }
+}
+
+/**
  * Get all items from profile graph as a flat list
+ * Now reads from relational tables
  */
 export async function getProfileGraphItems(): Promise<ProfileGraphItem[]> {
   const session = await auth();
@@ -282,15 +349,9 @@ export async function getProfileGraphItems(): Promise<ProfileGraphItem[]> {
   }
   
   try {
-    const profileGraph = await prisma.userProfileGraph.findUnique({
-      where: { userId: session.user.id }
-    });
+    const userValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
     
-    if (!profileGraph || !profileGraph.graphData) {
-      return [];
-    }
-    
-    return extractItemsFromXml(profileGraph.graphData);
+    return convertUserValuesToProfileItems(userValues);
   } catch (error) {
     console.error("Error fetching profile graph items:", error);
     throw new Error("Failed to fetch profile graph items");
@@ -299,6 +360,7 @@ export async function getProfileGraphItems(): Promise<ProfileGraphItem[]> {
 
 /**
  * Clear all profile graph data
+ * Now clears relational data
  */
 export async function clearProfileGraph() {
   const session = await auth();
@@ -308,18 +370,13 @@ export async function clearProfileGraph() {
   }
   
   try {
-    await prisma.userProfileGraph.upsert({
-      where: { userId: session.user.id },
-      update: {
-        graphData: createEmptyProfileXml()
-      },
-      create: {
-        userId: session.user.id,
-        graphData: createEmptyProfileXml()
-      }
+    // Delete all UserProfileValue records for this user
+    await prisma.userProfileValue.deleteMany({
+      where: { userId: session.user.id }
     });
     
     revalidatePath("/profile/graph");
+    revalidatePath("/profile");
     
     return { success: true };
   } catch (error) {

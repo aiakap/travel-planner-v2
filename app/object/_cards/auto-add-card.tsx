@@ -12,6 +12,7 @@ export interface AutoAddData {
   category: string;
   subcategory: string;
   value: string;
+  alreadyAdded?: boolean;  // Flag to skip save if item was already added in Phase 1
 }
 
 export function AutoAddCard({ data, onAction }: CardProps<AutoAddData>) {
@@ -20,12 +21,22 @@ export function AutoAddCard({ data, onAction }: CardProps<AutoAddData>) {
   const saveAttemptedRef = useRef(false);
 
   useEffect(() => {
+    // Skip if already attempted or if item was already added in Phase 1
     if (saveAttemptedRef.current) return;
     saveAttemptedRef.current = true;
 
+    // If alreadyAdded flag is set, skip the save and show as accepted
+    if (data.alreadyAdded) {
+      console.log('✓ [AUTO_ADD] Skipping save - item already added:', data.value);
+      setIsAccepted(true);
+      setIsSaving(false);
+      return;
+    }
+
     const autoSave = async () => {
       try {
-        const response = await fetch("/api/object/profile/upsert", {
+        // Use unified profile-graph endpoint
+        const response = await fetch("/api/profile-graph/add-item", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -52,7 +63,7 @@ export function AutoAddCard({ data, onAction }: CardProps<AutoAddData>) {
     };
 
     autoSave();
-  }, []);
+  }, [data.alreadyAdded, data.category, data.subcategory, data.value, onAction]);
 
   return (
     <div

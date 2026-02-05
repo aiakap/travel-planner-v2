@@ -3,13 +3,13 @@
  * 
  * Generates a new conversational prompt when user clicks "suggest a new topic"
  * or rejects suggestions
+ * Now uses relational storage instead of XML
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getUserProfileGraph } from "@/lib/actions/profile-graph-actions";
+import { getUserProfileGraph, getProfileGraphItems } from "@/lib/actions/profile-graph-actions";
 import { generateNewTopicSuggestion } from "@/lib/ai/profile-graph-chat";
-import { extractItemsFromXml } from "@/lib/profile-graph-xml";
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,9 +28,9 @@ export async function POST(req: NextRequest) {
 
     console.log("🔄 [New Topic API] Generating new topic suggestion");
 
-    // Get current profile graph
+    // Get current profile graph (now from relational tables)
     const profileGraph = await getUserProfileGraph(session.user.id);
-    const profileItems = extractItemsFromXml(profileGraph.xmlData);
+    const profileItems = await getProfileGraphItems();
 
     // Generate new topic suggestion
     const response = await generateNewTopicSuggestion(

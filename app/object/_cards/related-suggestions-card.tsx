@@ -32,7 +32,8 @@ export function RelatedSuggestionsCard({
     setLoadingItems(prev => new Set([...prev, suggestion.value]));
 
     try {
-      const response = await fetch("/api/object/profile/upsert", {
+      // Use unified profile-graph endpoint
+      const response = await fetch("/api/profile-graph/add-item", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

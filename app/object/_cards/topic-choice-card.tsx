@@ -35,7 +35,8 @@ export function TopicChoiceCard({
     setLoadingOptions(prev => new Set([...prev, optionValue]));
 
     try {
-      const response = await fetch("/api/object/profile/upsert", {
+      // Use unified profile-graph endpoint
+      const response = await fetch("/api/profile-graph/add-item", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

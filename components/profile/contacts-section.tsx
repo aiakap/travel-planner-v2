@@ -14,10 +14,11 @@ import { addContact, updateContact, deleteContact } from "@/lib/actions/profile-
 import { Trash2, Star, Plus } from "lucide-react";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { SaveStatusIndicator } from "@/components/ui/save-status-indicator";
+import { UserContact, ContactType } from "@/lib/types/profile";
 
 interface ContactsSectionProps {
-  initialContacts: any[];
-  contactTypes: any[];
+  initialContacts: UserContact[];
+  contactTypes: ContactType[];
 }
 
 export function ContactsSection({ initialContacts, contactTypes }: ContactsSectionProps) {

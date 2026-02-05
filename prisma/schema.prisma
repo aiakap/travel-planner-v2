@@ -342,20 +342,23 @@ model ImageGenerationLog {
 }
 
 model UserProfile {
-  id                String    @id @default(cuid())
-  userId            String    @unique
-  dateOfBirth       DateTime?
-  address           String?
-  city              String?
-  country           String?
-  loyaltyPrograms   Json?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  firstName         String?
-  lastName          String?
-  homeAirports      Json?
-  preferredAirports Json?
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  dateOfBirth        DateTime?
+  address            String?
+  city               String?
+  country            String?
+  loyaltyPrograms    Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  firstName          String?
+  lastName           String?
+  homeAirports       Json?
+  preferredAirports  Json?
+  gender             String?   // "male", "female", "non-binary", "prefer-not-to-say"
+  citizenship        Json?     // Array of ISO country codes, e.g. ["US", "UK"]
+  countryOfResidence String?   // Single ISO country code
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ContactType {

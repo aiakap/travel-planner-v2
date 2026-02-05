@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Profile Graph Client Component
+ * Dossier Tab Content
  * 
- * Main client component with split layout for chat and graph visualization
+ * Embeddable version of the profile graph client for use in the unified profile page.
+ * Contains chat interface and profile visualization in a split layout.
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
@@ -14,14 +15,15 @@ import { ProfileDossierView } from "@/components/profile-dossier-view";
 import { DeleteNodeModal } from "@/components/delete-node-modal";
 import { ClearAllModal } from "@/components/clear-all-modal";
 import { ConversationalMessage } from "@/components/conversational-message";
+import { ObjectStyleChat } from "@/components/profile/object-style-chat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, MessageCircle, Network, FileText, GripVertical, Loader2, Send, BookOpen, MapPin, Sparkles } from "lucide-react";
+import { Trash2, MessageCircle, Network, FileText, GripVertical, Loader2, Send, BookOpen, MapPin, Sparkles, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PendingSuggestion, InlineSuggestion, GraphCategory } from "@/lib/types/profile-graph";
 
-interface ProfileGraphClientProps {
+interface DossierTabContentProps {
   initialGraphData: GraphData;
   initialXmlData: string | null;
   user: {
@@ -33,6 +35,7 @@ interface ProfileGraphClientProps {
 }
 
 type ViewMode = "graph" | "text" | "dossier";
+type ChatMode = "object" | "conversational";
 
 interface ConversationalSuggestion {
   text: string;
@@ -56,15 +59,16 @@ interface Message {
   }>;
 }
 
-export function ProfileGraphClient({
+export function DossierTabContent({
   initialGraphData,
   initialXmlData, // Deprecated - no longer used
   user
-}: ProfileGraphClientProps) {
+}: DossierTabContentProps) {
   const [graphData, setGraphData] = useState<GraphData>(initialGraphData);
   const [colorScheme, setColorScheme] = useState<string>("default");
   const [customColors, setCustomColors] = useState<Record<string, string>>({});
   const [viewMode, setViewMode] = useState<ViewMode>("text");
+  const [chatMode, setChatMode] = useState<ChatMode>("conversational");
   const [leftPanelWidth, setLeftPanelWidth] = useState(40);
   const [dossierContent, setDossierContent] = useState<string | null>(null);
   const [isDossierLoading, setIsDossierLoading] = useState(false);
@@ -96,10 +100,11 @@ export function ProfileGraphClient({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [profileValues, setProfileValues] = useState<Set<string>>(new Set());
-  const [hasAutoStarted, setHasAutoStarted] = useState(false);
   
   // Refs for resizable panel
   const isDragging = useRef(false);
+  // Use ref instead of state to persist across React Strict Mode double-mounting
+  const hasAutoStartedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -128,9 +133,9 @@ export function ProfileGraphClient({
   // Auto-start conversation when component mounts
   useEffect(() => {
     const autoStartConversation = async () => {
-      if (hasAutoStarted) return;
+      if (hasAutoStartedRef.current) return;
       
-      setHasAutoStarted(true);
+      hasAutoStartedRef.current = true;
       setIsLoading(true);
       
       // Small delay to let the welcome message appear
@@ -184,7 +189,7 @@ export function ProfileGraphClient({
     };
 
     autoStartConversation();
-  }, [hasAutoStarted]);
+  }, []);
 
   // Handle sending message
   const handleSend = async (messageText?: string) => {
@@ -543,135 +548,168 @@ export function ProfileGraphClient({
   }, [handleMouseMove, handleMouseUp]);
 
   return (
-    <div ref={containerRef} className="flex bg-slate-50 mt-16" style={{ height: 'calc(100vh - 64px)' }}>
+    <div ref={containerRef} className="flex bg-slate-50 rounded-lg border" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
       {/* Left Panel: Chat Interface */}
-      <div className="flex flex-col h-full border-r bg-white overflow-hidden" style={{ width: `${leftPanelWidth}%` }}>
+      <div className="flex flex-col h-full border-r bg-white overflow-hidden rounded-l-lg" style={{ width: `${leftPanelWidth}%` }}>
         {/* Fixed Header */}
-        <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center">
-          <div className="flex flex-col w-full">
+        <div className="border-b border-slate-200 p-4 bg-slate-50 h-14 flex items-center justify-between">
+          <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5 text-slate-700 flex-shrink-0" />
-              <span className="text-base font-semibold text-slate-900">Profile Intake</span>
+              <MessageCircle className="h-4 w-4 text-slate-700 flex-shrink-0" />
+              <span className="text-sm font-semibold text-slate-900">Profile Builder</span>
             </div>
-            <span className="text-xs text-slate-600 ml-7">Share your travel preferences and we'll build your profile</span>
+            <span className="text-xs text-slate-500 ml-6">Share your travel preferences</span>
+          </div>
+          
+          {/* Chat Mode Toggle */}
+          <div className="flex gap-0.5 border rounded-md p-0.5 bg-white ml-auto">
+            <Button
+              variant={chatMode === "object" ? "default" : "ghost"}
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={() => setChatMode("object")}
+              title="Card Mode"
+            >
+              <LayoutGrid className="h-3 w-3" />
+            </Button>
+            <Button
+              variant={chatMode === "conversational" ? "default" : "ghost"}
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={() => setChatMode("conversational")}
+              title="Chat Mode"
+            >
+              <MessageCircle className="h-3 w-3" />
+            </Button>
           </div>
         </div>
 
-        {/* Scrollable Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 overscroll-contain">
-          {messages.map((message, index) => (
-            <div
-              key={index}
-              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} mb-4`}
-            >
-              <div
-                className={`max-w-[80%] rounded-lg p-3 ${
-                  message.role === "user"
-                    ? "bg-blue-500 text-white"
-                    : "bg-slate-100 text-slate-900"
-                }`}
-              >
-                {/* Show auto-added items badge */}
-                {message.role === "assistant" && message.addedItems && message.addedItems.length > 0 && (
-                  <div className="mb-3 pb-3 border-b border-slate-200">
-                    <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-2 py-1.5 rounded">
-                      <span className="font-medium">✓ Added to profile:</span>
-                      <span>{message.addedItems.map(item => item.value).join(", ")}</span>
-                    </div>
+        {/* Chat Content - Conditional based on chatMode */}
+        {chatMode === "object" ? (
+          <ObjectStyleChat 
+            graphData={graphData}
+            onGraphUpdate={setGraphData}
+          />
+        ) : (
+          <>
+            {/* Scrollable Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 overscroll-contain">
+              {messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} mb-3`}
+                >
+                  <div
+                    className={`max-w-[85%] rounded-lg p-3 ${
+                      message.role === "user"
+                        ? "bg-blue-500 text-white"
+                        : "bg-slate-100 text-slate-900"
+                    }`}
+                  >
+                    {/* Show auto-added items badge */}
+                    {message.role === "assistant" && message.addedItems && message.addedItems.length > 0 && (
+                      <div className="mb-2 pb-2 border-b border-slate-200">
+                        <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
+                          <span className="font-medium">✓ Added:</span>
+                          <span>{message.addedItems.map(item => item.value).join(", ")}</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Render conversational message if it has conversational suggestions */}
+                    {message.role === "assistant" && message.conversationalSuggestions && message.conversationalSuggestions.length > 0 ? (
+                      <ConversationalMessage
+                        message={message.content}
+                        suggestions={message.conversationalSuggestions}
+                        onSuggestionClick={handleInlineSuggestionClick}
+                        onNewTopicClick={handleNewTopicClick}
+                        existingProfileValues={profileValues}
+                      />
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    )}
+                    <p className={`text-xs mt-1 ${
+                      message.role === "user" ? "text-blue-100" : "text-slate-400"
+                    }`}>
+                      {message.timestamp.toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </p>
                   </div>
-                )}
-                
-                {/* Render conversational message if it has conversational suggestions */}
-                {message.role === "assistant" && message.conversationalSuggestions && message.conversationalSuggestions.length > 0 ? (
-                  <ConversationalMessage
-                    message={message.content}
-                    suggestions={message.conversationalSuggestions}
-                    onSuggestionClick={handleInlineSuggestionClick}
-                    onNewTopicClick={handleNewTopicClick}
-                    existingProfileValues={profileValues}
-                  />
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                )}
-                <p className={`text-xs mt-1 ${
-                  message.role === "user" ? "text-blue-100" : "text-slate-500"
-                }`}>
-                  {message.timestamp.toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </p>
-              </div>
-            </div>
-          ))}
+                </div>
+              ))}
 
-          {/* Loading indicator */}
-          {isLoading && (
-            <div className="flex justify-start mb-4">
-              <div className="bg-slate-100 rounded-lg p-3">
-                <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Fixed Input Area */}
-        <div className="border-t border-slate-200 p-6 bg-white">
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            if (input.trim() && !isLoading) {
-              handleSend();
-            }
-          }} className="flex gap-3">
-            <Input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Tell me about yourself..."
-              disabled={isLoading}
-              className="flex-1 border border-slate-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 text-slate-900 placeholder:text-slate-400"
-            />
-            <Button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className="bg-slate-900 hover:bg-slate-800 text-white px-6"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
+              {/* Loading indicator */}
+              {isLoading && (
+                <div className="flex justify-start mb-3">
+                  <div className="bg-slate-100 rounded-lg p-3">
+                    <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
+                  </div>
+                </div>
               )}
-            </Button>
-          </form>
-        </div>
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Fixed Input Area */}
+            <div className="border-t border-slate-200 p-4 bg-white">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (input.trim() && !isLoading) {
+                  handleSend();
+                }
+              }} className="flex gap-2">
+                <Input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Tell me about yourself..."
+                  disabled={isLoading}
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 focus:border-slate-400 text-slate-900 placeholder:text-slate-400"
+                />
+                <Button
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  size="sm"
+                  className="bg-slate-900 hover:bg-slate-800 text-white px-4"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </Button>
+              </form>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Resizable Divider */}
       <div
-        className="w-2 bg-slate-200 hover:bg-slate-300 cursor-col-resize flex items-center justify-center group transition-colors"
+        className="w-1.5 bg-slate-200 hover:bg-slate-300 cursor-col-resize flex items-center justify-center group transition-colors"
         onMouseDown={handleMouseDown}
       >
-        <GripVertical className="h-6 w-6 text-slate-400 group-hover:text-slate-600 transition-colors" />
+        <GripVertical className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
       </div>
 
       {/* Right Panel: Profile Visualization */}
-      <div className="flex flex-col overflow-hidden" style={{ width: `${100 - leftPanelWidth}%` }}>
+      <div className="flex flex-col overflow-hidden rounded-r-lg" style={{ width: `${100 - leftPanelWidth}%` }}>
         {/* Right Header */}
-        <div className="border-b border-slate-200 p-4 bg-slate-50 h-16 flex items-center justify-between">
+        <div className="border-b border-slate-200 p-3 bg-slate-50 h-14 flex items-center justify-between">
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-slate-700" />
-              <span className="text-base font-semibold text-slate-900">Dossier</span>
+              <BookOpen className="h-4 w-4 text-slate-700" />
+              <span className="text-sm font-semibold text-slate-900">Your Profile</span>
             </div>
-            <span className="text-xs text-slate-600 ml-7">Your comprehensive traveler profile</span>
+            <span className="text-xs text-slate-500 ml-6">{graphData.nodes.filter(n => n.type === 'item').length} items</span>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* View Toggle */}
-            <div className="flex gap-1 border rounded-lg p-0.5 bg-white">
+            <div className="flex gap-0.5 border rounded-md p-0.5 bg-white">
               <Button
                 variant={viewMode === "text" ? "default" : "ghost"}
                 size="sm"
@@ -706,30 +744,29 @@ export function ProfileGraphClient({
               <Button
                 variant="default"
                 size="sm"
-                className="h-8 bg-blue-600 hover:bg-blue-700"
+                className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
               >
                 <MapPin className="w-3 h-3 mr-1" />
-                Plan a Trip
+                Plan Trip
               </Button>
             </Link>
             <Link href="/suggestions">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8"
+                className="h-7 text-xs"
               >
                 <Sparkles className="w-3 h-3 mr-1" />
-                Trip Suggestions
+                Suggestions
               </Button>
             </Link>
             <Button
               variant="outline"
               size="sm"
               onClick={handleClearGraph}
-              className="h-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
             >
-              <Trash2 className="w-3 h-3 mr-1" />
-              Clear
+              <Trash2 className="w-3 h-3" />
             </Button>
           </div>
         </div>

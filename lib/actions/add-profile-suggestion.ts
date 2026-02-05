@@ -3,7 +3,12 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { addItemToXml, createEmptyProfileXml, parseXmlToGraph } from "@/lib/profile-graph-xml";
+import { addProfileValue, getUserProfileValues, cleanupDuplicateUserValues } from "@/lib/actions/profile-relational-actions";
+import { 
+  convertUserValuesToGraphData, 
+  mapXmlCategoryToRelationalSlug,
+  UserProfileValueWithRelations 
+} from "@/lib/profile-relational-adapter";
 
 interface ProfileSuggestion {
   type: "hobby" | "preference";
@@ -15,94 +20,80 @@ interface ProfileSuggestion {
 }
 
 export async function addProfileSuggestion(suggestion: ProfileSuggestion) {
-  console.log('🔵 addProfileSuggestion CALLED with:', suggestion);  const session = await auth();  if (!session?.user?.id) {
+  console.log('🔵 addProfileSuggestion CALLED with:', suggestion);
+  
+  const session = await auth();
+  if (!session?.user?.id) {
     throw new Error("Not authenticated");
   }
 
   try {
-    // Get existing graph data (XML)
-    const profileGraph = await prisma.userProfileGraph.findUnique({
-      where: { userId: session.user.id },
-    });    let xmlData = profileGraph?.graphData || createEmptyProfileXml();
-
-    // Add item to XML using the profile-graph-xml utility
-    // The subcategory is the suggestion type (hobby/preference)
-    const updatedXml = addItemToXml(
-      xmlData,
-      suggestion.category,
-      suggestion.type,
+    // Map category/type to relational slug
+    const categorySlug = mapXmlCategoryToRelationalSlug(suggestion.category, suggestion.type);
+    
+    console.log('🔵 Mapped to slug:', categorySlug);
+    
+    // Add to relational storage
+    const result = await addProfileValue(
+      session.user.id,
       suggestion.value,
+      categorySlug,
       {
+        source: 'suggestion',
+        originalCategory: suggestion.category,
+        originalType: suggestion.type,
         addedAt: new Date().toISOString(),
       }
-    );    // Save back to database
-    const upsertResult = await prisma.userProfileGraph.upsert({
-      where: { userId: session.user.id },
-      create: {
-        userId: session.user.id,
-        graphData: updatedXml,
-      },
-      update: {
-        graphData: updatedXml,
-      },
-    });
+    );
 
-    console.log('🟢 Database upsert COMPLETE:', {id: upsertResult.id, userId: upsertResult.userId});
+    if (!result.success) {
+      console.log('🔵 Value may already exist:', result.error);
+    } else {
+      console.log('🟢 Added to relational storage');
+    }
     
-    // Verify what's actually in the database
-    const verifyRead = await prisma.userProfileGraph.findUnique({
-      where: { userId: session.user.id }
-    });
-
-    console.log('🔍 VERIFICATION:', {
-      upsertedId: upsertResult.id,
-      verifiedId: verifyRead?.id,
-      upsertedLength: upsertResult.graphData.length,
-      verifiedLength: verifyRead?.graphData.length,
-      match: upsertResult.graphData === verifyRead?.graphData,
-      idsMatch: upsertResult.id === verifyRead?.id
-    });
-
-    // Check if there are multiple records
-    const allRecords = await prisma.userProfileGraph.findMany({
-      where: { userId: session.user.id }
-    });
-
-    console.log('📊 All records for user:', allRecords.map(r => ({
-      id: r.id,
-      xmlLength: r.graphData.length,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt
-    })));
-
+    // Fetch updated profile values
+    const userValues = await getUserProfileValues(session.user.id) as UserProfileValueWithRelations[];
+    
     // Fetch user for name
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { name: true }
     });
 
-    // Parse XML to graph data for immediate UI update
-    // Use the actual database result, not the local variable
-    const graphData = parseXmlToGraph(
-      upsertResult.graphData,
+    // Convert to graph data for immediate UI update
+    const { graphData, duplicateIds } = convertUserValuesToGraphData(
+      userValues,
       session.user.id,
       user?.name || undefined
     );
 
-    console.log('🔍 Using database result:', {
-      upsertedLength: upsertResult.graphData.length,
-      localLength: updatedXml.length,
-      match: upsertResult.graphData === updatedXml
-    });    revalidatePath("/profile/graph", "page");
+    console.log('🟢 Converted to graph:', {
+      nodeCount: graphData.nodes.length,
+      edgeCount: graphData.edges.length,
+      duplicatesFound: duplicateIds.length
+    });
+
+    // Fire-and-forget cleanup of duplicates
+    if (duplicateIds.length > 0) {
+      cleanupDuplicateUserValues(duplicateIds).catch(err => {
+        console.error('[addProfileSuggestion] Background cleanup failed:', err);
+      });
+    }
+
+    revalidatePath("/profile/graph", "page");
+    revalidatePath("/profile", "page");
     revalidatePath("/object/profile_attribute", "page");
-    revalidatePath("/", "layout");    return { 
+    revalidatePath("/", "layout");
+
+    return { 
       success: true, 
       message: "Added to profile graph",
       graphData,
-      xmlData: upsertResult.graphData
+      xmlData: null // No longer using XML
     };
   } catch (error) {
-    console.error('🔴 ERROR in addProfileSuggestion:', error);    console.error("Error adding to profile graph:", error);
+    console.error('🔴 ERROR in addProfileSuggestion:', error);
     throw new Error("Failed to add suggestion to profile");
   }
 }

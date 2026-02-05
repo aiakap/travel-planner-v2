@@ -24,7 +24,9 @@ import {
   type WizardSuggestionChip,
   type WizardState,
   type AssistedTripResult,
+  type TripAlternative,
 } from "@/lib/types/assisted-wizard";
+import type { AITripSuggestion } from "@/lib/ai/generate-trip-suggestions";
 
 interface AssistedTripWizardProps {
   profileItems: ProfileGraphItem[];
@@ -58,6 +60,7 @@ export function AssistedTripWizard({
   const [result, setResult] = useState<AssistedTripResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+  const [expandingAlternativeIndex, setExpandingAlternativeIndex] = useState<number | null>(null);
 
   const currentStep = WIZARD_STEPS[currentStepIndex];
   const isFirstStep = currentStepIndex === 0;
@@ -277,7 +280,67 @@ export function AssistedTripWizard({
     setWizardState("idle");
     setResult(null);
     setError(null);
+    setExpandingAlternativeIndex(null);
   }, []);
+
+  // Handle selecting an alternative - expand it to full suggestion and swap
+  const handleSelectAlternative = useCallback(async (alternative: TripAlternative) => {
+    if (!result) return;
+
+    // Find the index of this alternative
+    const altIndex = result.alternatives.findIndex(
+      (alt) => alt.title === alternative.title && alt.destination === alternative.destination
+    );
+    
+    setExpandingAlternativeIndex(altIndex);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/suggestions/expand-alternative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alternative,
+          originalAnswers: answers,
+          profileItems,
+          userProfile,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to expand alternative");
+      }
+
+      const data = await response.json();
+      const expandedSuggestion: AITripSuggestion = data.suggestion;
+
+      // Create a new alternative from the old main suggestion
+      const oldMainAsAlternative: TripAlternative = {
+        title: result.mainSuggestion.title,
+        destination: result.mainSuggestion.destination,
+        duration: result.mainSuggestion.duration,
+        estimatedBudget: result.mainSuggestion.estimatedBudget,
+        whyDifferent: "Your previous selection",
+        tripType: result.mainSuggestion.tripType,
+      };
+
+      // Build new alternatives list: remove selected, add old main
+      const newAlternatives = result.alternatives
+        .filter((_, idx) => idx !== altIndex)
+        .concat(oldMainAsAlternative);
+
+      // Update result with swapped suggestion
+      setResult({
+        mainSuggestion: expandedSuggestion,
+        alternatives: newAlternatives,
+      });
+    } catch (err) {
+      console.error("Error expanding alternative:", err);
+      setError("Failed to load alternative details. Please try again.");
+    } finally {
+      setExpandingAlternativeIndex(null);
+    }
+  }, [result, answers, profileItems, userProfile]);
 
   // Start wizard
   const handleStart = useCallback(() => {
@@ -362,9 +425,16 @@ export function AssistedTripWizard({
   if (wizardState === "complete" && result) {
     return (
       <div className="space-y-4">
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm text-center">
+            {error}
+          </div>
+        )}
         <AssistedTripResultCard
           result={result}
           onReset={handleReset}
+          onSelectAlternative={handleSelectAlternative}
+          expandingAlternativeIndex={expandingAlternativeIndex}
           userProfile={userProfile}
         />
       </div>

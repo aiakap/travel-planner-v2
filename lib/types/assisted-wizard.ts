@@ -43,13 +43,30 @@ export interface WizardAnswers {
   what: WizardStepAnswer;
 }
 
-// Alternative trip suggestion (brief summary)
+// Trip type for categorization
+export type TripType = "local_experience" | "road_trip" | "single_destination" | "multi_destination";
+
+// Alternative trip suggestion (brief summary with enough info to expand)
 export interface TripAlternative {
   title: string;
   destination: string;
   duration: string;
   estimatedBudget: string;
   whyDifferent: string; // e.g., "Lower budget option", "Different destination"
+  tripType: TripType; // Needed for expansion to full suggestion
+}
+
+// Request payload for expanding an alternative to a full suggestion
+export interface ExpandAlternativeRequest {
+  alternative: TripAlternative;
+  originalAnswers: WizardAnswers;
+  profileItems: ProfileGraphItem[];
+  userProfile: {
+    name: string;
+    dateOfBirth: Date | null;
+    city: string | null;
+    country: string | null;
+  };
 }
 
 // Result from the assisted trip generation
