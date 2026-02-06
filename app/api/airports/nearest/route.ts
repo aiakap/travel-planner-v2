@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { findNearestAirports } from "@/lib/amadeus/locations";
 
 /**
  * Find nearest airports to given coordinates
- * Uses Google Places Nearby Search to find airports within a radius
+ * Uses Amadeus API to find airports within a radius
  */
 export async function GET(request: NextRequest) {
   try {
@@ -20,96 +21,49 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-    
-    if (!apiKey) {
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+
+    if (isNaN(latitude) || isNaN(longitude)) {
       return NextResponse.json(
-        { error: "Google Maps API key not configured" },
-        { status: 500 }
+        { error: "Invalid latitude or longitude values" },
+        { status: 400 }
       );
     }
 
-    // Use Google Places Nearby Search to find airports
-    // Start with 50km radius, can expand if needed
-    const radius = 100000; // 100km in meters
-    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=airport&key=${apiKey}`;
+    // Use Amadeus to find nearby airports (100km radius)
+    const radius = 100; // km
+    const amadeusResults = await findNearestAirports(latitude, longitude, radius);
 
-    console.log("Calling Google Places Nearby Search...");
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      console.error("Google Places API error:", response.status);
-      return NextResponse.json(
-        { error: "Failed to search nearby airports" },
-        { status: response.status }
-      );
-    }
+    console.log(`Amadeus returned ${amadeusResults.length} nearby airports`);
 
-    const data = await response.json();
-    
-    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-      console.warn("Google Places API status:", data.status);
-      return NextResponse.json(
-        { error: `Google Places API error: ${data.status}` },
-        { status: 500 }
-      );
-    }
-
-    console.log(`Google Places returned ${data.results?.length || 0} nearby airports`);
-
-    // Import IATA mapping functions
-    const { extractIATAFromName } = await import("@/lib/data/airport-iata-mappings");
-
-    // Filter and format results
-    const airports = (data.results || [])
-      .filter((place: any) => {
-        // Filter for commercial/international airports
-        const name = place.name.toLowerCase();
-        const isCommercial = 
-          name.includes('international') || 
-          name.includes('intl') ||
-          place.user_ratings_total > 100;
-        
-        const isSmall = ['executive', 'municipal', 'county', 'regional'].some(
-          pattern => name.includes(pattern)
-        );
-        
-        return isCommercial && !isSmall;
-      })
+    // Format results and limit to requested count
+    const airports = amadeusResults
       .slice(0, limit)
-      .map((place: any) => {
-        const iataCode = extractIATAFromName(place.name) || 'UNK';
-        
+      .map((airport: any) => {
         // Calculate distance from origin
-        const distance = calculateDistance(
-          parseFloat(lat),
-          parseFloat(lng),
-          place.geometry.location.lat,
-          place.geometry.location.lng
+        const distance = airport.distance?.value || calculateDistance(
+          latitude,
+          longitude,
+          airport.geoCode?.latitude,
+          airport.geoCode?.longitude
         );
-        
-        // Extract city from vicinity or formatted address
-        const vicinity = place.vicinity || place.formatted_address || '';
-        const addressParts = vicinity.split(',');
-        const city = addressParts.length > 1 
-          ? addressParts[addressParts.length - 2]?.trim() 
-          : addressParts[0]?.trim() || '';
-        const country = addressParts[addressParts.length - 1]?.trim() || '';
 
         return {
-          iataCode: iataCode,
-          name: place.name,
-          city: city,
-          country: country,
-          displayName: `${place.name} (${iataCode})`,
+          iataCode: airport.iataCode,
+          name: airport.name,
+          city: airport.address?.cityName || "",
+          country: airport.address?.countryName || "",
+          displayName: `${airport.name} (${airport.iataCode})`,
           distance: Math.round(distance),
-          distanceUnit: 'km',
-          location: place.geometry.location,
-          placeId: place.place_id,
-          hasIATA: iataCode !== 'UNK',
+          distanceUnit: "km",
+          location: airport.geoCode ? {
+            lat: airport.geoCode.latitude,
+            lng: airport.geoCode.longitude
+          } : null,
+          hasIATA: true, // Amadeus always returns IATA codes
         };
-      })
-      .sort((a: any, b: any) => a.distance - b.distance); // Sort by distance
+      });
 
     console.log("Returning nearest airports:", airports.map((a: any) => `${a.iataCode} (${a.distance}km)`));
 
@@ -117,7 +71,7 @@ export async function GET(request: NextRequest) {
       airports,
       count: airports.length,
       status: "success",
-      coordinates: { lat: parseFloat(lat), lng: parseFloat(lng) }
+      coordinates: { lat: latitude, lng: longitude }
     });
   } catch (error: any) {
     console.error("Nearest airports search error:", error);

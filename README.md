@@ -55,6 +55,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 
 ## Documentation
 
+See the consolidated index in [`docs/README.md`](./docs/README.md) for navigation.
+
 ### API Documentation
 
 Comprehensive documentation for all integrated APIs:
@@ -81,7 +83,9 @@ Comprehensive documentation for all integrated APIs:
 
 ### Implementation Guides
 
-Check the various `*_COMPLETE.md` files in the root directory for detailed implementation documentation on specific features.
+- Feature and fix write-ups: see `docs/changelogs/` (formerly the `*_COMPLETE.md` and `*_FIX.md` files in the repo root).
+- Setup/how-to content: see `docs/guides/` for quick starts, READMEs, and checklists.
+- Operational/runbook notes: see `docs/runbooks/` for debugging and rollback procedures.
 
 ## Technology Stack
 

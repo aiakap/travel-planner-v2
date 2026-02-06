@@ -438,6 +438,23 @@ Use `api.sandbox.viator.com` for testing
 - Sandbox has sample products
 - Bookings won't charge in sandbox
 
+### Current API Key Status (as of Feb 2026)
+
+**Environment**: Sandbox only (production returns "Invalid API Key")
+
+**Working Endpoints**:
+- ✅ `GET /destinations` - Returns real destination data
+- ✅ `GET /products/tags` - Returns category tags
+- ✅ `POST /exchange-rates` - Returns currency exchange rates
+
+**Non-Working Endpoints** (return "Invalid input"):
+- ❌ `POST /products/search` - Product search
+- ❌ `GET /products/{code}` - Product details
+- ❌ `POST /search/freetext` - Freetext search
+- ❌ `POST /attractions/search` - Attractions search
+
+**Note**: The current API key appears to have limited access. Contact affiliateapi@tripadvisor.com to request full affiliate or merchant access for product search functionality.
+
 ### Postman Collections
 
 Viator provides Postman collections:

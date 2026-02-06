@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, MapPin, Navigation, Clock, Phone, Globe, Star, DollarSign, Accessibility, ExternalLink, Plane } from "lucide-react";
+import { Loader2, MapPin, Navigation, Clock, Phone, Globe, Star, DollarSign, Accessibility, ExternalLink } from "lucide-react";
 import { ApiTestLayout } from "../_components/api-test-layout";
 import { ApiResponseViewer } from "../_components/api-response-viewer";
 import { Badge } from "@/components/ui/badge";
@@ -37,11 +37,6 @@ export default function GoogleMapsTestPage() {
   const [geocodeAddress, setGeocodeAddress] = useState("1600 Amphitheatre Parkway, Mountain View, CA");
   const [geocodeResult, setGeocodeResult] = useState<TestResult | null>(null);
   const [geocodeLoading, setGeocodeLoading] = useState(false);
-
-  const [airportQuery, setAirportQuery] = useState("Palo Alto");
-  const [airportResult, setAirportResult] = useState<TestResult | null>(null);
-  const [airportLoading, setAirportLoading] = useState(false);
-  const [airportApiSource, setAirportApiSource] = useState<"google" | "amadeus" | "both">("google");
 
   const testAutocomplete = async () => {
     setAutocompleteLoading(true);
@@ -121,56 +116,10 @@ export default function GoogleMapsTestPage() {
     }
   };
 
-  const testAirportSearch = async () => {
-    setAirportLoading(true);
-    const startTime = Date.now();
-    
-    try {
-      let combinedResponse: any = {};
-      
-      if (airportApiSource === "google" || airportApiSource === "both") {
-        const googleResponse = await fetch(
-          `/api/airports/search-google?q=${encodeURIComponent(airportQuery)}`
-        );
-        const googleData = await googleResponse.json();
-        combinedResponse.google = {
-          data: googleData,
-          status: googleResponse.status,
-        };
-      }
-      
-      if (airportApiSource === "amadeus" || airportApiSource === "both") {
-        const amadeusResponse = await fetch(
-          `/api/airports/search?q=${encodeURIComponent(airportQuery)}`
-        );
-        const amadeusData = await amadeusResponse.json();
-        combinedResponse.amadeus = {
-          data: amadeusData,
-          status: amadeusResponse.status,
-        };
-      }
-      
-      const duration = Date.now() - startTime;
-      
-      setAirportResult({
-        response: combinedResponse,
-        status: 200,
-        duration,
-      });
-    } catch (error: any) {
-      setAirportResult({
-        response: null,
-        error: error.message,
-      });
-    } finally {
-      setAirportLoading(false);
-    }
-  };
-
   return (
     <ApiTestLayout
       title="Google Maps Platform"
-      description="Test Places Autocomplete, Place Details, Geocoding, Timezone, and Airport Search APIs"
+      description="Test Places Autocomplete, Place Details, Geocoding, and Timezone APIs"
       breadcrumbs={[{ label: "Google Maps" }]}
     >
       <Alert className="mb-6">
@@ -180,12 +129,8 @@ export default function GoogleMapsTestPage() {
         </AlertDescription>
       </Alert>
 
-      <Tabs defaultValue="airports" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="airports">
-            <Plane className="h-4 w-4 mr-2" />
-            Airport Search
-          </TabsTrigger>
+      <Tabs defaultValue="autocomplete" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="autocomplete">
             <MapPin className="h-4 w-4 mr-2" />
             Autocomplete
@@ -199,250 +144,6 @@ export default function GoogleMapsTestPage() {
             Geocoding & Timezone
           </TabsTrigger>
         </TabsList>
-
-        {/* Airport Search */}
-        <TabsContent value="airports" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Airport Search API</CardTitle>
-              <CardDescription>
-                Compare Google Places and Amadeus airport search results
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>API Source</Label>
-                <div className="flex gap-2">
-                  <Button
-                    variant={airportApiSource === "google" ? "default" : "outline"}
-                    onClick={() => setAirportApiSource("google")}
-                    size="sm"
-                  >
-                    Google Places
-                  </Button>
-                  <Button
-                    variant={airportApiSource === "amadeus" ? "default" : "outline"}
-                    onClick={() => setAirportApiSource("amadeus")}
-                    size="sm"
-                  >
-                    Amadeus
-                  </Button>
-                  <Button
-                    variant={airportApiSource === "both" ? "default" : "outline"}
-                    onClick={() => setAirportApiSource("both")}
-                    size="sm"
-                  >
-                    Both (Compare)
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="airport-query">Search Query</Label>
-                <Input
-                  id="airport-query"
-                  value={airportQuery}
-                  onChange={(e) => setAirportQuery(e.target.value)}
-                  placeholder="Enter city, airport code, or location..."
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  onClick={testAirportSearch}
-                  disabled={airportLoading || !airportQuery}
-                  className="flex-1"
-                >
-                  {airportLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Search Airports
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setAirportQuery("Palo Alto");
-                    setAirportResult(null);
-                  }}
-                >
-                  Palo Alto
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setAirportQuery("SFO");
-                    setAirportResult(null);
-                  }}
-                >
-                  SFO
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setAirportQuery("San Francisco");
-                    setAirportResult(null);
-                  }}
-                >
-                  San Francisco
-                </Button>
-              </div>
-
-              <div className="text-xs text-muted-foreground bg-muted p-3 rounded space-y-1">
-                <div><strong>Google Endpoint:</strong> GET /api/airports/search-google</div>
-                <div><strong>Amadeus Endpoint:</strong> GET /api/airports/search</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {airportResult && (
-            <div className="space-y-4">
-              {/* Test Status for Palo Alto */}
-              {airportQuery.toLowerCase().includes("palo alto") && (
-                <Card className="border-blue-200 bg-blue-50/50">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Palo Alto Test Results</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {airportResult.response?.google && (
-                      <div>
-                        <div className="text-sm font-medium mb-1">Google Places API:</div>
-                        <div className="flex gap-3 text-sm ml-4">
-                          <Badge variant={
-                            airportResult.response.google.data?.airports?.some((a: any) => a.iataCode === "SFO")
-                              ? "default"
-                              : "destructive"
-                          }>
-                            SFO: {airportResult.response.google.data?.airports?.some((a: any) => a.iataCode === "SFO") ? "✅ FOUND" : "❌ NOT FOUND"}
-                          </Badge>
-                          <Badge variant={
-                            airportResult.response.google.data?.airports?.some((a: any) => a.iataCode === "SJC")
-                              ? "default"
-                              : "destructive"
-                          }>
-                            SJC: {airportResult.response.google.data?.airports?.some((a: any) => a.iataCode === "SJC") ? "✅ FOUND" : "❌ NOT FOUND"}
-                          </Badge>
-                        </div>
-                      </div>
-                    )}
-                    {airportResult.response?.amadeus && (
-                      <div>
-                        <div className="text-sm font-medium mb-1">Amadeus API:</div>
-                        <div className="flex gap-3 text-sm ml-4">
-                          <Badge variant={
-                            airportResult.response.amadeus.data?.airports?.some((a: any) => a.iataCode === "SFO")
-                              ? "default"
-                              : "destructive"
-                          }>
-                            SFO: {airportResult.response.amadeus.data?.airports?.some((a: any) => a.iataCode === "SFO") ? "✅ FOUND" : "❌ NOT FOUND"}
-                          </Badge>
-                          <Badge variant={
-                            airportResult.response.amadeus.data?.airports?.some((a: any) => a.iataCode === "SJC")
-                              ? "default"
-                              : "destructive"
-                          }>
-                            SJC: {airportResult.response.amadeus.data?.airports?.some((a: any) => a.iataCode === "SJC") ? "✅ FOUND" : "❌ NOT FOUND"}
-                          </Badge>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Google Results */}
-              {airportResult.response?.google && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">Google Places Results</CardTitle>
-                      <Badge variant="outline">
-                        {airportResult.response.google.data?.count || 0} airports
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {airportResult.response.google.data?.airports?.length > 0 ? (
-                      <div className="space-y-2">
-                        {airportResult.response.google.data.airports.map((airport: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="font-semibold flex items-center gap-2">
-                                  <span>{airport.iataCode}</span>
-                                  {!airport.hasIATA && (
-                                    <Badge variant="secondary" className="text-xs">estimated</Badge>
-                                  )}
-                                </div>
-                                <div className="text-sm">{airport.name}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {airport.city}, {airport.country}
-                                </div>
-                              </div>
-                              <Badge variant="outline">#{idx + 1}</Badge>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No airports found
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Amadeus Results */}
-              {airportResult.response?.amadeus && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">Amadeus Results</CardTitle>
-                      <Badge variant="outline">
-                        {airportResult.response.amadeus.data?.count || 0} airports
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {airportResult.response.amadeus.data?.airports?.length > 0 ? (
-                      <div className="space-y-2">
-                        {airportResult.response.amadeus.data.airports.map((airport: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="font-semibold">{airport.iataCode}</div>
-                                <div className="text-sm">{airport.name}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {airport.city}, {airport.country}
-                                </div>
-                              </div>
-                              <Badge variant="outline">#{idx + 1}</Badge>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No airports found
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              <ApiResponseViewer
-                response={airportResult.response}
-                status={airportResult.status}
-                duration={airportResult.duration}
-                error={airportResult.error}
-              />
-            </div>
-          )}
-        </TabsContent>
 
         {/* Places Autocomplete */}
         <TabsContent value="autocomplete" className="space-y-4">

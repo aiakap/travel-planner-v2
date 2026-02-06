@@ -26,19 +26,27 @@ export async function POST(request: NextRequest) {
     const startTime = Date.now();
 
     // Viator API endpoint for product search
-    const url = "https://api.viator.com/partner/products/search";
+    // Note: Using sandbox URL as the current API key is for sandbox only
+    const url = "https://api.sandbox.viator.com/partner/products/search";
 
     const requestBody: any = {
       filtering: {
         destination: destination,
       },
-      pagination: {
-        limit: limit,
+      sorting: {
+        sort: "TRAVELER_RATING",
+        order: "DESCENDING",
       },
+      pagination: {
+        start: 1,
+        count: limit,
+      },
+      currency: "USD",
     };
 
+    // Tags filter (category is a tag ID number)
     if (category) {
-      requestBody.filtering.productCategories = [category];
+      requestBody.filtering.tags = [Number(category)];
     }
 
     if (startDate) {
@@ -65,15 +73,32 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[Viator API] Error response:", response.status, errorText);
+      console.error("[Viator API] Request body:", JSON.stringify(requestBody, null, 2));
       
       // Fall back to mock data instead of returning error
       console.log("[Viator API] Falling back to mock data");
+      
+      // Parse error for better messaging
+      let errorMessage = `Viator API returned ${response.status}. Using mock data.`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.code === "UNAUTHORIZED") {
+          errorMessage = "Viator API key is invalid or expired. Using mock data. Try sandbox endpoint or contact affiliateapi@tripadvisor.com";
+        } else if (errorJson.code === "BAD_REQUEST") {
+          errorMessage = "Viator API key may have limited access (sandbox only, no search permissions). Using mock data.";
+        }
+      } catch {}
+      
       return NextResponse.json({
         success: true,
         mock: true,
-        message: `Viator API returned ${response.status}. Using mock data. Check API key or endpoint configuration.`,
+        message: errorMessage,
         activities: getMockActivities(destination),
         total: 50,
+        debug: {
+          status: response.status,
+          endpoint: url,
+        }
       });
     }
 
@@ -118,7 +143,8 @@ export async function GET(request: NextRequest) {
     }
 
     const startTime = Date.now();
-    const url = `https://api.viator.com/partner/products/${productCode}`;
+    // Note: Using sandbox URL as the current API key is for sandbox only
+    const url = `https://api.sandbox.viator.com/partner/products/${productCode}`;
 
     const response = await fetch(url, {
       headers: {
