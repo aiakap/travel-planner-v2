@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { CruiseExtraction } from "@/lib/schemas/cruise-extraction-schema";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { enrichReservation } from "./enrich-reservation";
+import { stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
 
 interface AddCruisesOptions {
   autoMatch?: boolean;
@@ -116,8 +117,10 @@ export async function addCruisesToTrip(params: {
           endTitle: cruiseData.disembarkationPort,
           endLat: 0,
           endLng: 0,
-          startTime: new Date(`${cruiseData.embarkationDate}T${cruiseData.embarkationTime || '12:00'}`),
-          endTime: new Date(`${cruiseData.disembarkationDate}T${cruiseData.disembarkationTime || '12:00'}`),
+          // Wall date fields (source of truth)
+          wall_start_date: stringToPgDate(cruiseData.embarkationDate),
+          wall_end_date: stringToPgDate(cruiseData.disembarkationDate),
+          // Note: startTime/endTime auto-calculated by database trigger
           order: trip.segments.length,
         },
       });
@@ -158,6 +161,9 @@ export async function addCruisesToTrip(params: {
   const notes = notesLines.join('\n');
 
   // Create the reservation
+  const embarkTime = cruiseData.embarkationTime || '12:00';
+  const disembarkTime = cruiseData.disembarkationTime || '12:00';
+  
   const reservation = await prisma.reservation.create({
     data: {
       name: `${cruiseData.cruiseLine} - ${cruiseData.shipName}`,
@@ -166,8 +172,12 @@ export async function addCruisesToTrip(params: {
       reservationTypeId: reservationType.id,
       reservationStatusId: confirmedStatus.id,
       segmentId: targetSegmentId,
-      startTime: new Date(`${cruiseData.embarkationDate}T${cruiseData.embarkationTime || '12:00'}`),
-      endTime: new Date(`${cruiseData.disembarkationDate}T${cruiseData.disembarkationTime || '12:00'}`),
+      // Wall clock fields (source of truth)
+      wall_start_date: stringToPgDate(cruiseData.embarkationDate),
+      wall_start_time: stringToPgTime(embarkTime),
+      wall_end_date: stringToPgDate(cruiseData.disembarkationDate),
+      wall_end_time: stringToPgTime(disembarkTime),
+      // Note: startTime/endTime auto-calculated by database trigger
       cost: cruiseData.totalCost || undefined,
       currency: cruiseData.currency || undefined,
       departureLocation: `${cruiseData.embarkationPort} (${cruiseData.embarkationLocation})`,

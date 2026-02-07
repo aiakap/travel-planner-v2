@@ -7,7 +7,7 @@ import { getReservationType, getReservationStatus } from "@/lib/db/reservation-l
 import { createHotelCluster } from "@/lib/utils/hotel-clustering";
 import { findBestSegmentForHotel } from "@/lib/utils/segment-matching";
 import { getSegmentTimeZones, getTimeZoneForLocation } from "./timezone";
-import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
+import { stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
 import { enrichReservation } from "./enrich-reservation";
 
 // Geocoding helper
@@ -118,8 +118,11 @@ export async function addHotelsToTrip(params: {
         throw new Error('Could not geocode hotel location');
       }
       
-      const startTime = new Date(`${hotelData.checkInDate}T15:00:00`);
-      const endTime = new Date(`${hotelData.checkOutDate}T11:00:00`);
+      // Parse dates for timezone lookup
+      const [startYear, startMonth, startDay] = hotelData.checkInDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = hotelData.checkOutDate.split('-').map(Number);
+      const startDateObj = new Date(startYear, startMonth - 1, startDay, 12, 0, 0);
+      const endDateObj = new Date(endYear, endMonth - 1, endDay, 12, 0, 0);
       
       // Fetch timezone information for segment
       const timezones = await getSegmentTimeZones(
@@ -127,8 +130,8 @@ export async function addHotelsToTrip(params: {
         geo.lng,
         geo.lat,
         geo.lng,
-        startTime,
-        endTime
+        startDateObj,
+        endDateObj
       );
       
       const newSegment = await prisma.segment.create({
@@ -141,12 +144,15 @@ export async function addHotelsToTrip(params: {
           endTitle: city,
           endLat: geo.lat,
           endLng: geo.lng,
-          startTime,
-          endTime,
+          // Wall date fields (source of truth)
+          wall_start_date: stringToPgDate(hotelData.checkInDate),
+          wall_end_date: stringToPgDate(hotelData.checkOutDate),
+          // Timezone info (trigger uses this to calculate UTC)
           startTimeZoneId: timezones.start?.timeZoneId ?? null,
           startTimeZoneName: timezones.start?.timeZoneName ?? null,
           endTimeZoneId: timezones.end?.timeZoneId ?? null,
           endTimeZoneName: timezones.end?.timeZoneName ?? null,
+          // Note: startTime/endTime auto-calculated by database trigger
           order: trip.segments.length,
           segmentTypeId: stayType?.id
         }
@@ -225,20 +231,8 @@ export async function addHotelsToTrip(params: {
     }
   }
 
-  // Calculate UTC times using hotel timezone
-  let utcStartTime: Date | null = null;
-  let utcEndTime: Date | null = null;
-
-  if (hotelTimezone) {
-    utcStartTime = localToUTC(hotelData.checkInDate, checkInTime24, hotelTimezone, false);
-    utcEndTime = localToUTC(hotelData.checkOutDate, checkOutTime24, hotelTimezone, false);
-  } else {
-    // Fallback: treat as local server time
-    utcStartTime = new Date(`${hotelData.checkInDate}T${checkInTime24}`);
-    utcEndTime = new Date(`${hotelData.checkOutDate}T${checkOutTime24}`);
-  }
-
-  // Create the hotel reservation with proper timezone handling
+  // Create the hotel reservation with wall clock fields
+  // Note: startTime/endTime are auto-calculated by database trigger from wall fields + timezone
   const reservation = await prisma.reservation.create({
     data: {
       name: hotelData.hotelName,
@@ -246,15 +240,12 @@ export async function addHotelsToTrip(params: {
       reservationTypeId: hotelType.id,
       reservationStatusId: confirmedStatus.id,
       segmentId: targetSegmentId,
-      // Wall clock fields (what the user sees)
+      // Wall clock fields (source of truth)
       wall_start_date: stringToPgDate(hotelData.checkInDate),
       wall_start_time: stringToPgTime(checkInTime24),
       wall_end_date: stringToPgDate(hotelData.checkOutDate),
       wall_end_time: stringToPgTime(checkOutTime24),
-      // UTC fields (for sorting/filtering)
-      startTime: utcStartTime,
-      endTime: utcEndTime,
-      // Location and timezone info
+      // Location and timezone info (trigger uses timezone to calculate UTC)
       location: hotelData.address && hotelData.address !== "" ? hotelData.address : undefined,
       latitude: hotelLat,
       longitude: hotelLng,

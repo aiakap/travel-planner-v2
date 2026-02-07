@@ -272,6 +272,14 @@ export async function POST(request: NextRequest) {
             const segmentEndDate = new Date(segmentStartDate);
             segmentEndDate.setDate(segmentEndDate.getDate() + segmentDays);
 
+            // Format dates as YYYY-MM-DD for wall date fields
+            const formatDateStr = (d: Date): string => {
+              const year = d.getFullYear();
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const day = String(d.getDate()).padStart(2, '0');
+              return `${year}-${month}-${day}`;
+            };
+            
             segmentsToCreate.push({
               id: `temp-${i}`,
               type: card.segmentType || 'Stay',
@@ -282,8 +290,8 @@ export async function POST(request: NextRequest) {
               start_image: null,
               end_image: null,
               order: i,
-              startTime: segmentStartDate.toISOString(),
-              endTime: segmentEndDate.toISOString(),
+              startDate: formatDateStr(segmentStartDate),
+              endDate: formatDateStr(segmentEndDate),
             });
 
             sendSSE(controller, {

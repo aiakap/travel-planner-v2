@@ -9,7 +9,7 @@ import { suggestSegmentForCluster, SegmentSuggestion } from "@/lib/utils/segment
 import { createSegment } from "./create-segment";
 import { getReservationType, getReservationStatus } from "@/lib/db/reservation-lookups";
 import { getAirportTimezones } from "./airport-timezone";
-import { localToUTC, stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
+import { stringToPgDate, stringToPgTime } from "@/lib/utils/local-time";
 import { enrichReservation } from "./enrich-reservation";
 
 export interface AddFlightsOptions {
@@ -345,23 +345,12 @@ async function addFlightsToSegment(
     const depTimezone = timezoneMap[flight.departureAirport] || null;
     const arrTimezone = timezoneMap[flight.arrivalAirport] || null;
 
-    // Convert times to 24-hour format
+    // Convert times to 24-hour format for wall clock storage
     const depTime24 = convertTo24Hour(flight.departureTime);
     const arrTime24 = convertTo24Hour(flight.arrivalTime);
 
-    // Calculate UTC times using the airport timezones
-    let utcStartTime: Date | null = null;
-    let utcEndTime: Date | null = null;
-
-    if (depTimezone && flight.departureDate) {
-      utcStartTime = localToUTC(flight.departureDate, depTime24, depTimezone, false);
-      console.log(`[AddFlights] ${flight.departureAirport}: ${flight.departureDate} ${depTime24} (${depTimezone}) → UTC: ${utcStartTime.toISOString()}`);
-    }
-
-    if (arrTimezone && flight.arrivalDate) {
-      utcEndTime = localToUTC(flight.arrivalDate, arrTime24, arrTimezone, false);
-      console.log(`[AddFlights] ${flight.arrivalAirport}: ${flight.arrivalDate} ${arrTime24} (${arrTimezone}) → UTC: ${utcEndTime.toISOString()}`);
-    }
+    console.log(`[AddFlights] ${flight.departureAirport}: ${flight.departureDate} ${depTime24} (${depTimezone})`);
+    console.log(`[AddFlights] ${flight.arrivalAirport}: ${flight.arrivalDate} ${arrTime24} (${arrTimezone})`);
 
     const reservation = await prisma.reservation.create({
       data: {
@@ -370,17 +359,15 @@ async function addFlightsToSegment(
         reservationTypeId: flightType.id,
         reservationStatusId: confirmedStatus.id,
         segmentId,
-        // Wall clock fields (what the user sees - the actual local times)
+        // Wall clock fields (source of truth - what the user sees)
         wall_start_date: stringToPgDate(flight.departureDate),
         wall_start_time: stringToPgTime(depTime24),
         wall_end_date: stringToPgDate(flight.arrivalDate),
         wall_end_time: stringToPgTime(arrTime24),
-        // UTC fields (for sorting/filtering)
-        startTime: utcStartTime,
-        endTime: utcEndTime,
-        // Timezone info
+        // Timezone info (triggers calculate UTC from wall fields + timezone)
         departureTimezone: depTimezone,
         arrivalTimezone: arrTimezone,
+        // Note: startTime/endTime are auto-calculated by database trigger
         // Other fields
         cost: costPerFlight,
         currency: flightData.currency && flightData.currency !== "" ? flightData.currency : undefined,
