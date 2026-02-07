@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { TripStatus, TripPermission } from "@/app/generated/prisma";
 import { getSegmentTimeZones } from "@/lib/actions/timezone";
+import { stringToPgDate } from "@/lib/utils/local-time";
 
 // Geocoding helper (copied from create-segment.ts to keep isolated)
 async function geocodeLocation(location: string): Promise<{
@@ -146,8 +147,8 @@ export async function syncSegments(
     start_image: string | null;
     end_image: string | null;
     order: number;
-    startTime: string;
-    endTime: string;
+    startDate: string; // Wall date in YYYY-MM-DD format
+    endDate: string;   // Wall date in YYYY-MM-DD format
   }>,
   segmentTypeMap: Record<string, string> // Map of type name to DB ID
 ) {
@@ -203,14 +204,20 @@ export async function syncSegments(
       endGeo = await geocodeLocation(segment.end_location);
     }
 
+    // Parse dates for timezone lookup (create date at noon to avoid DST issues)
+    const [startYear, startMonth, startDay] = segment.startDate.split('-').map(Number);
+    const [endYear, endMonth, endDay] = segment.endDate.split('-').map(Number);
+    const startDateObj = new Date(startYear, startMonth - 1, startDay, 12, 0, 0);
+    const endDateObj = new Date(endYear, endMonth - 1, endDay, 12, 0, 0);
+
     // Fetch timezone information for segment
     const timezones = (startGeo && endGeo) ? await getSegmentTimeZones(
       startGeo.lat,
       startGeo.lng,
       endGeo.lat,
       endGeo.lng,
-      new Date(segment.startTime),
-      new Date(segment.endTime)
+      startDateObj,
+      endDateObj
     ) : { start: null, end: null, hasTimeZoneChange: false };
 
     const segmentData = {
@@ -223,12 +230,15 @@ export async function syncSegments(
       endTitle: segment.end_location || "",
       endLat: endGeo?.lat || 0,
       endLng: endGeo?.lng || 0,
-      startTime: new Date(segment.startTime),
-      endTime: new Date(segment.endTime),
+      // Wall date fields (source of truth - written by code)
+      wall_start_date: stringToPgDate(segment.startDate),
+      wall_end_date: stringToPgDate(segment.endDate),
+      // Timezone fields (needed for UTC calculation by trigger)
       startTimeZoneId: timezones.start?.timeZoneId ?? null,
       startTimeZoneName: timezones.start?.timeZoneName ?? null,
       endTimeZoneId: timezones.end?.timeZoneId ?? null,
       endTimeZoneName: timezones.end?.timeZoneName ?? null,
+      // Note: startTime/endTime are auto-calculated by database trigger from wall fields
       order: segment.order,
       imageUrl: segment.start_image || segment.end_image || null,
       notes: null,

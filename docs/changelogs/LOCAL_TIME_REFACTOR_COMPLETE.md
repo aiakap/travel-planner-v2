@@ -1,10 +1,15 @@
 # Local Time Refactor - Complete
 
+> **This is the authoritative reference for date handling in the travel planner.**
+> See also: `.cursor/rules/date-handling.md` for Cursor-enforced rules.
+
 ## Overview
 
 This refactor introduces a new date/time handling philosophy for the travel planner application. Instead of converting all times to UTC and back, we now store local "wall clock" times directly in the database with timezone context.
 
 **Philosophy**: "What you see is what you store" - dates are stored exactly as the user sees them, eliminating complex timezone conversions and the bugs that come with them.
+
+**Key Rule**: Wall dates are the source of truth. UTC fields are system-managed and only used for sorting.
 
 ## Problem Solved
 

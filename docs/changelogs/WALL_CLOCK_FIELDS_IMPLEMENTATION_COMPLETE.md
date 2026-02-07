@@ -2,65 +2,130 @@
 
 ## Overview
 
-Successfully added human-readable wall clock date/time fields to the `Segment` and `Reservation` database tables. These fields are **NOT used by application code** - they exist purely for easier database inspection and ad-hoc SQL queries.
+Wall clock date/time fields are the **primary source of truth** for Segment and Reservation dates in the database. Application code writes to wall fields, and database triggers automatically calculate UTC timestamps for sorting.
+
+**Architecture**: Wall dates are written by code, UTC is calculated by triggers for sorting only.
 
 ## What Was Added
 
 ### Segment Model
-- `wall_start_date` (DATE) - Wall clock date for segment start
-- `wall_end_date` (DATE) - Wall clock date for segment end
+- `wall_start_date` (DATE) - Wall clock date for segment start (SOURCE OF TRUTH)
+- `wall_end_date` (DATE) - Wall clock date for segment end (SOURCE OF TRUTH)
 
 ### Reservation Model
-- `wall_start_date` (DATE) - Wall clock date for reservation start
-- `wall_start_time` (TIME) - Wall clock time for reservation start
-- `wall_end_date` (DATE) - Wall clock date for reservation end
-- `wall_end_time` (TIME) - Wall clock time for reservation end
+- `wall_start_date` (DATE) - Wall clock date for reservation start (SOURCE OF TRUTH)
+- `wall_start_time` (TIME) - Wall clock time for reservation start (SOURCE OF TRUTH)
+- `wall_end_date` (DATE) - Wall clock date for reservation end (SOURCE OF TRUTH)
+- `wall_end_time` (TIME) - Wall clock time for reservation end (SOURCE OF TRUTH)
+
+## Data Flow
+
+```
+User Input → Application Code → wall_* fields → Database Trigger → startTime/endTime (UTC)
+                                     ↓
+                              (Source of Truth)
+                              
+Display ← Application Code ← wall_* fields
+                              
+Sorting ← Application Code ← startTime (UTC) ← Trigger
+```
+
+## How It Works
+
+1. **Application writes to wall fields**: Code sets `wall_start_date`, `wall_end_date`, etc.
+2. **Trigger calculates UTC**: Database trigger computes `startTime`/`endTime` from wall fields + timezone
+3. **Application reads wall fields**: For display, code reads from wall fields
+4. **UTC used for sorting only**: `startTime.getTime()` is the only valid use of UTC fields
 
 ## Implementation Details
 
 ### 1. Schema Changes
-Updated `prisma/schema.prisma` to add the new fields with PostgreSQL native types:
+Updated `prisma/schema.prisma` to add the wall clock fields with PostgreSQL native types:
 - `@db.Date` for date-only fields
 - `@db.Time` for time-only fields
 - All fields are nullable (`DateTime?`)
 
-### 2. Database Triggers
-Created PostgreSQL triggers that automatically populate wall clock fields on INSERT/UPDATE:
+### 2. Database Triggers (Reversed Direction)
+PostgreSQL triggers that automatically calculate UTC from wall clock fields:
 
-**Segment Trigger**: `update_segment_wall_clock()`
-- Converts UTC timestamps to local dates using `startTimeZoneId` and `endTimeZoneId`
+**Segment Trigger**: `calculate_segment_utc()`
+- Converts wall dates + timezone to UTC timestamps
+- Sets `startTime` from `wall_start_date` at midnight in local timezone
+- Sets `endTime` from `wall_end_date` at 23:59:59 in local timezone
 - Runs before every INSERT or UPDATE
 
-**Reservation Trigger**: `update_reservation_wall_clock()`
-- Converts UTC timestamps to local dates and times
+**Reservation Trigger**: `calculate_reservation_utc()`
+- Converts wall dates/times + timezone to UTC timestamps
 - Uses `timeZoneId` (preferred) or falls back to `departureTimezone`/`arrivalTimezone`
 - Runs before every INSERT or UPDATE
 
-### 3. Backfill
-All existing records were backfilled:
-- 21 segments updated with wall clock dates
-- 37 reservations updated with wall clock dates and times
+### 3. Setting Up Triggers
+To set up the reversed triggers (wall → UTC):
+```bash
+npx tsx scripts/reverse-wall-clock-triggers.ts
+```
 
-## Files Modified
+## Writing Data (Application Code)
 
-1. **prisma/schema.prisma** - Added wall clock fields to models
-2. **prisma/migrations/20260128100000_add_wall_clock_fields/migration.sql** - Migration SQL
-3. **scripts/add-wall-clock-triggers.ts** - Script to add triggers and backfill data
-4. **scripts/verify-wall-clock-fields.ts** - Verification script
+### Segments
+```typescript
+import { stringToPgDate } from '@/lib/utils/local-time';
 
-## Usage Examples
+await prisma.segment.create({
+  data: {
+    wall_start_date: stringToPgDate('2026-01-29'),
+    wall_end_date: stringToPgDate('2026-01-31'),
+    startTimeZoneId: 'America/Los_Angeles',
+    endTimeZoneId: 'America/Los_Angeles',
+    // DO NOT set startTime/endTime - trigger will calculate them
+  }
+});
+```
 
-### Viewing Data in Database
+### Reservations
+```typescript
+import { stringToPgDate, stringToPgTime } from '@/lib/utils/local-time';
+
+await prisma.reservation.create({
+  data: {
+    wall_start_date: stringToPgDate('2026-01-29'),
+    wall_start_time: stringToPgTime('14:30'),
+    wall_end_date: stringToPgDate('2026-01-29'),
+    wall_end_time: stringToPgTime('16:00'),
+    timeZoneId: 'America/Los_Angeles',
+    // DO NOT set startTime/endTime - trigger will calculate them
+  }
+});
+```
+
+## Reading Data (Application Code)
+
+### For Display
+```typescript
+import { pgDateToString, pgTimeToString } from '@/lib/utils/local-time';
+
+const dateStr = pgDateToString(reservation.wall_start_date); // "2026-01-29"
+const timeStr = pgTimeToString(reservation.wall_start_time); // "14:30"
+```
+
+### For Sorting (ONLY valid use of UTC)
+```typescript
+// Sort by UTC timestamp for cross-timezone ordering
+reservations.sort((a, b) => 
+  (a.startTime?.getTime() ?? 0) - (b.startTime?.getTime() ?? 0)
+);
+```
+
+## Viewing Data in Database
 
 **Segments:**
 ```sql
 SELECT 
   name,
-  "startTime" as utc_start,
+  "wall_start_date" as local_date,    -- Source of truth
   "startTimeZoneId" as tz,
-  "wall_start_date"
+  "startTime" as utc_calculated       -- Auto-calculated
 FROM "Segment"
-WHERE "startTime" IS NOT NULL
 LIMIT 5;
 ```
 
@@ -68,99 +133,47 @@ LIMIT 5;
 ```sql
 SELECT 
   name,
-  "startTime" as utc_start,
+  "wall_start_date" as local_date,    -- Source of truth
+  "wall_start_time" as local_time,    -- Source of truth
   "timeZoneId" as tz,
-  "wall_start_date",
-  "wall_start_time"
+  "startTime" as utc_calculated       -- Auto-calculated
 FROM "Reservation"
-WHERE "startTime" IS NOT NULL
 LIMIT 5;
 ```
 
-### Example Output
+## Rules (IMPORTANT)
 
-**Before (UTC only):**
-```
-startTime: 2026-05-15T18:00:00.000Z
-startTimeZoneId: America/Los_Angeles
-```
+### NEVER DO
+- Write to `startTime` or `endTime` on Segments
+- Write to `startTime` or `endTime` on Reservations
+- Read from UTC fields for display
+- Use `new Date("YYYY-MM-DD")` (interprets as UTC midnight)
 
-**After (with wall clock):**
-```
-startTime: 2026-05-15T18:00:00.000Z
-startTimeZoneId: America/Los_Angeles
-wall_start_date: 2026-05-15  ← Easy to read!
-wall_start_time: 11:00:00     ← Easy to read!
-```
+### ALWAYS DO
+- Write to wall fields (`wall_start_date`, `wall_end_date`, etc.)
+- Read from wall fields for display
+- Use `stringToPgDate()` / `stringToPgTime()` for writing
+- Use `pgDateToString()` / `pgTimeToString()` for reading
+- Only use UTC fields (`startTime`) for sorting
 
-## How It Works
+### Exception: Trip Model
+The `Trip` model only has UTC dates (`startDate`, `endDate`) without timezone context.
+These CAN be written directly by code since trips don't have location-specific timezones.
 
-1. **Application writes data**: Code continues to use `startTime`, `endTime`, and timezone fields
-2. **Trigger fires**: Database automatically converts UTC to local time and populates wall clock fields
-3. **You inspect database**: See human-readable dates/times without mental conversion
+## Cursor Rules
 
-## Maintenance
-
-### Rebuilding Wall Clock Fields
-If triggers fail or data becomes stale, re-run:
-```bash
-npx tsx scripts/add-wall-clock-triggers.ts
-```
-
-### Verifying Data
-Check wall clock fields are correct:
-```bash
-npx tsx scripts/verify-wall-clock-fields.ts
-```
-
-### Removing (if needed)
-To remove wall clock fields entirely:
-```sql
--- Drop triggers
-DROP TRIGGER IF EXISTS segment_wall_clock_trigger ON "Segment";
-DROP TRIGGER IF EXISTS reservation_wall_clock_trigger ON "Reservation";
-
--- Drop functions
-DROP FUNCTION IF EXISTS update_segment_wall_clock();
-DROP FUNCTION IF EXISTS update_reservation_wall_clock();
-
--- Drop columns
-ALTER TABLE "Segment" DROP COLUMN "wall_start_date";
-ALTER TABLE "Segment" DROP COLUMN "wall_end_date";
-ALTER TABLE "Reservation" DROP COLUMN "wall_start_date";
-ALTER TABLE "Reservation" DROP COLUMN "wall_start_time";
-ALTER TABLE "Reservation" DROP COLUMN "wall_end_date";
-ALTER TABLE "Reservation" DROP COLUMN "wall_end_time";
-```
-
-Then remove the fields from `prisma/schema.prisma`.
+See `.cursor/rules/date-handling.md` for comprehensive rules enforced by Cursor.
 
 ## Benefits
 
-✅ **Easier Debugging**: See "2026-01-29" instead of "2026-01-29T08:01:00.000Z"  
-✅ **Better SQL Queries**: Filter/sort by human-readable dates  
-✅ **No Code Changes**: Zero risk to application logic  
-✅ **Automatic Updates**: Triggers keep fields in sync  
-✅ **PostgreSQL Native**: Uses proper DATE and TIME types  
+- **What You See Is What You Store**: No confusing timezone conversions
+- **Simpler Code**: No `dateToUTC()` or `utcToDate()` calls needed
+- **Fewer Bugs**: Eliminated date-shifting issues across timezones
+- **Easier Debugging**: Wall dates are human-readable
+- **Proper Sorting**: UTC still available for cross-timezone ordering
 
-## Important Notes
-
-- **Not used by application code**: These fields are for human inspection only
-- **Automatically maintained**: Triggers update them on every INSERT/UPDATE
-- **Can be removed anytime**: No application dependencies
-- **Storage overhead**: Minimal (2-4 extra columns per table)
-
-## Verification Results
-
-```
-Segments: 21 total, 21 with start date, 21 with end date
-Reservations: 37 total, 37 with start date, 37 with start time
-```
-
-All existing records successfully populated with wall clock fields!
-
-## Date Created
-January 28, 2026
+## Date Updated
+February 8, 2026
 
 ## Status
-✅ **COMPLETE** - Wall clock fields are live and working in the database.
+UPDATED - Wall clock fields are now the source of truth, with reversed triggers calculating UTC.

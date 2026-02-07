@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { pgDateToString } from "@/lib/utils/local-time";
 
 export type TransportMode = "DRIVE" | "WALK" | "TRANSIT" | "BICYCLE";
 
@@ -253,25 +254,37 @@ export async function optimizeDayRoute(
       return null;
     }
 
-    // Calculate the date for this day
+    // Calculate the target date string for this day (YYYY-MM-DD format)
     const tripStartDate = new Date(trip.startDate);
     const targetDate = new Date(tripStartDate);
     targetDate.setDate(targetDate.getDate() + day - 1);
+    
+    // Format target date as YYYY-MM-DD for wall date comparison
+    const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
 
-    // Get all reservations for this day that have location data
+    // Get all reservations for this day that have location data (using wall dates)
     const dayReservations = trip.segments
       .flatMap((seg) => seg.reservations)
       .filter((res) => {
-        if (!res.startTime || !res.latitude || !res.longitude) return false;
+        if (!res.latitude || !res.longitude) return false;
+        
+        // Prefer wall_start_date for date comparison
+        if (res.wall_start_date) {
+          const wallDateStr = pgDateToString(res.wall_start_date);
+          return wallDateStr === targetDateStr;
+        }
+        // Fallback to startTime for backwards compatibility
+        if (!res.startTime) return false;
         const resDate = new Date(res.startTime);
         return (
-          resDate.getFullYear() === targetDate.getFullYear() &&
-          resDate.getMonth() === targetDate.getMonth() &&
-          resDate.getDate() === targetDate.getDate()
+          resDate.getUTCFullYear() === targetDate.getFullYear() &&
+          resDate.getUTCMonth() === targetDate.getMonth() &&
+          resDate.getUTCDate() === targetDate.getDate()
         );
       })
       .sort((a, b) => {
-        return new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime();
+        // Use UTC startTime for sorting (correct use of UTC fields)
+        return (a.startTime?.getTime() ?? 0) - (b.startTime?.getTime() ?? 0);
       });
 
     if (dayReservations.length < 2) {

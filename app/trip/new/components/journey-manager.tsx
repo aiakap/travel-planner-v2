@@ -21,8 +21,7 @@ import {
   updateTripMetadata, 
   syncSegments 
 } from '../actions/trip-builder-actions';
-import { updateTripStatus } from '@/lib/actions/update-trip-status';
-import { TripStatus } from '@/app/generated/prisma';
+import { finalizeDraftTrip } from '@/lib/actions/finalize-draft-trip';
 import { HomeLocationData } from '@/lib/types/home-location';
 
 /**
@@ -78,7 +77,11 @@ const formatDate = (date: Date): string => {
 };
 
 const formatDateISO = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  // Use local date methods to avoid UTC conversion issues
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const parseLocalDate = (dateStr: string): Date => {
@@ -613,8 +616,13 @@ export function JourneyManager({
 
     saveTimeoutRef.current = setTimeout(async () => {
       try {
+        // Calculate travel days based on home toggles
+        const travelOutDays = (settings.startFromHome && homeLocation) ? 1 : 0;
+        const travelHomeDays = (settings.endAtHome && homeLocation) ? 1 : 0;
+        const totalDaysWithTravel = totalTripDays + travelOutDays + travelHomeDays;
+        
         const startDateStr = startDate ? formatDateISO(startDate) : formatDateISO(new Date());
-        const endDateStr = formatDateISO(addDays(startDate || new Date(), totalTripDays - 1));
+        const endDateStr = formatDateISO(addDays(startDate || new Date(), totalDaysWithTravel - 1));
         
         if (!tripIdRef.current) {
           // First save - create trip
@@ -627,16 +635,65 @@ export function JourneyManager({
           tripIdRef.current = id;
           setTripId(id);
         } else {
-          // Subsequent saves - update trip and segments
-          const segmentsWithDates = chapters.map((chapter, idx) => {
+          // Build all segments including travel segments
+          const allSegments: Array<{
+            id: string;
+            dbId?: string;
+            type: string;
+            name: string;
+            days: number;
+            start_location: string;
+            end_location: string;
+            start_image: string | null;
+            end_image: string | null;
+            start_lat?: number;
+            start_lng?: number;
+            end_lat?: number;
+            end_lng?: number;
+            order: number;
+            startTime: string;
+            endTime: string;
+          }> = [];
+          
+          let currentOrder = 0;
+          let currentDayOffset = 0;
+          
+          // Add Travel Out segment if starting from home
+          if (settings.startFromHome && homeLocation) {
+            const travelOutStart = addDays(startDate || new Date(), currentDayOffset);
+            const firstDestination = chapters[0]?.location || '';
+            
+            allSegments.push({
+              id: 'travel-out',
+              type: 'TRAVEL',
+              name: firstDestination ? `Travel to ${firstDestination.split(',')[0].trim()}` : 'Journey Begins',
+              days: 1,
+              start_location: homeLocation.name,
+              end_location: firstDestination,
+              start_image: homeLocation.imageUrl,
+              end_image: chapters[0]?.image || null,
+              start_lat: homeLocation.lat ?? undefined,
+              start_lng: homeLocation.lng ?? undefined,
+              end_lat: chapters[0]?.lat,
+              end_lng: chapters[0]?.lng,
+              order: currentOrder,
+              startDate: formatDateISO(travelOutStart),
+              endDate: formatDateISO(travelOutStart),
+            });
+            currentOrder++;
+            currentDayOffset += 1;
+          }
+          
+          // Add chapter segments (STAY type) with adjusted dates
+          chapters.forEach((chapter, idx) => {
             const daysBefore = chapters.slice(0, idx).reduce((sum, c) => sum + c.days, 0);
-            const segStart = addDays(startDate || new Date(), daysBefore);
+            const segStart = addDays(startDate || new Date(), currentDayOffset + daysBefore);
             const segEnd = addDays(segStart, chapter.days - 1);
             
-            return {
+            allSegments.push({
               id: chapter.id,
               dbId: chapter.dbId,
-              type: 'STAY', // Default type for chapters
+              type: 'STAY',
               name: chapter.location.split(',')[0].trim(),
               days: chapter.days,
               start_location: chapter.location,
@@ -645,11 +702,37 @@ export function JourneyManager({
               end_image: null,
               start_lat: chapter.lat,
               start_lng: chapter.lng,
-              order: idx,
-              startTime: segStart.toISOString(),
-              endTime: segEnd.toISOString().replace('T00:00:00.000Z', 'T23:59:59.000Z'),
-            };
+              order: currentOrder,
+              startDate: formatDateISO(segStart),
+              endDate: formatDateISO(segEnd),
+            });
+            currentOrder++;
           });
+          
+          // Add Travel Home segment if returning home
+          if (settings.endAtHome && homeLocation) {
+            const lastChapter = chapters[chapters.length - 1];
+            const totalChapterDays = chapters.reduce((sum, c) => sum + c.days, 0);
+            const travelHomeStart = addDays(startDate || new Date(), currentDayOffset + totalChapterDays);
+            
+            allSegments.push({
+              id: 'travel-home',
+              type: 'TRAVEL',
+              name: `Return to ${homeLocation.name.split(',')[0].trim()}`,
+              days: 1,
+              start_location: lastChapter?.location || '',
+              end_location: homeLocation.name,
+              start_image: lastChapter?.image || null,
+              end_image: homeLocation.imageUrl,
+              start_lat: lastChapter?.lat,
+              start_lng: lastChapter?.lng,
+              end_lat: homeLocation.lat ?? undefined,
+              end_lng: homeLocation.lng ?? undefined,
+              order: currentOrder,
+              startDate: formatDateISO(travelHomeStart),
+              endDate: formatDateISO(travelHomeStart),
+            });
+          }
 
           await Promise.all([
             updateTripMetadata(tripIdRef.current, {
@@ -658,7 +741,7 @@ export function JourneyManager({
               startDate: startDateStr,
               endDate: endDateStr,
             }),
-            syncSegments(tripIdRef.current, segmentsWithDates, segmentTypeMap),
+            syncSegments(tripIdRef.current, allSegments, segmentTypeMap),
           ]);
         }
         setSaveStatus('saved');
@@ -673,7 +756,7 @@ export function JourneyManager({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [journeyName, startDate, chapters, hasUserInteracted, totalTripDays, segmentTypeMap]);
+  }, [journeyName, startDate, chapters, hasUserInteracted, totalTripDays, segmentTypeMap, settings, homeLocation]);
 
   // --- HANDLERS ---
   const handleAddChapter = (chapterData: Omit<Chapter, 'id'>, index: number | null = null) => {
@@ -723,8 +806,9 @@ export function JourneyManager({
     
     setIsTransitioning(true);
     try {
-      // Update trip status from DRAFT to PLANNING
-      await updateTripStatus(tripIdRef.current, TripStatus.PLANNING);
+      // Finalize draft: set default theme, placeholder image, queue AI generation, update status
+      const result = await finalizeDraftTrip(tripIdRef.current);
+      console.log('Trip finalized:', result);
       
       // Navigate to view1 with the trip ID
       router.push(`/view1/${tripIdRef.current}`);

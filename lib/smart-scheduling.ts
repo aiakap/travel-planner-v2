@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PlaceSuggestion } from "@/lib/types/place-suggestion";
 import { timeToMinutes, minutesToTime, addDuration } from "@/lib/time-utils";
 import { getDefaultTimeForType } from "@/lib/scheduling-utils";
+import { pgDateToString, pgTimeToString } from "@/lib/utils/local-time";
 
 interface TimeSlot {
   day: number;
@@ -90,7 +91,7 @@ async function findAvailableSlots(
 
   if (!trip) return [];
 
-  // Calculate the date for this day
+  // Calculate the target date string for this day (YYYY-MM-DD format)
   const tripStartDate = new Date(trip.startDate);
   
   // Validate trip start date
@@ -101,21 +102,31 @@ async function findAvailableSlots(
   
   const targetDate = new Date(tripStartDate);
   targetDate.setDate(targetDate.getDate() + day - 1);
+  
+  // Format target date as YYYY-MM-DD for wall date comparison
+  const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
 
-  // Get all reservations for this day
+  // Get all reservations for this day using wall dates
   const dayReservations = trip.segments
     .flatMap((seg) => seg.reservations)
     .filter((res) => {
+      // Prefer wall_start_date for date comparison
+      if (res.wall_start_date) {
+        const wallDateStr = pgDateToString(res.wall_start_date);
+        return wallDateStr === targetDateStr;
+      }
+      // Fallback to startTime for backwards compatibility (sorting only)
       if (!res.startTime) return false;
       const resDate = new Date(res.startTime);
       return (
-        resDate.getFullYear() === targetDate.getFullYear() &&
-        resDate.getMonth() === targetDate.getMonth() &&
-        resDate.getDate() === targetDate.getDate()
+        resDate.getUTCFullYear() === targetDate.getFullYear() &&
+        resDate.getUTCMonth() === targetDate.getMonth() &&
+        resDate.getUTCDate() === targetDate.getDate()
       );
     })
     .sort((a, b) => {
-      return new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime();
+      // Use UTC startTime for sorting (this is the correct use of UTC fields)
+      return (a.startTime?.getTime() ?? 0) - (b.startTime?.getTime() ?? 0);
     });
 
   // Find gaps between reservations
@@ -135,10 +146,15 @@ async function findAvailableSlots(
   }
 
   // Check gap before first reservation
-  const firstResTime = new Date(dayReservations[0].startTime!);
-  const firstResMinutes = timeToMinutes(
-    `${firstResTime.getHours()}:${firstResTime.getMinutes()}`
-  );
+  // Use wall_start_time if available, otherwise fall back to startTime (less accurate)
+  const firstRes = dayReservations[0];
+  const firstResTimeStr = firstRes.wall_start_time 
+    ? pgTimeToString(firstRes.wall_start_time)
+    : (() => {
+        const t = new Date(firstRes.startTime!);
+        return `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}`;
+      })();
+  const firstResMinutes = timeToMinutes(firstResTimeStr);
 
   if (firstResMinutes - dayStart >= minGapMinutes) {
     slots.push({
@@ -150,15 +166,29 @@ async function findAvailableSlots(
 
   // Check gaps between reservations
   for (let i = 0; i < dayReservations.length - 1; i++) {
-    const currentEnd = dayReservations[i].endTime || dayReservations[i].startTime!;
-    const nextStart = dayReservations[i + 1].startTime!;
+    const currentRes = dayReservations[i];
+    const nextRes = dayReservations[i + 1];
 
-    const currentEndMinutes = timeToMinutes(
-      `${new Date(currentEnd).getHours()}:${new Date(currentEnd).getMinutes()}`
-    );
-    const nextStartMinutes = timeToMinutes(
-      `${new Date(nextStart).getHours()}:${new Date(nextStart).getMinutes()}`
-    );
+    // Get end time from wall_end_time, or fall back to wall_start_time, then UTC
+    const currentEndStr = currentRes.wall_end_time 
+      ? pgTimeToString(currentRes.wall_end_time)
+      : currentRes.wall_start_time 
+        ? pgTimeToString(currentRes.wall_start_time)
+        : (() => {
+            const t = new Date(currentRes.endTime || currentRes.startTime!);
+            return `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}`;
+          })();
+    
+    // Get start time from wall_start_time, or fall back to UTC
+    const nextStartStr = nextRes.wall_start_time 
+      ? pgTimeToString(nextRes.wall_start_time)
+      : (() => {
+          const t = new Date(nextRes.startTime!);
+          return `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}`;
+        })();
+
+    const currentEndMinutes = timeToMinutes(currentEndStr);
+    const nextStartMinutes = timeToMinutes(nextStartStr);
 
     const gapMinutes = nextStartMinutes - currentEndMinutes;
 
@@ -173,10 +203,15 @@ async function findAvailableSlots(
 
   // Check gap after last reservation
   const lastRes = dayReservations[dayReservations.length - 1];
-  const lastEndTime = lastRes.endTime || lastRes.startTime!;
-  const lastEndMinutes = timeToMinutes(
-    `${new Date(lastEndTime).getHours()}:${new Date(lastEndTime).getMinutes()}`
-  );
+  const lastEndStr = lastRes.wall_end_time 
+    ? pgTimeToString(lastRes.wall_end_time)
+    : lastRes.wall_start_time 
+      ? pgTimeToString(lastRes.wall_start_time)
+      : (() => {
+          const t = new Date(lastRes.endTime || lastRes.startTime!);
+          return `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}`;
+        })();
+  const lastEndMinutes = timeToMinutes(lastEndStr);
 
   if (dayEnd - lastEndMinutes >= minGapMinutes) {
     slots.push({
