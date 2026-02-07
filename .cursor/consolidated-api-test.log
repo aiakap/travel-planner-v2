@@ -1,0 +1,707 @@
+
+================================================================================
+EMPTY: "best restaurants" - no concepts generated
+================================================================================
+[2026-02-07T20:38:23.455Z] [REQUEST] === Consolidated API Request Started ===
+[2026-02-07T20:38:23.459Z] [REQUEST] Request validated successfully
+  {
+  "query": "best restaurants",
+  "location": "Paris, France",
+  "categories": [
+    "restaurant"
+  ],
+  "limit": 3,
+  "options": {
+    "includeWeather": false,
+    "includePricing": true,
+    "skipCache": true,
+    "useAI": true
+  }
+}
+[2026-02-07T20:38:23.459Z] [API_STATUS] Current API configuration
+  {
+  "google": "configured",
+  "yelp": "configured",
+  "amadeus": "configured",
+  "weather": "configured"
+}
+[2026-02-07T20:38:23.459Z] [CACHE] Cache skipped by request option
+[2026-02-07T20:38:23.459Z] [STAGE_1] Starting AI concept generation...
+[2026-02-07T20:38:23.459Z] [AI_GENERATION] Starting concept generation for query: "best restaurants"
+  {
+  "locationContext": "Paris, France",
+  "categories": [
+    "restaurant"
+  ],
+  "limit": 3
+}
+[2026-02-07T20:38:24.094Z] [AI_GENERATION] ERROR: Invalid schema for response_format 'response': In context=('properties', 'places', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'searchHint'.
+  {
+  "error": "AI_APICallError: Invalid schema for response_format 'response': In context=('properties', 'places', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'searchHint'.\n    at eval (webpack-internal:///(rsc)/./node_modules/@ai-sdk/provider-utils/dist/index.mjs:2406:14)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async postToApi (webpack-internal:///(rsc)/./node_modules/@ai-sdk/pr
+[2026-02-07T20:38:24.201Z] [STAGE_1] AI generation complete: 0 concepts (742ms)
+  {
+  "conceptNames": []
+}
+[2026-02-07T20:38:24.201Z] [RESULT] No concepts generated - returning empty response (746ms)
+
+
+================================================================================
+EMPTY: "coffee shops" - no concepts generated
+================================================================================
+[2026-02-07T20:38:30.733Z] [REQUEST] === Consolidated API Request Started ===
+[2026-02-07T20:38:30.734Z] [REQUEST] Request validated successfully
+  {
+  "query": "coffee shops",
+  "location": "San Francisco, USA",
+  "categories": [
+    "cafe"
+  ],
+  "limit": 5,
+  "options": {
+    "includeWeather": false,
+    "includePricing": true,
+    "skipCache": true,
+    "useAI": true
+  }
+}
+[2026-02-07T20:38:30.734Z] [API_STATUS] Current API configuration
+  {
+  "google": "configured",
+  "yelp": "configured",
+  "amadeus": "configured",
+  "weather": "configured"
+}
+[2026-02-07T20:38:30.734Z] [CACHE] Cache skipped by request option
+[2026-02-07T20:38:30.734Z] [STAGE_1] Starting AI concept generation...
+[2026-02-07T20:38:30.734Z] [AI_GENERATION] Starting concept generation for query: "coffee shops"
+  {
+  "locationContext": "San Francisco, USA",
+  "categories": [
+    "cafe"
+  ],
+  "limit": 5
+}
+[2026-02-07T20:38:31.681Z] [AI_GENERATION] ERROR: Invalid schema for response_format 'response': In context=('properties', 'places', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'searchHint'.
+  {
+  "error": "AI_APICallError: Invalid schema for response_format 'response': In context=('properties', 'places', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'searchHint'.\n    at eval (webpack-internal:///(rsc)/./node_modules/@ai-sdk/provider-utils/dist/index.mjs:2406:14)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async postToApi (webpack-internal:///(rsc)/./node_modules/@ai-sdk/pr
+[2026-02-07T20:38:31.745Z] [STAGE_1] AI generation complete: 0 concepts (1011ms)
+  {
+  "conceptNames": []
+}
+[2026-02-07T20:38:31.745Z] [RESULT] No concepts generated - returning empty response (1012ms)
+
+
+================================================================================
+SUCCESS: "best restaurants" in Paris - 4 results in 11167ms
+================================================================================
+[2026-02-07T20:38:44.277Z] [REQUEST] === Consolidated API Request Started ===
+[2026-02-07T20:38:44.278Z] [REQUEST] Request validated successfully
+  {
+  "query": "best restaurants",
+  "location": "Paris, France",
+  "categories": [
+    "restaurant"
+  ],
+  "limit": 3,
+  "options": {
+    "includeWeather": false,
+    "includePricing": true,
+    "skipCache": true,
+    "useAI": true
+  }
+}
+[2026-02-07T20:38:44.278Z] [API_STATUS] Current API configuration
+  {
+  "google": "configured",
+  "yelp": "configured",
+  "amadeus": "configured",
+  "weather": "configured"
+}
+[2026-02-07T20:38:44.278Z] [CACHE] Cache skipped by request option
+[2026-02-07T20:38:44.278Z] [STAGE_1] Starting AI concept generation...
+[2026-02-07T20:38:44.278Z] [AI_GENERATION] Starting concept generation for query: "best restaurants"
+  {
+  "locationContext": "Paris, France",
+  "categories": [
+    "restaurant"
+  ],
+  "limit": 3
+}
+[2026-02-07T20:38:47.995Z] [AI_GENERATION] Generated 3 place concepts
+  {
+  "places": [
+    "Le Meurice (restaurant)",
+    "L'Atelier de Joël Robuchon (restaurant)",
+    "Le Relais de l'Entrecôte (restaurant)"
+  ]
+}
+[2026-02-07T20:38:47.995Z] [STAGE_1] AI generation complete: 3 concepts (3717ms)
+  {
+  "conceptNames": [
+    "Le Meurice",
+    "L'Atelier de Joël Robuchon",
+    "Le Relais de l'Entrecôte"
+  ]
+}
+[2026-02-07T20:38:47.995Z] [STAGE_2] Starting API resolution...
+  {
+  "conceptCount": 3,
+  "includeGoogle": true,
+  "includeYelp": true,
+  "includeAmadeus": true,
+  "includeWeather": false
+}
+[2026-02-07T20:38:48.858Z] [STAGE_2] API resolution complete (863ms)
+  {
+  "googleResults": 3,
+  "yelpResults": 3,
+  "amadeusResults": 0,
+  "weatherResult": "none",
+  "errors": 0,
+  "timing": {
+    "total": 862,
+    "google": 841,
+    "yelp": 862,
+    "amadeus": 6
+  }
+}
+[2026-02-07T20:38:48.858Z] [STAGE_3] Starting consolidation...
+[2026-02-07T20:38:55.444Z] [STAGE_3] Consolidation complete (6586ms)
+  {
+  "inputConcepts": 3,
+  "outputPlaces": 4,
+  "placeNames": [
+    "Relais de l’Entrecôte",
+    "Le Meurice",
+    "L'Atelier de Joël Robuchon",
+    "Le Relais de l'Entrecôte"
+  ]
+}
+[2026-02-07T20:38:55.444Z] [RESULT] === Request Complete === (11167ms)
+  {
+  "success": true,
+  "totalResults": 4,
+  "totalTime": 11167,
+  "breakdown": {
+    "aiGeneration": 3717,
+    "apiResolution": 863,
+    "consolidation": 6586
+  }
+}
+
+
+================================================================================
+SUCCESS: "luxury hotels" in Rome - 3 results in 10591ms
+================================================================================
+[2026-02-07T20:39:08.869Z] [REQUEST] === Consolidated API Request Started ===
+[2026-02-07T20:39:08.869Z] [REQUEST] Request validated successfully
+  {
+  "query": "top attractions and activities",
+  "location": "Tokyo, Japan",
+  "categories": [
+    "attraction",
+    "activity"
+  ],
+  "limit": 5,
+  "options": {
+    "includeWeather": false,
+    "includePricing": true,
+    "skipCache": true,
+    "useAI": true
+  }
+}
+[2026-02-07T20:39:08.869Z] [API_STATUS] Current API configuration
+  {
+  "google": "configured",
+  "yelp": "configured",
+  "amadeus": "configured",
+  "weather": "configured"
+}
+[2026-02-07T20:39:08.869Z] [CACHE] Cache skipped by request option
+[2026-02-07T20:39:08.869Z] [STAGE_1] Starting AI concept generation...
+[2026-02-07T20:39:08.869Z] [AI_GENERATION] Starting concept generation for query: "top attractions and activities"
+  {
+  "locationContext": "Tokyo, Japan",
+  "categories": [
+    "attraction",
+    "activity"
+  ],
+  "limit": 5
+}
+[2026-02-07T20:39:10.655Z] [AI_GENERATION] Generated 3 place concepts
+  {
+  "places": [
+    "Hotel Hassler Roma (hotel)",
+    "The St. Regis Rome (hotel)",
+    "Rome Cavalieri, A Waldorf Astoria Hotel (hotel)"
+  ]
+}
+[2026-02-07T20:39:10.655Z] [STAGE_1] AI generation complete: 3 concepts (3525ms)
+  {
+  "conceptNames": [
+    "Hotel Hassler Roma",
+    "The St. Regis Rome",
+    "Rome Cavalieri, A Waldorf Astoria Hotel"
+  ]
+}
+[2026-02-07T20:39:10.655Z] [STAGE_2] Starting API resolution...
+  {
+  "conceptCount": 3,
+  "includeGoogle": true,
+  "includeYelp": true,
+  "includeAmadeus": true,
+  "includeWeather": false
+}
+[2026-02-07T20:39:12.190Z] [STAGE_2] API resolution complete (1535ms)
+  {
+  "googleResults": 3,
+  "yelpResults": 0,
+  "amadeusResults": 0,
+  "weatherResult": "none",
+  "errors": 0,
+  "timing": {
+    "total": 1535,
+    "google": 1534,
+    "yelp": 5,
+    "amadeus": 5
+  }
+}
+[2026-02-07T20:39:12.190Z] [STAGE_3] Starting consolidation...
+[2026-02-07T20:39:12.851Z] [AI_GENERATION] Generated 5 place concepts
+  {
+  "places": [
+    "Tokyo Skytree (attraction)",
+    "Shinjuku Gyoen National Garden (activity)",
+    "Meiji Shrine (attraction)",
+    "Harajuku Shopping District (shopping)",
+    "Asakusa Culture and Tourism Center (activity)"
+  ]
+}
+[2026-02-07T20:39:12.851Z] [STAGE_1] AI generation complete: 5 concepts (3982ms)
+  {
+  "conceptNames": [
+    "Tokyo Skytree",
+    "Shinjuku Gyoen National Garden",
+    "Meiji Shrine",
+    "Harajuku Shopping District",
+    "Asakusa Culture and Tourism Center"
+  ]
+}
+[2026-02-07T20:39:12.851Z] [STAGE_2] Starting API resolution...
+  {
+  "conceptCount": 5,
+  "includeGoogle": true,
+  "includeYelp": true,
+  "includeAmadeus": true,
+  "includeWeather": false
+}
+[2026-02-07T20:39:13.651Z] [STAGE_2] API resolution complete (800ms)
+  {
+  "googleResults": 5,
+  "yelpResults": 1,
+  "amadeusResults": 0,
+  "weatherResult": "none",
+  "errors": 0,
+  "timing": {
+    "total": 800,
+    "google": 788,
+    "yelp": 800,
+    "amadeus": 5
+  }
+}
+[2026-02-07T20:39:13.651Z] [STAGE_3] Starting consolidation...
+[2026-02-07T20:39:17.720Z] [STAGE_3] Consolidation complete (5530ms)
+  {
+  "inputConcepts": 3,
+  "outputPlaces": 3,
+  "placeNames": [
+    "The St. Regis Rome",
+    "Hotel Hassler Roma",
+    "Rome Cavalieri, A Waldorf Astoria Hotel"
+  ]
+}
+[2026-02-07T20:39:17.720Z] [RESULT] === Request Complete === (10591ms)
+  {
+  "success": true,
+  "totalResults": 3,
+  "totalTime": 10591,
+  "breakdown": {
+    "aiGeneration": 3525,
+    "apiResolution": 1535,
+    "consolidation": 5530
+  }
+}
+
+
+================================================================================
+SUCCESS: "top attractions and activities" in Tokyo - 6 results in 10270ms
+================================================================================
+[2026-02-07T20:39:08.869Z] [REQUEST] === Consolidated API Request Started ===
+[2026-02-07T20:39:08.869Z] [REQUEST] Request validated successfully
+  {
+  "query": "top attractions and activities",
+  "location": "Tokyo, Japan",
+  "categories": [
+    "attraction",
+    "activity"
+  ],
+  "limit": 5,
+  "options": {
+    "includeWeather": false,
+    "includePricing": true,
+    "skipCache": true,
+    "useAI": true
+  }
+}
+[2026-02-07T20:39:08.869Z] [API_STATUS] Current API configuration
+  {
+  "google": "configured",
+  "yelp": "configured",
+  "amadeus": "configured",
+  "weather": "configured"
+}
+[2026-02-07T20:39:08.869Z] [CACHE] Cache skipped by request option
+[2026-02-07T20:39:08.869Z] [STAGE_1] Starting AI concept generation...
+[2026-02-07T20:39:08.869Z] [AI_GENERATION] Starting concept generation for query: "top attractions and activities"
+  {
+  "locationContext": "Tokyo, Japan",
+  "categories": [
+    "attraction",
+    "activity"
+  ],
+  "limit": 5
+}
+[2026-02-07T20:39:10.655Z] [AI_GENERATION] Generated 3 place concepts
+  {
+  "places": [
+    "Hotel Hassler Roma (hotel)",
+    "The St. Regis Rome (hotel)",
+    "Rome Cavalieri, A Waldorf Astoria Hotel (hotel)"
+  ]
+}
+[2026-02-07T20:39:10.655Z] [STAGE_1] AI generation complete: 3 concepts (3525ms)
+  {
+  "conceptNames": [
+    "Hotel Hassler Roma",
+    "The St. Regis Rome",
+    "Rome Cavalieri, A Waldorf Astoria Hotel"
+  ]
+}
+[2026-02-07T20:39:10.655Z] [STAGE_2] Starting API resolution...
+  {
+  "conceptCount": 3,
+  "includeGoogle": true,
+  "includeYelp": true,
+  "includeAmadeus": true,
+  "includeWeather": false
+}
+[2026-02-07T20:39:12.190Z] [STAGE_2] API resolution complete (1535ms)
+  {
+  "googleResults": 3,
+  "yelpResults": 0,
+  "amadeusResults": 0,
+  "weatherResult": "none",
+  "errors": 0,
+  "timing": {
+    "total": 1535,
+    "google": 1534,
+    "yelp": 5,
+    "amadeus": 5
+  }
+}
+[2026-02-07T20:39:12.190Z] [STAGE_3] Starting consolidation...
+[2026-02-07T20:39:12.851Z] [AI_GENERATION] Generated 5 place concepts
+  {
+  "places": [
+    "Tokyo Skytree (attraction)",
+    "Shinjuku Gyoen National Garden (activity)",
+    "Meiji Shrine (attraction)",
+    "Harajuku Shopping District (shopping)",
+    "Asakusa Culture and Tourism Center (activity)"
+  ]
+}
+[2026-02-07T20:39:12.851Z] [STAGE_1] AI generation complete: 5 concepts (3982ms)
+  {
+  "conceptNames": [
+    "Tokyo Skytree",
+    "Shinjuku Gyoen National Garden",
+    "Meiji Shrine",
+    "Harajuku Shopping District",
+    "Asakusa Culture and Tourism Center"
+  ]
+}
+[2026-02-07T20:39:12.851Z] [STAGE_2] Starting API resolution...
+  {
+  "conceptCount": 5,
+  "includeGoogle": true,
+  "includeYelp": true,
+  "includeAmadeus": true,
+  "includeWeather": false
+}
+[2026-02-07T20:39:13.651Z] [STAGE_2] API resolution complete (800ms)
+  {
+  "googleResults": 5,
+  "yelpResults": 1,
+  "amadeusResults": 0,
+  "weatherResult": "none",
+  "errors": 0,
+  "timing": {
+    "total": 800,
+    "google": 788,
+    "yelp": 800,
+    "amadeus": 5
+  }
+}
+[2026-02-07T20:39:13.651Z] [STAGE_3] Starting consolidation...
+[2026-02-07T20:39:17.720Z] [STAGE_3] Consolidation complete (5530ms)
+  {
+  "inputConcepts": 3,
+  "outputPlaces": 3,
+  "placeNames": [
+    "The St. Regis Rome",
+    "Hotel Hassler Roma",
+    "Rome Cavalieri, A Waldorf Astoria Hotel"
+  ]
+}
+[2026-02-07T20:39:17.720Z] [RESULT] === Request Complete === (10591ms)
+  {
+  "success": true,
+  "totalResults": 3,
+  "totalTime": 10591,
+  "breakdown": {
+    "aiGeneration": 3525,
+    "apiResolution": 1535,
+    "consolidation": 5530
+  }
+}
+[2026-02-07T20:39:19.139Z] [STAGE_3] Consolidation complete (5488ms)
+  {
+  "inputConcepts": 5,
+  "outputPlaces": 6,
+  "placeNames": [
+    "Shinjuku Gyoen National Garden",
+    "Meiji Jingu",
+    "Asakusa Culture Tourist Information Center",
+    "Tokyu Plaza Harajuku \"Harakado\"",
+    "Tokyo Skytree",
+    "Six Harajuku Terrace"
+  ]
+}
+[2026-02-07T20:39:19.139Z] [RESULT] === Request Complete === (10270ms)
+  {
+  "success": true,
+  "totalResults": 6,
+  "totalTime": 10270,
+  "breakdown": {
+    "aiGeneration": 3982,
+    "apiResolution": 800,
+    "consolidation": 5488
+  }
+}
+
+
+================================================================================
+SUCCESS: "coffee shops" in San Francisco - 4 results in 8977ms
+================================================================================
+[2026-02-07T20:39:23.618Z] [REQUEST] === Consolidated API Request Started ===
+[2026-02-07T20:39:23.619Z] [REQUEST] Request validated successfully
+  {
+  "query": "coffee shops",
+  "location": "San Francisco, USA",
+  "categories": [
+    "cafe"
+  ],
+  "limit": 3,
+  "options": {
+    "includeWeather": false,
+    "includePricing": true,
+    "skipCache": true,
+    "useAI": true
+  }
+}
+[2026-02-07T20:39:23.619Z] [API_STATUS] Current API configuration
+  {
+  "google": "configured",
+  "yelp": "configured",
+  "amadeus": "configured",
+  "weather": "configured"
+}
+[2026-02-07T20:39:23.619Z] [CACHE] Cache skipped by request option
+[2026-02-07T20:39:23.619Z] [STAGE_1] Starting AI concept generation...
+[2026-02-07T20:39:23.619Z] [AI_GENERATION] Starting concept generation for query: "coffee shops"
+  {
+  "locationContext": "San Francisco, USA",
+  "categories": [
+    "cafe"
+  ],
+  "limit": 3
+}
+[2026-02-07T20:39:26.143Z] [AI_GENERATION] Generated 3 place concepts
+  {
+  "places": [
+    "Blue Bottle Coffee (cafe)",
+    "Saint Frank Coffee (cafe)",
+    "The Mill (cafe)"
+  ]
+}
+[2026-02-07T20:39:26.144Z] [STAGE_1] AI generation complete: 3 concepts (2524ms)
+  {
+  "conceptNames": [
+    "Blue Bottle Coffee",
+    "Saint Frank Coffee",
+    "The Mill"
+  ]
+}
+[2026-02-07T20:39:26.144Z] [STAGE_2] Starting API resolution...
+  {
+  "conceptCount": 3,
+  "includeGoogle": true,
+  "includeYelp": true,
+  "includeAmadeus": true,
+  "includeWeather": false
+}
+[2026-02-07T20:39:26.808Z] [STAGE_2] API resolution complete (664ms)
+  {
+  "googleResults": 3,
+  "yelpResults": 3,
+  "amadeusResults": 0,
+  "weatherResult": "none",
+  "errors": 0,
+  "timing": {
+    "total": 664,
+    "google": 664,
+    "yelp": 582,
+    "amadeus": 8
+  }
+}
+[2026-02-07T20:39:26.808Z] [STAGE_3] Starting consolidation...
+[2026-02-07T20:39:32.595Z] [STAGE_3] Consolidation complete (5787ms)
+  {
+  "inputConcepts": 3,
+  "outputPlaces": 4,
+  "placeNames": [
+    "The Mill",
+    "Blue Bottle Coffee",
+    "Saint Frank Coffee",
+    "Blue Bottle Coffee - Pacific Heights"
+  ]
+}
+[2026-02-07T20:39:32.595Z] [RESULT] === Request Complete === (8977ms)
+  {
+  "success": true,
+  "totalResults": 4,
+  "totalTime": 8977,
+  "breakdown": {
+    "aiGeneration": 2524,
+    "apiResolution": 664,
+    "consolidation": 5787
+  }
+}
+
+
+================================================================================
+SUCCESS: "coffee shops" in San Francisco - 5 results in 8882ms
+================================================================================
+[2026-02-07T20:39:40.353Z] [REQUEST] === Consolidated API Request Started ===
+[2026-02-07T20:39:40.355Z] [REQUEST] Request validated successfully
+  {
+  "query": "coffee shops",
+  "location": "San Francisco, USA",
+  "categories": [
+    "cafe"
+  ],
+  "limit": 3,
+  "options": {
+    "includeWeather": false,
+    "includePricing": true,
+    "skipCache": false,
+    "useAI": true
+  }
+}
+[2026-02-07T20:39:40.355Z] [API_STATUS] Current API configuration
+  {
+  "google": "configured",
+  "yelp": "configured",
+  "amadeus": "configured",
+  "weather": "configured"
+}
+[2026-02-07T20:39:40.355Z] [CACHE] Cache MISS - proceeding with API calls (0ms)
+  {
+  "cacheKey": "suggestions:consolidated:coffee_shops:san_francisco"
+}
+[2026-02-07T20:39:40.355Z] [STAGE_1] Starting AI concept generation...
+[2026-02-07T20:39:40.355Z] [AI_GENERATION] Starting concept generation for query: "coffee shops"
+  {
+  "locationContext": "San Francisco, USA",
+  "categories": [
+    "cafe"
+  ],
+  "limit": 3
+}
+[2026-02-07T20:39:43.681Z] [AI_GENERATION] Generated 3 place concepts
+  {
+  "places": [
+    "Blue Bottle Coffee (cafe)",
+    "Philz Coffee (cafe)",
+    "Ritual Coffee Roasters (cafe)"
+  ]
+}
+[2026-02-07T20:39:43.682Z] [STAGE_1] AI generation complete: 3 concepts (3327ms)
+  {
+  "conceptNames": [
+    "Blue Bottle Coffee",
+    "Philz Coffee",
+    "Ritual Coffee Roasters"
+  ]
+}
+[2026-02-07T20:39:43.682Z] [STAGE_2] Starting API resolution...
+  {
+  "conceptCount": 3,
+  "includeGoogle": true,
+  "includeYelp": true,
+  "includeAmadeus": true,
+  "includeWeather": false
+}
+[2026-02-07T20:39:44.547Z] [STAGE_2] API resolution complete (865ms)
+  {
+  "googleResults": 3,
+  "yelpResults": 3,
+  "amadeusResults": 0,
+  "weatherResult": "none",
+  "errors": 0,
+  "timing": {
+    "total": 865,
+    "google": 864,
+    "yelp": 558,
+    "amadeus": 4
+  }
+}
+[2026-02-07T20:39:44.547Z] [STAGE_3] Starting consolidation...
+[2026-02-07T20:39:49.235Z] [STAGE_3] Consolidation complete (4688ms)
+  {
+  "inputConcepts": 3,
+  "outputPlaces": 5,
+  "placeNames": [
+    "Blue Bottle Coffee",
+    "Philz Coffee",
+    "Ritual Coffee Roasters",
+    "Philz Coffee",
+    "Blue Bottle Coffee - Pacific Heights"
+  ]
+}
+[2026-02-07T20:39:49.235Z] [RESULT] === Request Complete === (8882ms)
+  {
+  "success": true,
+  "totalResults": 5,
+  "totalTime": 8882,
+  "breakdown": {
+    "aiGeneration": 3327,
+    "apiResolution": 865,
+    "consolidation": 4688
+  }
+}
+[2026-02-07T20:39:49.235Z] [CACHE] Response cached
+  {
+  "cacheKey": "suggestions:consolidated:coffee_shops:san_francisco"
+}
+

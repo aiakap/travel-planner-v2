@@ -22,7 +22,7 @@ import { UserMenu } from "@/components/user-menu";
 import { TestMenu } from "@/components/test-menu";
 import { UserContextIcon } from "@/components/user-context-icon";
 import { getMinimalUserContext } from "@/lib/actions/user-context";
-import { TripBuilderModal } from "@/components/trip-builder-modal";
+// TripBuilderModal replaced with full-page JourneyManager at /trip/new
 
 interface NavItem {
   label: string;
@@ -289,11 +289,10 @@ interface NavigationMainProps {
 
 export default function NavigationMain({ session, userContext }: NavigationMainProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [tripModalOpen, setTripModalOpen] = useState(false);
   const router = useRouter();
 
   const handleOpenTripModal = () => {
-    setTripModalOpen(true);
+    router.push('/trip/new');
     setMobileMenuOpen(false);
   };
 
@@ -398,15 +397,6 @@ export default function NavigationMain({ session, userContext }: NavigationMainP
         </div>
       </header>
 
-      {/* Trip Builder Modal */}
-      <TripBuilderModal
-        isOpen={tripModalOpen}
-        onClose={() => setTripModalOpen(false)}
-        onComplete={(tripId) => {
-          setTripModalOpen(false);
-          router.push(`/exp?tripId=${tripId}`);
-        }}
-      />
     </>
   );
 }

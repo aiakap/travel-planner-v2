@@ -105,7 +105,15 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
 
   // Memoize grouped profile items by category
   const groupedProfile = useMemo<GroupedProfile>(() => {
-    return profileItems.reduce((acc, item) => {
+    // Deduplicate by item.id first (defensive against server duplicates)
+    const seenIds = new Set<string>();
+    const uniqueItems = profileItems.filter(item => {
+      if (seenIds.has(item.id)) return false;
+      seenIds.add(item.id);
+      return true;
+    });
+    
+    return uniqueItems.reduce((acc, item) => {
       const category = item.category || 'other';
       if (!acc[category]) {
         acc[category] = [];
@@ -212,9 +220,15 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
       // Update local state
       if (data.graphData) {
         setGraphData(data.graphData);
-        // Re-extract items from updated XML
+        // Re-extract items from updated graph data with deduplication
+        const seenIds = new Set<string>();
         const updatedItems = data.graphData.nodes
           .filter((n: any) => n.type === 'item')
+          .filter((n: any) => {
+            if (seenIds.has(n.id)) return false;
+            seenIds.add(n.id);
+            return true;
+          })
           .map((n: any) => ({
             id: n.id,
             category: n.category,
@@ -267,9 +281,15 @@ export function SuggestionsClient({ user, userProfile, profileItems: initialProf
       // Update graph with any auto-added items
       if (data.graphData) {
         setGraphData(data.graphData);
-        // Re-extract items from updated XML
+        // Re-extract items from updated graph data with deduplication
+        const seenIds = new Set<string>();
         const updatedItems = data.graphData.nodes
           .filter((n: any) => n.type === 'item')
+          .filter((n: any) => {
+            if (seenIds.has(n.id)) return false;
+            seenIds.add(n.id);
+            return true;
+          })
           .map((n: any) => ({
             id: n.id,
             category: n.category,

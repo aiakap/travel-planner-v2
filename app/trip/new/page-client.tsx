@@ -1,21 +1,22 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
-import { TripBuilderModal } from '@/components/trip-builder-modal';
+import { JourneyManager } from './components/journey-manager';
+import { HomeLocationData } from '@/lib/types/home-location';
 
 interface TripBuilderPageClientProps {
   segmentTypeMap: Record<string, string>;
+  homeLocation?: HomeLocationData | null;
 }
 
-export default function TripBuilderPageClient({ segmentTypeMap }: TripBuilderPageClientProps) {
+export default function TripBuilderPageClient({ segmentTypeMap, homeLocation }: TripBuilderPageClientProps) {
   const router = useRouter();
 
   return (
-    <TripBuilderModal 
-      isOpen={true}
-      onClose={() => router.push('/manage')}
-      onComplete={(tripId) => router.push(`/exp?tripId=${tripId}`)}
+    <JourneyManager 
       segmentTypeMap={segmentTypeMap}
+      homeLocation={homeLocation}
+      onComplete={(tripId) => router.push(`/exp?tripId=${tripId}`)}
     />
   );
 }

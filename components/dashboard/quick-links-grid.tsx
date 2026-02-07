@@ -1,14 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Globe2, ListChecks, MessageSquare, Plus, Map, Compass } from "lucide-react";
-import { TripBuilderModal } from "@/components/trip-builder-modal";
 
 export function QuickLinksGrid() {
   const router = useRouter();
-  const [tripModalOpen, setTripModalOpen] = useState(false);
   const links = [
     {
       href: "/manage1",
@@ -112,7 +109,7 @@ export function QuickLinksGrid() {
 
               if (link.action === 'openTripModal') {
                 return (
-                  <button key={index} onClick={() => setTripModalOpen(true)} className="text-left">
+                  <button key={index} onClick={() => router.push('/trip/new')} className="text-left">
                     {content}
                   </button>
                 );
@@ -127,16 +124,6 @@ export function QuickLinksGrid() {
           </div>
         </div>
       </div>
-
-      {/* Trip Builder Modal */}
-      <TripBuilderModal
-        isOpen={tripModalOpen}
-        onClose={() => setTripModalOpen(false)}
-        onComplete={(tripId) => {
-          setTripModalOpen(false);
-          router.push(`/exp?tripId=${tripId}`);
-        }}
-      />
     </section>
   );
 }

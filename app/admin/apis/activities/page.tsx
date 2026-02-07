@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, MapPin, Star, Clock, DollarSign, CheckCircle, XCircle, ExternalLink, AlertCircle } from "lucide-react";
+import { Loader2, MapPin, Star, Clock, DollarSign, CheckCircle, XCircle, ExternalLink, AlertCircle, Users, Info, Navigation, Zap } from "lucide-react";
 import { ApiTestLayout } from "../_components/api-test-layout";
 import { AdminMultiLocationMap } from "../_components/admin-map-components";
 import { cachedFetch, CacheTTL } from "@/lib/admin/api-cache";
@@ -38,19 +38,44 @@ interface Activity {
     instantConfirmation?: boolean;
     freeCancellation?: boolean;
     cancellationPolicy?: string;
+    minTravelers?: number;
+    maxTravelers?: number;
+    requiresAdultForBooking?: boolean;
   };
   productUrl?: string;
+  flags?: string[];
 }
 
 interface ActivityDetails extends Activity {
   itinerary?: {
-    description?: string;
     duration?: string;
-    highlights?: string[];
+    fixedDurationInMinutes?: number;
+    privateTour?: boolean;
+    skipTheLine?: boolean;
+    items?: Array<{
+      title?: string;
+      description: string;
+      duration?: string;
+    }>;
   };
   inclusions?: string[];
   exclusions?: string[];
   additionalInfo?: string[];
+  meetingPoint?: string;
+  endPoint?: string;
+  travelerPickup?: {
+    pickupOptionType?: string;
+    allowCustomPickup?: boolean;
+  };
+  cancellationPolicy?: {
+    type?: string;
+    description?: string;
+    refundEligibility?: Array<{
+      dayRangeMin: number;
+      dayRangeMax?: number;
+      percentageRefundable: number;
+    }>;
+  };
 }
 
 export default function ActivitiesAPIPage() {
@@ -59,12 +84,22 @@ export default function ActivitiesAPIPage() {
   const [searchCategory, setSearchCategory] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<Activity[]>([]);
-  const [showSearchMap, setShowSearchMap] = useState(false);
   const [mockDataWarning, setMockDataWarning] = useState<string | null>(null);
 
   // Details State
   const [selectedActivity, setSelectedActivity] = useState<ActivityDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+
+  // Map State (geocoding on demand)
+  const [showMap, setShowMap] = useState(false);
+  const [geocodedLocations, setGeocodedLocations] = useState<Array<{
+    lat: number;
+    lng: number;
+    name: string;
+    description: string;
+    category: string;
+  }>>([]);
+  const [geocodingLoading, setGeocodingLoading] = useState(false);
 
   // Categories State
   const categories = [
@@ -81,6 +116,9 @@ export default function ActivitiesAPIPage() {
   const handleSearch = async () => {
     setSearchLoading(true);
     setMockDataWarning(null);
+    // Reset map state on new search
+    setShowMap(false);
+    setGeocodedLocations([]);
     try {
       const categoryFilter = searchCategory === "all" ? undefined : searchCategory;
       const data = await cachedFetch(
@@ -120,13 +158,57 @@ export default function ActivitiesAPIPage() {
         CacheTTL.ACTIVITIES
       );
 
-      setSelectedActivity(data.activity);
+      // Merge details with original activity data (to preserve pricing from search)
+      // Product details API doesn't return pricing - it requires availability check
+      setSelectedActivity({
+        ...data.activity,
+        // Preserve pricing from search results if not in details
+        pricing: data.activity.pricing?.summary?.fromPrice 
+          ? data.activity.pricing 
+          : activity.pricing,
+      });
       trackCost("viator", "details", { code: activity.productCode });
     } catch (error) {
       console.error(error);
     } finally {
       setDetailsLoading(false);
     }
+  };
+
+  // Geocode activity meeting points on demand
+  const handleAddMap = async () => {
+    setGeocodingLoading(true);
+    const locations: typeof geocodedLocations = [];
+    
+    for (const activity of searchResults) {
+      // Use meeting point if available, otherwise use destination + activity title for context
+      const addressToGeocode = activity.meetingPoint 
+        || `${activity.title}, ${searchDestination}`;
+      
+      try {
+        const response = await fetch(
+          `/api/geocode-timezone?address=${encodeURIComponent(addressToGeocode)}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.coordinates) {
+            locations.push({
+              lat: data.coordinates.lat,
+              lng: data.coordinates.lng,
+              name: activity.title,
+              description: `${activity.rating?.toFixed(1) || "N/A"} ⭐ • $${activity.pricing?.summary?.fromPrice || "N/A"}`,
+              category: "activity",
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Geocoding error for activity:", activity.title);
+      }
+    }
+    
+    setGeocodedLocations(locations);
+    setShowMap(true);
+    setGeocodingLoading(false);
   };
 
   const renderStars = (rating?: number) => {
@@ -226,15 +308,42 @@ export default function ActivitiesAPIPage() {
                     <h3 className="text-xl font-bold">
                       Found {searchResults.length} activities
                     </h3>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowSearchMap(!showSearchMap)}
-                    >
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {showSearchMap ? "Hide" : "Show"} Map
-                    </Button>
+                    
+                    {/* Add Map button - triggers geocoding on demand */}
+                    {!showMap && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddMap}
+                        disabled={geocodingLoading}
+                      >
+                        {geocodingLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            Geocoding...
+                          </>
+                        ) : (
+                          <>
+                            <MapPin className="h-4 w-4 mr-1" />
+                            Add Map
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
+
+                  {/* Map shown after geocoding */}
+                  {showMap && geocodedLocations.length > 0 && (
+                    <AdminMultiLocationMap
+                      locations={geocodedLocations}
+                      title={`Activity Locations (${geocodedLocations.length} geocoded)`}
+                      showDebug={true}
+                      onLocationClick={(loc) => {
+                        const activity = searchResults.find(a => a.title === loc.name);
+                        if (activity) handleViewDetails(activity);
+                      }}
+                    />
+                  )}
 
                   <div className="grid gap-4 md:grid-cols-2">
                     {searchResults.map((activity) => (
@@ -318,28 +427,6 @@ export default function ActivitiesAPIPage() {
                       </Card>
                     ))}
                   </div>
-
-                  {showSearchMap && (
-                    <AdminMultiLocationMap
-                      locations={searchResults
-                        .filter(a => a.location?.latitude && a.location?.longitude)
-                        .map((activity) => ({
-                          lat: activity.location!.latitude!,
-                          lng: activity.location!.longitude!,
-                          name: activity.title,
-                          description: `${activity.rating?.toFixed(1)} ⭐ • $${activity.pricing?.summary?.fromPrice || "N/A"}`,
-                          category: "activity",
-                          rating: activity.rating,
-                          price: activity.pricing?.summary?.fromPrice ? `$${activity.pricing.summary.fromPrice}` : undefined,
-                        }))}
-                      title="Activity Locations"
-                      showDebug={true}
-                      onLocationClick={(loc) => {
-                        const activity = searchResults.find(a => a.title === loc.name);
-                        if (activity) handleViewDetails(activity);
-                      }}
-                    />
-                  )}
                 </div>
               )}
             </CardContent>
@@ -400,16 +487,37 @@ export default function ActivitiesAPIPage() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <Card>
                       <CardContent className="pt-6">
-                        <h4 className="font-semibold mb-2">Duration</h4>
+                        <h4 className="font-semibold mb-2 flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          Duration
+                        </h4>
                         <p className="text-sm">
-                          {formatDuration(selectedActivity.duration?.fixedDurationInMinutes)}
+                          {selectedActivity.itinerary?.duration || formatDuration(selectedActivity.duration?.fixedDurationInMinutes)}
                         </p>
+                        {/* Show tour type badges */}
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {selectedActivity.itinerary?.privateTour && (
+                            <Badge variant="secondary" className="text-xs">
+                              <Users className="h-3 w-3 mr-1" />
+                              Private Tour
+                            </Badge>
+                          )}
+                          {selectedActivity.itinerary?.skipTheLine && (
+                            <Badge variant="secondary" className="text-xs">
+                              <Zap className="h-3 w-3 mr-1" />
+                              Skip the Line
+                            </Badge>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
 
                     <Card>
                       <CardContent className="pt-6">
-                        <h4 className="font-semibold mb-2">Price</h4>
+                        <h4 className="font-semibold mb-2 flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" />
+                          Price
+                        </h4>
                         <div className="space-y-1">
                           <p className="text-lg font-bold text-green-600">
                             From ${selectedActivity.pricing?.summary?.fromPrice || "N/A"}
@@ -426,18 +534,88 @@ export default function ActivitiesAPIPage() {
                     </Card>
                   </div>
 
-                  {selectedActivity.itinerary?.highlights && (
+                  {/* Meeting Point & End Point */}
+                  {(selectedActivity.meetingPoint || selectedActivity.endPoint) && (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {selectedActivity.meetingPoint && (
+                        <Card>
+                          <CardContent className="pt-6">
+                            <h4 className="font-semibold mb-2 flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-green-600" />
+                              Meeting Point
+                            </h4>
+                            <p className="text-sm text-muted-foreground">
+                              {selectedActivity.meetingPoint}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      )}
+                      {selectedActivity.endPoint && (
+                        <Card>
+                          <CardContent className="pt-6">
+                            <h4 className="font-semibold mb-2 flex items-center gap-2">
+                              <Navigation className="h-4 w-4 text-blue-600" />
+                              End Point
+                            </h4>
+                            <p className="text-sm text-muted-foreground">
+                              {selectedActivity.endPoint}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Traveler Pickup Info */}
+                  {selectedActivity.travelerPickup && (
                     <Card>
                       <CardContent className="pt-6">
-                        <h4 className="font-semibold mb-3">Highlights</h4>
-                        <ul className="space-y-2">
-                          {selectedActivity.itinerary.highlights.map((highlight, i) => (
-                            <li key={i} className="text-sm flex items-start gap-2">
-                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              {highlight}
-                            </li>
+                        <h4 className="font-semibold mb-2 flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Pickup Information
+                        </h4>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedActivity.travelerPickup.pickupOptionType === "PICKUP_AND_MEET_UP" 
+                            ? "Pickup available or you can meet at the starting point"
+                            : selectedActivity.travelerPickup.pickupOptionType === "PICKUP_EVERYONE"
+                            ? "Pickup included for all travelers"
+                            : "Meet at the starting point"}
+                        </p>
+                        {selectedActivity.travelerPickup.allowCustomPickup && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Custom pickup location requests may be accommodated
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Itinerary Items - Tour Stops */}
+                  {selectedActivity.itinerary?.items && selectedActivity.itinerary.items.length > 0 && (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <h4 className="font-semibold mb-3">Tour Itinerary</h4>
+                        <div className="space-y-4">
+                          {selectedActivity.itinerary.items.map((item, i) => (
+                            <div key={i} className="relative pl-6 pb-4 border-l-2 border-gray-200 last:pb-0">
+                              <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                                <span className="text-[10px] text-primary-foreground font-medium">{i + 1}</span>
+                              </div>
+                              {item.title && (
+                                <h5 className="font-medium text-sm">{item.title}</h5>
+                              )}
+                              <p className="text-sm text-muted-foreground">
+                                {item.description}
+                              </p>
+                              {item.duration && (
+                                <span className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {item.duration}
+                                </span>
+                              )}
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       </CardContent>
                     </Card>
                   )}
@@ -474,6 +652,61 @@ export default function ActivitiesAPIPage() {
                     </Card>
                   )}
 
+                  {/* Additional Info - Accessibility, fitness level, etc. */}
+                  {selectedActivity.additionalInfo && selectedActivity.additionalInfo.length > 0 && (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <h4 className="font-semibold mb-3 flex items-center gap-2">
+                          <Info className="h-4 w-4" />
+                          Important Information
+                        </h4>
+                        <ul className="space-y-2">
+                          {selectedActivity.additionalInfo.map((info, i) => (
+                            <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                              <span className="text-primary mt-1">•</span>
+                              {info}
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Cancellation Policy */}
+                  {selectedActivity.cancellationPolicy && (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <h4 className="font-semibold mb-3">Cancellation Policy</h4>
+                        {selectedActivity.cancellationPolicy.type && (
+                          <Badge 
+                            variant={selectedActivity.cancellationPolicy.type === "STANDARD" ? "default" : "secondary"}
+                            className="mb-2"
+                          >
+                            {selectedActivity.cancellationPolicy.type === "STANDARD" 
+                              ? "Free Cancellation" 
+                              : selectedActivity.cancellationPolicy.type}
+                          </Badge>
+                        )}
+                        {selectedActivity.cancellationPolicy.description && (
+                          <p className="text-sm text-muted-foreground">
+                            {selectedActivity.cancellationPolicy.description}
+                          </p>
+                        )}
+                        {selectedActivity.cancellationPolicy.refundEligibility && 
+                         selectedActivity.cancellationPolicy.refundEligibility.length > 0 && (
+                          <div className="mt-3 space-y-1">
+                            <p className="text-xs font-medium">Refund Schedule:</p>
+                            {selectedActivity.cancellationPolicy.refundEligibility.map((refund, i) => (
+                              <p key={i} className="text-xs text-muted-foreground">
+                                {refund.dayRangeMin}+ days before: {refund.percentageRefundable}% refund
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {selectedActivity.bookingInfo && (
                     <Card>
                       <CardContent className="pt-6">
@@ -495,9 +728,22 @@ export default function ActivitiesAPIPage() {
                             )}
                             <span className="text-sm">Free Cancellation</span>
                           </div>
-                          {selectedActivity.bookingInfo.cancellationPolicy && (
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {selectedActivity.bookingInfo.cancellationPolicy}
+                          {/* Traveler Requirements */}
+                          {(selectedActivity.bookingInfo.minTravelers || selectedActivity.bookingInfo.maxTravelers) && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">
+                                {selectedActivity.bookingInfo.minTravelers && selectedActivity.bookingInfo.maxTravelers
+                                  ? `${selectedActivity.bookingInfo.minTravelers} - ${selectedActivity.bookingInfo.maxTravelers} travelers`
+                                  : selectedActivity.bookingInfo.minTravelers
+                                  ? `Minimum ${selectedActivity.bookingInfo.minTravelers} travelers`
+                                  : `Maximum ${selectedActivity.bookingInfo.maxTravelers} travelers`}
+                              </span>
+                            </div>
+                          )}
+                          {selectedActivity.bookingInfo.requiresAdultForBooking && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Adult required to book
                             </p>
                           )}
                         </div>

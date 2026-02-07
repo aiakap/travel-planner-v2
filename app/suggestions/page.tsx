@@ -19,9 +19,15 @@ export default async function SuggestionsPage() {
   // Fetch profile graph data (already parses XML to graphData)
   const profileGraph = await getUserProfileGraph(session.user.id);
   
-  // Extract items from already-parsed graphData.nodes (no re-parsing!)
+  // Extract and deduplicate items from already-parsed graphData.nodes
+  const seenIds = new Set<string>();
   const profileItems: ProfileGraphItem[] = profileGraph.graphData.nodes
     .filter((n) => n.type === 'item')
+    .filter((n) => {
+      if (seenIds.has(n.id)) return false;
+      seenIds.add(n.id);
+      return true;
+    })
     .map((n) => ({
       id: n.id,
       category: n.category as GraphCategory,

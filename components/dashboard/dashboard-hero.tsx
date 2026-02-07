@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Calendar, MapPin, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
-import { TripBuilderModal } from "@/components/trip-builder-modal";
 
 interface Trip {
   id: string;
@@ -41,7 +40,6 @@ function getTripImageUrl(trip: Trip): string {
 export function DashboardHero({ upcomingTrips, userName }: DashboardHeroProps) {
   const router = useRouter();
   const [currentTripIndex, setCurrentTripIndex] = useState(0);
-  const [tripModalOpen, setTripModalOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState<{
     days: number;
     hours: number;
@@ -122,7 +120,7 @@ export function DashboardHero({ upcomingTrips, userName }: DashboardHeroProps) {
               </p>
               <Button
                 size="lg"
-                onClick={() => setTripModalOpen(true)}
+                onClick={() => router.push('/trip/new')}
                 className="inline-flex items-center gap-2 bg-white text-slate-900 hover:bg-slate-100 text-base px-6 py-3 rounded-lg font-medium shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
               >
                 Plan Your Next Journey
@@ -131,16 +129,6 @@ export function DashboardHero({ upcomingTrips, userName }: DashboardHeroProps) {
             </div>
           </div>
         </div>
-
-        {/* Trip Builder Modal */}
-        <TripBuilderModal
-          isOpen={tripModalOpen}
-          onClose={() => setTripModalOpen(false)}
-          onComplete={(tripId) => {
-            setTripModalOpen(false);
-            router.push(`/exp?tripId=${tripId}`);
-          }}
-        />
       </section>
     );
   }

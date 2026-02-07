@@ -60,12 +60,30 @@ interface Message {
   }>;
 }
 
+/**
+ * Helper to deduplicate graph data nodes by ID
+ * Prevents React duplicate key errors from server-side duplicates
+ */
+function deduplicateGraphData(graphData: GraphData): GraphData {
+  const seenIds = new Set<string>();
+  const uniqueNodes = graphData.nodes.filter(node => {
+    if (seenIds.has(node.id)) return false;
+    seenIds.add(node.id);
+    return true;
+  });
+  return {
+    ...graphData,
+    nodes: uniqueNodes
+  };
+}
+
 export function DossierTabContent({
   initialGraphData,
   initialXmlData, // Deprecated - no longer used
   user
 }: DossierTabContentProps) {
-  const [graphData, setGraphData] = useState<GraphData>(initialGraphData);
+  // Initialize with deduplicated graph data
+  const [graphData, setGraphData] = useState<GraphData>(() => deduplicateGraphData(initialGraphData));
   const [colorScheme, setColorScheme] = useState<string>("default");
   const [customColors, setCustomColors] = useState<Record<string, string>>({});
   const [viewMode, setViewMode] = useState<ViewMode>("text");
@@ -230,10 +248,10 @@ export function DossierTabContent({
 
       const data = await response.json();
 
-      // Update graph data with auto-added items
+      // Update graph data with auto-added items (deduplicated)
       if (data.graphData) {
         console.log("📊 [Client] Updating graph with", data.graphData.nodes.length, "nodes");
-        setGraphData(data.graphData);
+        setGraphData(deduplicateGraphData(data.graphData));
       }
 
       // Log auto-added items
@@ -357,9 +375,9 @@ export function DossierTabContent({
 
       const data = await response.json();
 
-      // Update graph with new item
+      // Update graph with new item (deduplicated)
       if (data.graphData) {
-        setGraphData(data.graphData);
+        setGraphData(deduplicateGraphData(data.graphData));
       }
 
       // Add to local tracking
@@ -403,9 +421,9 @@ export function DossierTabContent({
 
       const data = await response.json();
 
-      // Update graph with item removed
+      // Update graph with item removed (deduplicated)
       if (data.graphData) {
-        setGraphData(data.graphData);
+        setGraphData(deduplicateGraphData(data.graphData));
       }
 
       console.log("✅ Item deleted from profile");
@@ -436,9 +454,9 @@ export function DossierTabContent({
 
       const data = await response.json();
 
-      // Update graph with item removed
+      // Update graph with item removed (deduplicated)
       if (data.graphData) {
-        setGraphData(data.graphData);
+        setGraphData(deduplicateGraphData(data.graphData));
       }
 
       console.log("✅ Item deleted from profile");
@@ -589,7 +607,7 @@ export function DossierTabContent({
         {chatMode === "object" ? (
           <ObjectStyleChat 
             graphData={graphData}
-            onGraphUpdate={setGraphData}
+            onGraphUpdate={(newGraphData) => setGraphData(deduplicateGraphData(newGraphData))}
           />
         ) : (
           <>
