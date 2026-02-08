@@ -31,7 +31,7 @@ export default async function ManagePage({ params }: PageProps) {
         }
       }
     },
-    orderBy: { startDate: "desc" }
+    orderBy: { startDate: "asc" }
   })
 
   // Transform to TripSummary format (async for currency conversion)
@@ -108,6 +108,7 @@ export default async function ManagePage({ params }: PageProps) {
       status,
       statusColor,
       dates,
+      startDate: trip.startDate.toISOString(),
       destinations: destinationsStr,
       duration,
       cost: costStr,

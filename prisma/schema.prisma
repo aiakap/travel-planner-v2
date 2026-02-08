@@ -99,6 +99,8 @@ model Trip {
   profileReferences     String[]
   generationProgress    Json?
   generationError       String?
+  wall_start_date       DateTime?          @db.Date
+  wall_end_date         DateTime?          @db.Date
   conversations         ChatConversation[]
   segments              Segment[]
   imagePrompt           ImagePrompt?       @relation(fields: [imagePromptId], references: [id])

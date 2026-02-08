@@ -7,8 +7,10 @@ import { Badge } from "./badge"
 import { Button } from "./button"
 import { useRouter } from "next/navigation"
 import { DeleteTripDialog } from "@/components/delete-trip-dialog"
+import { updateTripStatus } from "@/lib/actions/update-trip-status"
+import { TripStatus } from "@/app/generated/prisma"
 
-type FilterType = 'All' | 'Upcoming' | 'Planning' | 'Drafts' | 'Archived'
+type FilterType = 'Planning' | 'Upcoming' | 'Drafts' | 'Archived'
 
 interface YourJourneysSectionProps {
   trips: TripSummary[]
@@ -16,9 +18,9 @@ interface YourJourneysSectionProps {
 
 export const YourJourneysSection = ({ trips }: YourJourneysSectionProps) => {
   const router = useRouter()
-  const filters: FilterType[] = ['All', 'Upcoming', 'Planning', 'Drafts', 'Archived']
+  const filters: FilterType[] = ['Planning', 'Upcoming', 'Drafts', 'Archived']
   
-  const [activeFilter, setActiveFilter] = useState<FilterType>('All')
+  const [activeFilter, setActiveFilter] = useState<FilterType>('Planning')
   const [searchTerm, setSearchTerm] = useState('')
   const [localTrips, setLocalTrips] = useState<TripSummary[]>(trips)
   const [tripToDelete, setTripToDelete] = useState<TripSummary | null>(null)
@@ -38,19 +40,57 @@ export const YourJourneysSection = ({ trips }: YourJourneysSectionProps) => {
     setLocalTrips(prev => prev.filter(t => t.id !== tripId))
   }
 
+  // Handle status change (Archive/Planning)
+  const handleStatusChange = async (trip: TripSummary, newStatus: string) => {
+    try {
+      await updateTripStatus(trip.id, newStatus as TripStatus)
+      // Optimistic update
+      setLocalTrips(prev => prev.map(t => 
+        t.id === trip.id 
+          ? { 
+              ...t, 
+              dbStatus: newStatus, 
+              status: newStatus === 'ARCHIVED' ? 'Archived' : 'Planning' as const,
+              statusColor: newStatus === 'ARCHIVED' ? 'warning' : 'info' as const
+            }
+          : t
+      ))
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to update trip status:", error)
+    }
+  }
+
   // Filter trips based on active filter and search term
   const filteredTrips = useMemo(() => {
     let result = localTrips
+    const now = new Date()
+    const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
 
     // Apply status filter
-    if (activeFilter !== 'All') {
-      if (activeFilter === 'Drafts') {
-        // Filter by database status for drafts
+    switch (activeFilter) {
+      case 'Planning':
+        // Planning: PLANNING or LIVE status, not starting within 2 weeks
+        result = result.filter(trip => {
+          if (trip.dbStatus === 'DRAFT' || trip.dbStatus === 'ARCHIVED') return false
+          const startDate = new Date(trip.startDate)
+          return startDate > twoWeeksFromNow
+        })
+        break
+      case 'Upcoming':
+        // Upcoming: starts within next 2 weeks, not draft or archived
+        result = result.filter(trip => {
+          if (trip.dbStatus === 'DRAFT' || trip.dbStatus === 'ARCHIVED') return false
+          const startDate = new Date(trip.startDate)
+          return startDate >= now && startDate <= twoWeeksFromNow
+        })
+        break
+      case 'Drafts':
         result = result.filter(trip => trip.dbStatus === 'DRAFT')
-      } else {
-        // Filter by calculated display status
-        result = result.filter(trip => trip.status === activeFilter)
-      }
+        break
+      case 'Archived':
+        result = result.filter(trip => trip.dbStatus === 'ARCHIVED')
+        break
     }
 
     // Apply search filter
@@ -77,7 +117,7 @@ export const YourJourneysSection = ({ trips }: YourJourneysSectionProps) => {
             <List size={20} />
           </div>
           <h2 className="text-2xl font-bold text-slate-900">Your Journeys</h2>
-          <Badge variant="default" className="ml-2">{filteredTrips.length} {activeFilter === 'All' ? 'Total' : activeFilter}</Badge>
+          <Badge variant="default" className="ml-2">{filteredTrips.length} {activeFilter}</Badge>
         </div>
         
         <div className="flex items-center gap-3">
@@ -122,6 +162,7 @@ export const YourJourneysSection = ({ trips }: YourJourneysSectionProps) => {
               key={trip.id} 
               trip={trip} 
               onDelete={handleDeleteRequest}
+              onStatusChange={handleStatusChange}
             />
           ))
         ) : (

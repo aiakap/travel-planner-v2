@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "../prisma";
-import { TripStatus } from "@prisma/client";
+import { TripStatus } from "@/app/generated/prisma";
 import { revalidatePath } from "next/cache";
 
 export async function updateTripStatus(tripId: string, newStatus: TripStatus) {
@@ -32,8 +32,9 @@ export async function updateTripStatus(tripId: string, newStatus: TripStatus) {
     data: { status: newStatus },
   });
 
-  // Revalidate the manage page to show updated status
+  // Revalidate the manage pages to show updated status
   revalidatePath("/manage");
+  revalidatePath("/manage1");
 
   return { success: true, status: newStatus };
 }

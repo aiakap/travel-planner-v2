@@ -23,6 +23,7 @@ import {
 } from '../actions/trip-builder-actions';
 import { finalizeDraftTrip } from '@/lib/actions/finalize-draft-trip';
 import { HomeLocationData } from '@/lib/types/home-location';
+import { TravelSegmentIndicator, type TravelInfo } from './travel-segment-indicator';
 
 /**
  * TYPES
@@ -242,7 +243,7 @@ const JourneyHeader = ({
  * JOURNEY TILE COMPONENT
  */
 interface JourneyTileProps {
-  item: Chapter & { isHome?: boolean };
+  item: Chapter;
   index: number;
   startDate: Date | null;
   runningDayCount: number;
@@ -266,14 +267,11 @@ const JourneyTile = ({
   isFirst,
   isLast 
 }: JourneyTileProps) => {
-  const isHome = item.isHome;
-  
-  // Date Calc
-  let dateRangeStr = `Day ${runningDayCount} - Day ${runningDayCount + item.days}`;
+  // Date Calc - startDate is now passed as the tile's actual start date
+  let dateRangeStr = `Day ${runningDayCount} - Day ${runningDayCount + item.days - 1}`;
   if (startDate) {
-    const start = addDays(startDate, runningDayCount - 1);
-    const end = addDays(start, item.days);
-    dateRangeStr = `${formatDate(start)} - ${formatDate(end)}`;
+    const end = addDays(startDate, item.days - 1);
+    dateRangeStr = `${formatDate(startDate)} - ${formatDate(end)}`;
   }
   
   // Fallback image
@@ -288,55 +286,47 @@ const JourneyTile = ({
         <img 
           src={bgImage} 
           alt={item.location}
-          className={`absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110
-            ${isHome ? 'grayscale opacity-40' : 'opacity-80'}`}
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80"
         />
         
         {/* Gradient Overlay */}
-        <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent transition-opacity
-          ${isHome ? 'via-black/40' : ''}`} 
-        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent transition-opacity" />
 
         {/* Top Header: Sequence & Actions */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
-          <div className={`
-            flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-md text-xs font-bold border border-white/20
-            ${isHome ? 'bg-white/10 text-stone-300' : 'bg-white/20 text-white'}
-          `}>
-            {isHome ? <Home size={14} /> : index + 1}
+          <div className="flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-md text-xs font-bold border border-white/20 bg-white/20 text-white">
+            {index + 1}
           </div>
 
           {/* Hover Actions */}
-          {!isHome && (
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-[-10px] group-hover:translate-y-0 duration-200">
-              <button 
-                onClick={() => onMove(index, -1)} 
-                disabled={isFirst}
-                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white text-white hover:text-black flex items-center justify-center backdrop-blur-md disabled:opacity-0 transition-all"
-              >
-                <ArrowLeft size={14} />
-              </button>
-              <button 
-                onClick={() => onMove(index, 1)} 
-                disabled={isLast}
-                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white text-white hover:text-black flex items-center justify-center backdrop-blur-md disabled:opacity-0 transition-all"
-              >
-                <ArrowRight size={14} />
-              </button>
-              <button 
-                onClick={() => onDelete(index)} 
-                className="w-8 h-8 rounded-full bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center backdrop-blur-md transition-all ml-2"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          )}
+          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-[-10px] group-hover:translate-y-0 duration-200">
+            <button 
+              onClick={() => onMove(index, -1)} 
+              disabled={isFirst}
+              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white text-white hover:text-black flex items-center justify-center backdrop-blur-md disabled:opacity-0 transition-all"
+            >
+              <ArrowLeft size={14} />
+            </button>
+            <button 
+              onClick={() => onMove(index, 1)} 
+              disabled={isLast}
+              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white text-white hover:text-black flex items-center justify-center backdrop-blur-md disabled:opacity-0 transition-all"
+            >
+              <ArrowRight size={14} />
+            </button>
+            <button 
+              onClick={() => onDelete(index)} 
+              className="w-8 h-8 rounded-full bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center backdrop-blur-md transition-all ml-2"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
         </div>
 
         {/* Bottom Content */}
         <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
           <div className="flex justify-between items-end mb-1">
-            <h3 className={`font-serif text-2xl leading-none ${isHome ? 'text-stone-300' : 'text-white'}`}>
+            <h3 className="font-serif text-2xl leading-none text-white">
               {item.location}
             </h3>
           </div>
@@ -346,39 +336,35 @@ const JourneyTile = ({
               {dateRangeStr}
             </div>
 
-            {!isHome && (
-              <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-lg p-1 border border-white/10">
-                  <button 
-                    onClick={() => onUpdate(item.id, { days: Math.max(1, item.days - 1) })}
-                    className="w-6 h-6 flex items-center justify-center hover:bg-white/20 rounded-md transition-colors"
-                  >
-                    <Minus size={12} />
-                  </button>
-                  <span className="text-sm font-bold tabular-nums min-w-[2ch] text-center">{item.days}d</span>
-                  <button 
-                    onClick={() => onUpdate(item.id, { days: Math.min(60, item.days + 1) })}
-                    className="w-6 h-6 flex items-center justify-center hover:bg-white/20 rounded-md transition-colors"
-                  >
-                    <Plus size={12} />
-                  </button>
-              </div>
-            )}
+            <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-lg p-1 border border-white/10">
+                <button 
+                  onClick={() => onUpdate(item.id, { days: Math.max(1, item.days - 1) })}
+                  className="w-6 h-6 flex items-center justify-center hover:bg-white/20 rounded-md transition-colors"
+                >
+                  <Minus size={12} />
+                </button>
+                <span className="text-sm font-bold tabular-nums min-w-[2ch] text-center">{item.days}d</span>
+                <button 
+                  onClick={() => onUpdate(item.id, { days: Math.min(60, item.days + 1) })}
+                  className="w-6 h-6 flex items-center justify-center hover:bg-white/20 rounded-md transition-colors"
+                >
+                  <Plus size={12} />
+                </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* INSERT BUTTON (RIGHT EDGE) */}
-      {!isHome && (
-        <div className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
-           <button 
-             onClick={onInsert}
-             className="bg-stone-900 text-white p-1.5 rounded-full border-2 border-white shadow-lg hover:scale-110 transition-transform"
-             title="Insert chapter after"
-           >
-             <Plus size={16} />
-           </button>
-        </div>
-      )}
+      <div className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+         <button 
+           onClick={onInsert}
+           className="bg-stone-900 text-white p-1.5 rounded-full border-2 border-white shadow-lg hover:scale-110 transition-transform"
+           title="Insert chapter after"
+         >
+           <Plus size={16} />
+         </button>
+      </div>
     </div>
   );
 };
@@ -547,6 +533,11 @@ export function JourneyManager({
   
   // Continue to planning state
   const [isTransitioning, setIsTransitioning] = useState(false);
+  
+  // Travel calculation state
+  const [outboundTravel, setOutboundTravel] = useState<TravelInfo | null>(null);
+  const [returnTravel, setReturnTravel] = useState<TravelInfo | null>(null);
+  const [isCalculatingTravel, setIsCalculatingTravel] = useState(false);
 
   // Initialize from existing trip (edit mode)
   useEffect(() => {
@@ -584,22 +575,114 @@ export function JourneyManager({
     }
   }, [chapters, isTitleManual]);
 
+  // Calculate travel times when chapters or settings change
+  useEffect(() => {
+    async function calculateTravelTimes() {
+      if (!homeLocation || chapters.length === 0) {
+        setOutboundTravel(null);
+        setReturnTravel(null);
+        return;
+      }
+
+      setIsCalculatingTravel(true);
+
+      try {
+        const promises: Promise<void>[] = [];
+
+        // Calculate outbound travel (home -> first destination)
+        if (settings.startFromHome) {
+          const firstDest = chapters[0];
+          promises.push(
+            fetch(`/api/travel-time?origin=${encodeURIComponent(homeLocation.name)}&destination=${encodeURIComponent(firstDest.location)}`)
+              .then(res => res.json())
+              .then(data => {
+                if (!data.error) {
+                  setOutboundTravel(data as TravelInfo);
+                } else {
+                  setOutboundTravel(null);
+                }
+              })
+              .catch(() => setOutboundTravel(null))
+          );
+        } else {
+          setOutboundTravel(null);
+        }
+
+        // Calculate return travel (last destination -> home)
+        if (settings.endAtHome) {
+          const lastDest = chapters[chapters.length - 1];
+          promises.push(
+            fetch(`/api/travel-time?origin=${encodeURIComponent(lastDest.location)}&destination=${encodeURIComponent(homeLocation.name)}`)
+              .then(res => res.json())
+              .then(data => {
+                if (!data.error) {
+                  setReturnTravel(data as TravelInfo);
+                } else {
+                  setReturnTravel(null);
+                }
+              })
+              .catch(() => setReturnTravel(null))
+          );
+        } else {
+          setReturnTravel(null);
+        }
+
+        await Promise.all(promises);
+      } catch (error) {
+        console.error('Error calculating travel times:', error);
+      } finally {
+        setIsCalculatingTravel(false);
+      }
+    }
+
+    calculateTravelTimes();
+  }, [chapters, homeLocation, settings.startFromHome, settings.endAtHome]);
+
   const handleNameChange = (val: string) => {
     setJourneyName(val);
     setIsTitleManual(true);
     setHasUserInteracted(true);
   };
 
-  // Calculate total days
-  const totalTripDays = chapters.reduce((acc, c) => acc + c.days, 0);
+  // Calculate total days at destinations
+  const totalDestinationDays = chapters.reduce((acc, c) => acc + c.days, 0);
+
+  // Calculate travel days based on actual travel info
+  const calculateTravelDays = (travelInfo: TravelInfo | null): number => {
+    if (!travelInfo) return 1; // Default to 1 day if not calculated yet
+    const totalHours = travelInfo.mode === 'flight' 
+      ? travelInfo.durationHours + 6 // Add airport buffer
+      : travelInfo.durationHours;
+    return Math.max(1, Math.ceil(totalHours / 24));
+  };
+
+  const outboundTravelDays = settings.startFromHome && homeLocation 
+    ? calculateTravelDays(outboundTravel) 
+    : 0;
+  const returnTravelDays = settings.endAtHome && homeLocation && chapters.length > 0 
+    ? calculateTravelDays(returnTravel) 
+    : 0;
+
+  // Total trip days including travel
+  const totalTripDays = totalDestinationDays + outboundTravelDays + returnTravelDays;
 
   // Generate summary for saving
   const getGeneratedSummary = () => {
     const dateRange = startDate 
-      ? `${formatDate(startDate)} - ${formatDate(addDays(startDate, totalTripDays))}`
+      ? `${formatDate(startDate)} - ${formatDate(addDays(startDate, totalTripDays - 1))}`
       : `${totalTripDays} days`;
     const chapterList = chapters.map(c => c.location).join(' → ');
-    return `${totalTripDays} Days · ${dateRange}\nJourney: ${chapterList}`;
+    
+    // Include travel info in summary
+    let travelInfo = '';
+    if (outboundTravel && settings.startFromHome) {
+      travelInfo += `\nOutbound: ${outboundTravel.mode === 'flight' ? 'Flight' : 'Drive'} ~${Math.round(outboundTravel.durationHours)}h`;
+    }
+    if (returnTravel && settings.endAtHome) {
+      travelInfo += `\nReturn: ${returnTravel.mode === 'flight' ? 'Flight' : 'Drive'} ~${Math.round(returnTravel.durationHours)}h`;
+    }
+    
+    return `${totalTripDays} Days · ${dateRange}\nJourney: ${chapterList}${travelInfo}`;
   };
 
   // --- AUTO-SAVE LOGIC ---
@@ -616,13 +699,9 @@ export function JourneyManager({
 
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        // Calculate travel days based on home toggles
-        const travelOutDays = (settings.startFromHome && homeLocation) ? 1 : 0;
-        const travelHomeDays = (settings.endAtHome && homeLocation) ? 1 : 0;
-        const totalDaysWithTravel = totalTripDays + travelOutDays + travelHomeDays;
-        
+        // Use already-calculated travel days (totalTripDays already includes travel)
         const startDateStr = startDate ? formatDateISO(startDate) : formatDateISO(new Date());
-        const endDateStr = formatDateISO(addDays(startDate || new Date(), totalDaysWithTravel - 1));
+        const endDateStr = formatDateISO(addDays(startDate || new Date(), totalTripDays - 1));
         
         if (!tripIdRef.current) {
           // First save - create trip
@@ -662,12 +741,15 @@ export function JourneyManager({
           if (settings.startFromHome && homeLocation) {
             const travelOutStart = addDays(startDate || new Date(), currentDayOffset);
             const firstDestination = chapters[0]?.location || '';
+            const outboundDays = outboundTravelDays;
+            const travelOutEnd = addDays(travelOutStart, outboundDays - 1);
+            const transportMode = outboundTravel?.mode === 'flight' ? 'Flight' : 'Drive';
             
             allSegments.push({
               id: 'travel-out',
               type: 'TRAVEL',
-              name: firstDestination ? `Travel to ${firstDestination.split(',')[0].trim()}` : 'Journey Begins',
-              days: 1,
+              name: firstDestination ? `${transportMode} to ${firstDestination.split(',')[0].trim()}` : 'Journey Begins',
+              days: outboundDays,
               start_location: homeLocation.name,
               end_location: firstDestination,
               start_image: homeLocation.imageUrl,
@@ -678,10 +760,10 @@ export function JourneyManager({
               end_lng: chapters[0]?.lng,
               order: currentOrder,
               startDate: formatDateISO(travelOutStart),
-              endDate: formatDateISO(travelOutStart),
+              endDate: formatDateISO(travelOutEnd),
             });
             currentOrder++;
-            currentDayOffset += 1;
+            currentDayOffset += outboundDays;
           }
           
           // Add chapter segments (STAY type) with adjusted dates
@@ -714,12 +796,15 @@ export function JourneyManager({
             const lastChapter = chapters[chapters.length - 1];
             const totalChapterDays = chapters.reduce((sum, c) => sum + c.days, 0);
             const travelHomeStart = addDays(startDate || new Date(), currentDayOffset + totalChapterDays);
+            const returnDays = returnTravelDays;
+            const travelHomeEnd = addDays(travelHomeStart, returnDays - 1);
+            const transportMode = returnTravel?.mode === 'flight' ? 'Flight' : 'Drive';
             
             allSegments.push({
               id: 'travel-home',
               type: 'TRAVEL',
-              name: `Return to ${homeLocation.name.split(',')[0].trim()}`,
-              days: 1,
+              name: `${transportMode} back to ${homeLocation.name.split(',')[0].trim()}`,
+              days: returnDays,
               start_location: lastChapter?.location || '',
               end_location: homeLocation.name,
               start_image: lastChapter?.image || null,
@@ -730,7 +815,7 @@ export function JourneyManager({
               end_lng: homeLocation.lng ?? undefined,
               order: currentOrder,
               startDate: formatDateISO(travelHomeStart),
-              endDate: formatDateISO(travelHomeStart),
+              endDate: formatDateISO(travelHomeEnd),
             });
           }
 
@@ -756,7 +841,7 @@ export function JourneyManager({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [journeyName, startDate, chapters, hasUserInteracted, totalTripDays, segmentTypeMap, settings, homeLocation]);
+  }, [journeyName, startDate, chapters, hasUserInteracted, totalTripDays, segmentTypeMap, settings, homeLocation, outboundTravel, returnTravel, outboundTravelDays, returnTravelDays]);
 
   // --- HANDLERS ---
   const handleAddChapter = (chapterData: Omit<Chapter, 'id'>, index: number | null = null) => {
@@ -818,40 +903,33 @@ export function JourneyManager({
     }
   };
 
-  // Build timeline items with home bookends
-  const timelineItems: (Chapter & { isHome?: boolean })[] = [];
-  
-  if (settings.startFromHome && homeLocation) {
-    timelineItems.push({ 
-      id: 'home-start', 
-      location: homeLocation.name, 
-      days: 0, 
-      isHome: true, 
-      image: homeLocation.imageUrl,
-      placeId: homeLocation.placeId ?? undefined,
-      lat: homeLocation.lat ?? undefined,
-      lng: homeLocation.lng ?? undefined,
-    });
-  }
+  // Build timeline items - only actual chapters (no home tiles)
+  const timelineItems: Chapter[] = [...chapters];
 
-  timelineItems.push(...chapters);
+  // Helper to get first destination arrival date (for outbound indicator)
+  const getFirstDestinationArrivalDate = (): Date | null => {
+    if (!startDate || chapters.length === 0) return null;
+    // If starting from home with travel, first destination starts after travel
+    if (settings.startFromHome && outboundTravel) {
+      // Calculate travel days (round up hours to full days for trip planning)
+      const travelHours = outboundTravel.mode === 'flight' 
+        ? outboundTravel.durationHours + 6 // Add airport buffer
+        : outboundTravel.durationHours;
+      const travelDays = Math.ceil(travelHours / 24);
+      return addDays(startDate, travelDays);
+    }
+    return startDate;
+  };
 
-  if (settings.endAtHome && homeLocation && chapters.length > 0) {
-    timelineItems.push({ 
-      id: 'home-end', 
-      location: homeLocation.name, 
-      days: 0, 
-      isHome: true, 
-      image: homeLocation.imageUrl,
-      placeId: homeLocation.placeId ?? undefined,
-      lat: homeLocation.lat ?? undefined,
-      lng: homeLocation.lng ?? undefined,
-    });
-  }
-
-  // Helper to determine where to insert in the `chapters` array based on `timelineItems` index
-  const getChapterInsertIndex = (timelineIdx: number): number => {
-    return settings.startFromHome && homeLocation ? timelineIdx : timelineIdx + 1;
+  // Helper to get last destination departure date (for return indicator)
+  const getLastDestinationDepartureDate = (): Date | null => {
+    if (!startDate || chapters.length === 0) return null;
+    const arrivalDate = getFirstDestinationArrivalDate();
+    if (!arrivalDate) return startDate;
+    
+    // Calculate total days spent at destinations
+    const totalDestinationDays = chapters.reduce((sum, c) => sum + c.days, 0);
+    return addDays(arrivalDate, totalDestinationDays - 1);
   };
 
   return (
@@ -924,34 +1002,67 @@ export function JourneyManager({
       {/* Main Grid Canvas */}
       <div className="p-6 md:p-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {/* Outbound Travel Indicator */}
+          {settings.startFromHome && homeLocation && chapters.length > 0 && (
+            <TravelSegmentIndicator
+              from={{ 
+                name: homeLocation.name, 
+                lat: homeLocation.lat ?? undefined, 
+                lng: homeLocation.lng ?? undefined 
+              }}
+              to={{ 
+                name: chapters[0].location, 
+                lat: chapters[0].lat, 
+                lng: chapters[0].lng 
+              }}
+              type="outbound"
+              isCalculating={isCalculatingTravel}
+              travelInfo={outboundTravel}
+              startDate={startDate}
+              arrivalDate={getFirstDestinationArrivalDate()}
+            />
+          )}
+
           {timelineItems.length === 0 ? (
              <div className="col-span-full flex flex-col items-center justify-center py-32 text-stone-300 border-2 border-dashed border-stone-200 rounded-3xl">
                <Globe size={64} className="mb-4 text-stone-200" />
                <p className="font-serif text-2xl text-stone-400">Where to first?</p>
+               {settings.startFromHome && homeLocation && (
+                 <p className="text-sm text-stone-400 mt-2">
+                   Add your first destination to see travel time from {homeLocation.name.split(',')[0]}
+                 </p>
+               )}
              </div>
           ) : (
             (() => {
+              // Calculate starting day accounting for outbound travel
               let runningDay = 1;
+              if (settings.startFromHome && outboundTravel) {
+                const travelHours = outboundTravel.mode === 'flight' 
+                  ? outboundTravel.durationHours + 6 
+                  : outboundTravel.durationHours;
+                runningDay += Math.ceil(travelHours / 24);
+              }
+              
               const renderedItems: React.ReactNode[] = [];
 
               timelineItems.forEach((item, idx) => {
                  const currentRunningDay = runningDay;
-                 if (!item.isHome) runningDay += item.days;
+                 runningDay += item.days;
                  
-                 const chapterIndex = chapters.findIndex(c => c.id === item.id);
-                 const isFirstChapter = chapterIndex === 0;
-                 const isLastChapter = chapterIndex === chapters.length - 1;
+                 const isFirstChapter = idx === 0;
+                 const isLastChapter = idx === chapters.length - 1;
 
                  renderedItems.push(
                   <JourneyTile 
                     key={item.id}
                     item={item}
                     index={idx}
-                    startDate={startDate}
+                    startDate={startDate ? addDays(startDate, currentRunningDay - 1) : null}
                     runningDayCount={currentRunningDay}
                     onUpdate={handleUpdateChapter}
-                    onDelete={() => handleDeleteChapter(chapterIndex)}
-                    onMove={(_, dir) => handleMoveChapter(chapterIndex, dir)}
+                    onDelete={() => handleDeleteChapter(idx)}
+                    onMove={(_, dir) => handleMoveChapter(idx, dir)}
                     onInsert={() => setInsertIndex(idx)}
                     isFirst={isFirstChapter}
                     isLast={isLastChapter}
@@ -963,7 +1074,7 @@ export function JourneyManager({
                       <AddTile 
                         key={`insert-${idx}`}
                         autoFocus={true}
-                        onAdd={(data) => handleAddChapter(data, getChapterInsertIndex(idx))}
+                        onAdd={(data) => handleAddChapter(data, idx + 1)}
                         onCancel={() => setInsertIndex(null)}
                       />
                     );
@@ -972,6 +1083,27 @@ export function JourneyManager({
               
               return renderedItems;
             })()
+          )}
+          
+          {/* Return Travel Indicator */}
+          {settings.endAtHome && homeLocation && chapters.length > 0 && (
+            <TravelSegmentIndicator
+              from={{ 
+                name: chapters[chapters.length - 1].location, 
+                lat: chapters[chapters.length - 1].lat, 
+                lng: chapters[chapters.length - 1].lng 
+              }}
+              to={{ 
+                name: homeLocation.name, 
+                lat: homeLocation.lat ?? undefined, 
+                lng: homeLocation.lng ?? undefined 
+              }}
+              type="return"
+              isCalculating={isCalculatingTravel}
+              travelInfo={returnTravel}
+              startDate={getLastDestinationDepartureDate()}
+              arrivalDate={null}
+            />
           )}
           
           {/* The "Add" Button is always a tile in the grid */}

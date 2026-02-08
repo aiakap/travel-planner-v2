@@ -19,12 +19,17 @@ export interface WizardStep {
   allowMultiple?: boolean; // For 'what' step - allow multiple selections
 }
 
+// Chip group for organizing suggestions in UI
+export type ChipGroup = 'profile' | 'category' | 'suggested' | 'preset';
+
 // Suggestion chip for each step
 export interface WizardSuggestionChip {
   id: string;
   label: string;
   description?: string;
   fromProfile?: boolean; // Whether this was derived from user's profile
+  group?: ChipGroup; // For grouping chips in UI sections
+  value?: number; // For budget chips: the per-day amount
 }
 
 // Answer for a single step
@@ -32,6 +37,15 @@ export interface WizardStepAnswer {
   stepId: WizardStepId;
   selectedChips: string[]; // IDs of selected chips
   customValue?: string; // Custom text input
+  // Fields for "when" step
+  durationDays?: number; // Number of days (1-90)
+  startDate?: string; // YYYY-MM-DD format
+  // Fields for "budget" step
+  budgetPerDay?: number; // Per-day budget in dollars
+  budgetTotal?: number; // Total trip budget in dollars
+  // Fields for "where" step - multiple custom inputs
+  customPlaces?: string[]; // Custom place names
+  customTypes?: string[]; // Custom destination types
 }
 
 // All wizard answers collected
@@ -98,6 +112,8 @@ export interface WizardQuestionCardProps {
   onAnswerChange: (answer: WizardStepAnswer) => void;
   isActive: boolean;
   direction: "forward" | "backward";
+  // For budget step: duration from "when" step for calculating totals
+  durationDays?: number;
 }
 
 // API request payload
@@ -157,19 +173,19 @@ export const DEFAULT_SUGGESTIONS: Record<WizardStepId, WizardSuggestionChip[]> =
     { id: "flexible", label: "I'm Flexible" },
   ],
   where: [
-    { id: "beach", label: "Beach & Sun" },
-    { id: "city", label: "City Break" },
-    { id: "mountains", label: "Mountains" },
-    { id: "europe", label: "Europe" },
-    { id: "asia", label: "Asia" },
-    { id: "surprise", label: "Surprise Me" },
+    { id: "beach", label: "Beach & Sun", group: "category" },
+    { id: "city", label: "City Break", group: "category" },
+    { id: "mountains", label: "Mountains", group: "category" },
+    { id: "europe", label: "Europe", group: "category" },
+    { id: "asia", label: "Asia", group: "category" },
+    { id: "surprise", label: "Surprise Me", group: "category" },
   ],
   budget: [
-    { id: "budget", label: "Budget", description: "Under $500" },
-    { id: "moderate", label: "Moderate", description: "$500-1,500" },
-    { id: "comfortable", label: "Comfortable", description: "$1,500-3,000" },
-    { id: "luxury", label: "Luxury", description: "$3,000+" },
-    { id: "no-limit", label: "No Limit" },
+    { id: "budget", label: "Budget", description: "~$75/day", value: 75, group: "preset" },
+    { id: "moderate", label: "Moderate", description: "~$150/day", value: 150, group: "preset" },
+    { id: "comfortable", label: "Comfortable", description: "~$300/day", value: 300, group: "preset" },
+    { id: "luxury", label: "Luxury", description: "~$500+/day", value: 500, group: "preset" },
+    { id: "no-limit", label: "No Limit", group: "preset" },
   ],
   who: [
     { id: "solo", label: "Solo" },
@@ -190,10 +206,13 @@ export const DEFAULT_SUGGESTIONS: Record<WizardStepId, WizardSuggestionChip[]> =
   ],
 };
 
+// Default trip duration in days
+export const DEFAULT_DURATION_DAYS = 7;
+
 // Helper to create empty answers
 export function createEmptyAnswers(): WizardAnswers {
   return {
-    when: { stepId: "when", selectedChips: [] },
+    when: { stepId: "when", selectedChips: [], durationDays: DEFAULT_DURATION_DAYS },
     where: { stepId: "where", selectedChips: [] },
     budget: { stepId: "budget", selectedChips: [] },
     who: { stepId: "who", selectedChips: [] },

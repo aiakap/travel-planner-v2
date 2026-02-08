@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useRouter } from "next/navigation"
+import { extractFlightSearchParams } from "@/lib/utils/airport-codes"
 
 // Simple message type with segments
 interface ChatMessage {
@@ -1324,12 +1325,18 @@ export function ExpClient({
             data: {
               name: v0Segment.name,
               type: v0Segment.type,
+              segmentType: dbSegment.segmentType.name, // Pass segment type for context-aware actions
               startLocation: v0Segment.startLocation || v0Segment.startDate,
               endLocation: v0Segment.endLocation || v0Segment.endDate,
               startDate: v0Segment.startDate,
               endDate: v0Segment.endDate,
               reservationsCount: v0Segment.days?.reduce((acc: number, d: any) => 
-                acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0
+                acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0,
+              // Pass reservation summary for determining what's already booked
+              reservations: dbSegment.reservations.map(r => ({
+                type: r.reservationType.name,
+                category: r.reservationType.category.name
+              }))
             },
             fullTripContext: selectedTrip
           })
@@ -1352,12 +1359,18 @@ export function ExpClient({
             contextType: 'segment',
             data: {
               segmentId: conversation.segmentId,
+              tripId: selectedTrip?.id,
               name: v0Segment.name,
               type: v0Segment.type,
+              segmentType: dbSegment.segmentType.name,
               startLocation: v0Segment.startLocation || 'N/A',
               endLocation: v0Segment.endLocation || 'N/A',
+              startTitle: dbSegment.startTitle,
+              endTitle: dbSegment.endTitle,
               startDate: v0Segment.startDate,
               endDate: v0Segment.endDate,
+              startTime: dbSegment.startTime,
+              endTime: dbSegment.endTime,
               reservationsCount: v0Segment.days?.reduce((acc: number, d: any) => 
                 acc + (d.items?.reduce((a: number, i: any) => a + (i.reservations?.length || 0), 0) || 0), 0) || 0
             },
@@ -1838,6 +1851,125 @@ export function ExpClient({
     }
   };
 
+  // Handler for flight search - triggered when user clicks "View Flights" action
+  const handleFlightSearch = async (segmentData: {
+    segmentId: string;
+    tripId: string;
+    startTitle: string;
+    endTitle: string;
+    startTime: Date | string | null;
+    endTime: Date | string | null;
+  }) => {
+    console.log('[handleFlightSearch] Starting flight search for segment:', segmentData.segmentId);
+    
+    // Extract flight search params
+    const searchParams = extractFlightSearchParams({
+      startTitle: segmentData.startTitle,
+      endTitle: segmentData.endTitle,
+      startTime: segmentData.startTime,
+      endTime: segmentData.endTime
+    });
+    
+    if (!searchParams) {
+      // Add error message to chat
+      const errorMessage: ChatMessage = {
+        id: `flight-error-${Date.now()}`,
+        role: 'assistant',
+        content: `I couldn't determine the airport codes for this route. The segment goes from "${segmentData.startTitle}" to "${segmentData.endTitle}". Could you specify the departure and arrival airports (like "SFO to JFK")?`,
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      return;
+    }
+    
+    console.log('[handleFlightSearch] Search params:', searchParams);
+    
+    // Add loading message
+    const loadingMessage: ChatMessage = {
+      id: `flight-loading-${Date.now()}`,
+      role: 'assistant',
+      content: `Searching for flights from ${searchParams.origin} to ${searchParams.destination} on ${searchParams.departureDate}...`,
+      segments: [{
+        type: 'extraction_progress' as any,
+        progress: 50,
+        message: 'Searching flights...'
+      }]
+    };
+    setMessages(prev => [...prev, loadingMessage]);
+    setIsLoading(true);
+    
+    try {
+      // Call Amadeus API
+      const response = await fetch('/api/flights/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: searchParams.origin,
+          destination: searchParams.destination,
+          departureDate: searchParams.departureDate,
+          adults: 1,
+          max: 10
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[handleFlightSearch] API error:', errorText);
+        throw new Error(`Flight search failed: ${errorText}`);
+      }
+      
+      const { flights } = await response.json();
+      console.log('[handleFlightSearch] Found', flights?.length || 0, 'flights');
+      
+      // Remove loading message
+      setMessages(prev => prev.filter(m => m.id !== loadingMessage.id));
+      
+      if (!flights || flights.length === 0) {
+        // No flights found
+        const noResultsMessage: ChatMessage = {
+          id: `flight-no-results-${Date.now()}`,
+          role: 'assistant',
+          content: `I couldn't find any flights from ${searchParams.origin} to ${searchParams.destination} on ${searchParams.departureDate}. This could be because:\n- The date is too far in the future\n- No direct flights exist on this route\n- Try adjusting your travel dates`,
+        };
+        setMessages(prev => [...prev, noResultsMessage]);
+        return;
+      }
+      
+      // Add flight results message
+      const flightResultsMessage: ChatMessage = {
+        id: `flight-results-${Date.now()}`,
+        role: 'assistant',
+        content: `I found ${flights.length} flight options for your trip:`,
+        segments: [{
+          type: 'flight_search_results' as any,
+          origin: searchParams.origin,
+          destination: searchParams.destination,
+          departDate: searchParams.departureDate,
+          segmentId: segmentData.segmentId,
+          tripId: segmentData.tripId,
+          flights: flights,
+          onFlightAdded: refetchTrip
+        }]
+      };
+      setMessages(prev => [...prev, flightResultsMessage]);
+      
+    } catch (error) {
+      console.error('[handleFlightSearch] Error:', error);
+      
+      // Remove loading message
+      setMessages(prev => prev.filter(m => m.id !== loadingMessage.id));
+      
+      // Add error message
+      const errorMessage: ChatMessage = {
+        id: `flight-error-${Date.now()}`,
+        role: 'assistant',
+        content: `Sorry, I encountered an error while searching for flights. ${error instanceof Error ? error.message : 'Please try again.'}`,
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Handler for opening an existing chat
   const handleOpenExistingChat = async (conversationId: string) => {
     setIsLoading(true);
@@ -2195,6 +2327,7 @@ export function ExpClient({
                               onReservationAdded={refetchTrip}
                               onActionClick={handleContextAction}
                               onEditItem={handleEditItem}
+                              onFlightSearch={handleFlightSearch}
                             />
                           ) : (
                             msg.content
@@ -2428,6 +2561,7 @@ export function ExpClient({
                               onReservationAdded={refetchTrip}
                               onActionClick={handleContextAction}
                               onEditItem={handleEditItem}
+                              onFlightSearch={handleFlightSearch}
                             />
                           ) : (
                             msg.content

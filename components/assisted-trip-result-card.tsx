@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   MapPin,
   Calendar,
@@ -18,21 +20,38 @@ import {
   CheckCircle2,
   ChevronRight,
   Loader2,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
-import type { AssistedTripResult, TripAlternative } from "@/lib/types/assisted-wizard";
-import type { AITripSuggestion } from "@/lib/ai/generate-trip-suggestions";
+import type { AssistedTripResult } from "@/lib/types/assisted-wizard";
+import type { ProfileGraphItem } from "@/lib/types/profile-graph";
+
+// Generation progress types
+interface GenerationProgress {
+  step: string;
+  completed: string[];
+  failed: string[];
+  percentComplete: number;
+  message: string;
+}
+
+interface GenerationState {
+  tripId: string | null;
+  status: "idle" | "generating" | "ready" | "failed";
+  progress: GenerationProgress | null;
+  error?: string;
+}
 
 interface AssistedTripResultCardProps {
   result: AssistedTripResult;
   onReset: () => void;
-  onSelectAlternative?: (alternative: TripAlternative) => Promise<void>;
-  expandingAlternativeIndex?: number | null;
   userProfile: {
     name: string;
     dateOfBirth: Date | null;
     city: string | null;
     country: string | null;
   };
+  profileItems: ProfileGraphItem[];
 }
 
 // Type labels constant
@@ -46,13 +65,18 @@ const TRIP_TYPE_LABELS = {
 export function AssistedTripResultCard({
   result,
   onReset,
-  onSelectAlternative,
-  expandingAlternativeIndex,
   userProfile,
+  profileItems,
 }: AssistedTripResultCardProps) {
-  const { mainSuggestion, alternatives } = result;
+  const router = useRouter();
+  const { mainSuggestion } = result;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [generationState, setGenerationState] = useState<GenerationState>({
+    tripId: null,
+    status: "idle",
+    progress: null,
+  });
 
   // Fetch image for the suggestion
   useEffect(() => {
@@ -80,6 +104,62 @@ export function AssistedTripResultCard({
       .catch(console.error);
   }, [mainSuggestion]);
 
+  // Reset generation state when mainSuggestion changes (e.g., when selecting an alternative)
+  useEffect(() => {
+    setGenerationState({ tripId: null, status: "idle", progress: null });
+  }, [mainSuggestion]);
+
+  // Poll for generation status
+  useEffect(() => {
+    if (generationState.status !== "generating" || !generationState.tripId) return;
+
+    // Capture tripId to avoid stale closure
+    const currentTripId = generationState.tripId;
+    console.log("Starting status polling for trip:", currentTripId);
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/trips/${currentTripId}/generation-status`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch status");
+        }
+        
+        const data = await response.json();
+        console.log("Poll status response:", data.status, data.progress?.step);
+        
+        if (data.status === "ready") {
+          setGenerationState(prev => ({
+            ...prev,
+            status: "ready",
+            progress: data.progress,
+          }));
+          // Navigate to the trip view after a brief delay
+          console.log("Trip ready, navigating to:", `/view1/${currentTripId}`);
+          setTimeout(() => {
+            router.push(`/view1/${currentTripId}`);
+          }, 1000);
+        } else if (data.status === "failed") {
+          console.error("Trip generation failed:", data.error);
+          setGenerationState(prev => ({
+            ...prev,
+            status: "failed",
+            error: data.error,
+            progress: data.progress,
+          }));
+        } else {
+          setGenerationState(prev => ({
+            ...prev,
+            progress: data.progress,
+          }));
+        }
+      } catch (error) {
+        console.error("Error polling status:", error);
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [generationState.status, generationState.tripId, router]);
+
   // Get transport icon
   const getTransportIcon = useCallback((mode: string) => {
     const lowerMode = mode.toLowerCase();
@@ -94,11 +174,61 @@ export function AssistedTripResultCard({
     TRIP_TYPE_LABELS.single_destination;
 
   // Handle creating a trip from the suggestion
-  const handleCreateTrip = useCallback(() => {
-    // For now, log and show alert - can integrate with trip creation later
-    console.log("Creating trip from suggestion:", mainSuggestion);
-    alert(`Creating trip: ${mainSuggestion.title}\n\nThis will navigate to trip creation with pre-filled data.`);
-  }, [mainSuggestion]);
+  const handleCreateTrip = useCallback(async () => {
+    if (!userProfile) {
+      console.error("Cannot create trip: missing userProfile");
+      return;
+    }
+
+    console.log("Starting trip creation with suggestion:", mainSuggestion.title);
+
+    setGenerationState({
+      tripId: null,
+      status: "generating",
+      progress: { step: "starting", completed: [], failed: [], percentComplete: 0, message: "Starting generation..." },
+    });
+
+    try {
+      const response = await fetch("/api/suggestions/create-sample-trip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          suggestion: mainSuggestion,
+          profileItems,
+          userProfile,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Trip creation API error:", data);
+        throw new Error(data.error || "Failed to start trip generation");
+      }
+
+      console.log("Trip creation started successfully, tripId:", data.tripId);
+      
+      setGenerationState(prev => ({
+        ...prev,
+        tripId: data.tripId,
+        progress: { 
+          step: "itinerary", 
+          completed: [], 
+          failed: [], 
+          percentComplete: 5, 
+          message: "Generating itinerary..." 
+        },
+      }));
+    } catch (error: any) {
+      console.error("Trip creation failed:", error);
+      setGenerationState({
+        tripId: null,
+        status: "failed",
+        progress: null,
+        error: error.message || "Failed to create trip",
+      });
+    }
+  }, [mainSuggestion, profileItems, userProfile]);
 
   return (
     <Card className="border-2 border-purple-100 overflow-hidden">
@@ -214,102 +344,86 @@ export function AssistedTripResultCard({
             {mainSuggestion.bestTimeToVisit}
           </div>
 
-          {/* Create Trip Button */}
-          <Button
-            onClick={handleCreateTrip}
-            size="lg"
-            className="w-full bg-purple-600 hover:bg-purple-700"
-          >
-            Create This Trip
-            <ArrowRight className="h-4 w-4 ml-2" />
-          </Button>
+          {/* Create Trip Button / Progress UI */}
+          <div className="pt-4 border-t">
+            {generationState.status === "generating" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-center gap-3 text-purple-600">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="font-medium">{generationState.progress?.message || "Generating..."}</span>
+                </div>
+                <Progress value={generationState.progress?.percentComplete || 0} className="h-2" />
+                <div className="space-y-2 text-sm">
+                  {["itinerary", "flights", "hotels", "restaurants", "activities"].map((step) => {
+                    const isCompleted = generationState.progress?.completed.includes(step);
+                    const isCurrent = generationState.progress?.step === step;
+                    const isFailed = generationState.progress?.failed.includes(step);
+                    
+                    return (
+                      <div key={step} className="flex items-center gap-2">
+                        {isCompleted ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : isFailed ? (
+                          <AlertCircle className="h-4 w-4 text-red-500" />
+                        ) : isCurrent ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border-2 border-slate-200" />
+                        )}
+                        <span className={isCompleted ? "text-slate-400" : isCurrent ? "font-medium text-slate-700" : "text-slate-400"}>
+                          {step === "itinerary" && "Generate itinerary"}
+                          {step === "flights" && "Find flights"}
+                          {step === "hotels" && "Search hotels"}
+                          {step === "restaurants" && "Discover restaurants"}
+                          {step === "activities" && "Select activities"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {generationState.status === "ready" && (
+              <div className="flex flex-col items-center gap-3 text-center">
+                <CheckCircle className="h-10 w-10 text-green-500" />
+                <div>
+                  <p className="font-semibold text-lg">Trip Generated!</p>
+                  <p className="text-sm text-slate-500">Redirecting to your trip...</p>
+                </div>
+              </div>
+            )}
+            
+            {generationState.status === "failed" && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 text-red-600">
+                  <AlertCircle className="h-5 w-5" />
+                  <span>{generationState.error || "Generation failed"}</span>
+                </div>
+                <Button 
+                  onClick={handleCreateTrip}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Try Again
+                </Button>
+              </div>
+            )}
+            
+            {generationState.status === "idle" && (
+              <Button
+                onClick={handleCreateTrip}
+                size="lg"
+                className="w-full bg-purple-600 hover:bg-purple-700"
+              >
+                Create This Trip
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            )}
+          </div>
         </motion.div>
       </div>
 
-      {/* Alternatives Section */}
-      {alternatives && alternatives.length > 0 && (
-        <div className="border-t bg-slate-50 p-6">
-          <h3 className="font-semibold text-slate-700 mb-4">
-            Other Options You Might Like
-            {onSelectAlternative && (
-              <span className="text-xs font-normal text-slate-500 ml-2">
-                (click to explore)
-              </span>
-            )}
-          </h3>
-          <div className="grid gap-3">
-            {alternatives.map((alt, idx) => (
-              <AlternativeCard
-                key={idx}
-                alternative={alt}
-                onClick={onSelectAlternative ? () => onSelectAlternative(alt) : undefined}
-                isLoading={expandingAlternativeIndex === idx}
-                isDisabled={expandingAlternativeIndex !== null && expandingAlternativeIndex !== idx}
-              />
-            ))}
-          </div>
-        </div>
-      )}
     </Card>
-  );
-}
-
-// Alternative suggestion card
-interface AlternativeCardProps {
-  alternative: TripAlternative;
-  onClick?: () => void;
-  isLoading?: boolean;
-  isDisabled?: boolean;
-}
-
-function AlternativeCard({ alternative, onClick, isLoading, isDisabled }: AlternativeCardProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      onClick={!isDisabled && !isLoading ? onClick : undefined}
-      className={`bg-white rounded-lg border p-4 transition-all ${
-        isLoading
-          ? "border-purple-400 shadow-md"
-          : isDisabled
-          ? "border-slate-100 opacity-50 cursor-not-allowed"
-          : onClick
-          ? "border-slate-200 hover:border-purple-300 hover:shadow-sm cursor-pointer"
-          : "border-slate-200"
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <h4 className="font-medium text-slate-800">{alternative.title}</h4>
-          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 flex-wrap">
-            <span className="flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
-              {alternative.destination}
-            </span>
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {alternative.duration}
-            </span>
-            <span className="flex items-center gap-1">
-              <DollarSign className="h-3 w-3" />
-              {alternative.estimatedBudget}
-            </span>
-          </div>
-          <p className="text-xs text-purple-600 mt-2">{alternative.whyDifferent}</p>
-        </div>
-        <div className="ml-2 flex-shrink-0">
-          {isLoading ? (
-            <Loader2 className="h-5 w-5 text-purple-500 animate-spin" />
-          ) : onClick ? (
-            <ChevronRight className="h-5 w-5 text-slate-400" />
-          ) : null}
-        </div>
-      </div>
-      {isLoading && (
-        <div className="mt-3 text-xs text-purple-600 text-center">
-          Generating full trip details...
-        </div>
-      )}
-    </motion.div>
   );
 }

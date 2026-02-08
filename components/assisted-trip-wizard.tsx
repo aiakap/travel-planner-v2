@@ -18,6 +18,7 @@ import type { ProfileGraphItem } from "@/lib/types/profile-graph";
 import {
   WIZARD_STEPS,
   DEFAULT_SUGGESTIONS,
+  DEFAULT_DURATION_DAYS,
   createEmptyAnswers,
   type WizardStepId,
   type WizardAnswers,
@@ -70,68 +71,106 @@ export function AssistedTripWizard({
   const getSuggestionsForStep = useCallback(
     (stepId: WizardStepId): WizardSuggestionChip[] => {
       const defaultSuggestions = DEFAULT_SUGGESTIONS[stepId];
-      const profileSuggestions: WizardSuggestionChip[] = [];
 
       // Extract relevant profile items based on step
       switch (stepId) {
         case "when": {
-          // Look for timing preferences
-          const timingItems = profileItems.filter(
-            (item) =>
-              item.category === "timing" ||
-              item.metadata?.subcategory === "timing"
-          );
-          timingItems.slice(0, 2).forEach((item) => {
-            profileSuggestions.push({
-              id: `profile-${item.id}`,
-              label: item.value,
-              fromProfile: true,
-            });
-          });
-          break;
+          // For "when" step, just return the default quick options
+          return defaultSuggestions;
         }
+        
         case "where": {
-          // Look for destination preferences
+          // For "where" step, organize into groups: profile destinations, categories, suggested
+          const allSuggestions: WizardSuggestionChip[] = [];
+          
+          // 1. Profile destinations (ALL of them)
           const destinationItems = profileItems.filter(
             (item) =>
               item.category === "destinations" ||
               item.metadata?.subcategory === "wishlist" ||
               item.metadata?.subcategory === "favorites"
           );
-          destinationItems.slice(0, 3).forEach((item) => {
-            profileSuggestions.push({
+          destinationItems.forEach((item) => {
+            allSuggestions.push({
               id: `profile-${item.id}`,
               label: item.value,
               fromProfile: true,
+              group: "profile",
             });
           });
-          break;
-        }
-        case "budget": {
-          // Look for budget/spending preferences
-          const budgetItems = profileItems.filter(
+          
+          // 2. Category chips (from defaults)
+          defaultSuggestions.forEach((chip) => {
+            allSuggestions.push({
+              ...chip,
+              group: "category",
+            });
+          });
+          
+          // 3. AI-suggested destinations based on profile interests
+          // Generate suggestions from hobbies and travel style
+          const interestItems = profileItems.filter(
             (item) =>
-              item.category === "budget" ||
-              item.category === "spending-priorities"
+              item.category === "hobbies" ||
+              item.category === "travel-style" ||
+              item.category === "activities"
           );
-          budgetItems.slice(0, 2).forEach((item) => {
-            profileSuggestions.push({
-              id: `profile-${item.id}`,
-              label: item.value,
-              fromProfile: true,
+          
+          // Map interests to destination suggestions
+          const interestToDestination: Record<string, { label: string; id: string }[]> = {
+            hiking: [{ id: "suggest-swiss-alps", label: "Swiss Alps" }, { id: "suggest-patagonia", label: "Patagonia" }],
+            photography: [{ id: "suggest-iceland", label: "Iceland" }, { id: "suggest-japan", label: "Japan" }],
+            food: [{ id: "suggest-italy", label: "Italy" }, { id: "suggest-thailand", label: "Thailand" }],
+            wine: [{ id: "suggest-napa", label: "Napa Valley" }, { id: "suggest-bordeaux", label: "Bordeaux" }],
+            surfing: [{ id: "suggest-bali", label: "Bali" }, { id: "suggest-hawaii", label: "Hawaii" }],
+            diving: [{ id: "suggest-maldives", label: "Maldives" }, { id: "suggest-great-barrier", label: "Great Barrier Reef" }],
+            history: [{ id: "suggest-rome", label: "Rome" }, { id: "suggest-egypt", label: "Egypt" }],
+            art: [{ id: "suggest-paris", label: "Paris" }, { id: "suggest-florence", label: "Florence" }],
+            adventure: [{ id: "suggest-new-zealand", label: "New Zealand" }, { id: "suggest-costa-rica", label: "Costa Rica" }],
+            relaxation: [{ id: "suggest-maldives-relax", label: "Maldives" }, { id: "suggest-santorini", label: "Santorini" }],
+            skiing: [{ id: "suggest-whistler", label: "Whistler" }, { id: "suggest-zermatt", label: "Zermatt" }],
+            culture: [{ id: "suggest-kyoto", label: "Kyoto" }, { id: "suggest-morocco", label: "Morocco" }],
+          };
+          
+          const existingLabels = new Set(allSuggestions.map(s => s.label.toLowerCase()));
+          const suggestedDestinations: WizardSuggestionChip[] = [];
+          
+          interestItems.forEach((item) => {
+            const value = item.value.toLowerCase();
+            Object.entries(interestToDestination).forEach(([interest, destinations]) => {
+              if (value.includes(interest)) {
+                destinations.forEach((dest) => {
+                  if (!existingLabels.has(dest.label.toLowerCase()) && suggestedDestinations.length < 4) {
+                    existingLabels.add(dest.label.toLowerCase());
+                    suggestedDestinations.push({
+                      id: dest.id,
+                      label: dest.label,
+                      group: "suggested",
+                    });
+                  }
+                });
+              }
             });
           });
-          break;
+          
+          allSuggestions.push(...suggestedDestinations);
+          return allSuggestions;
         }
+        
+        case "budget": {
+          // For "budget" step, just return the preset chips
+          return defaultSuggestions;
+        }
+        
         case "who": {
           // Look for family/companions
+          const profileSuggestions: WizardSuggestionChip[] = [];
           const companionItems = profileItems.filter(
             (item) =>
               item.category === "family" ||
               item.category === "companions"
           );
           companionItems.slice(0, 3).forEach((item) => {
-            // Transform family items into companion suggestions
             const label = item.value.toLowerCase().includes("spouse") || 
                          item.value.toLowerCase().includes("wife") ||
                          item.value.toLowerCase().includes("husband")
@@ -141,7 +180,6 @@ export function AssistedTripWizard({
               ? "Family"
               : item.value;
             
-            // Avoid duplicates
             if (!profileSuggestions.find(s => s.label === label)) {
               profileSuggestions.push({
                 id: `profile-${item.id}`,
@@ -150,10 +188,22 @@ export function AssistedTripWizard({
               });
             }
           });
-          break;
+          
+          // Merge with defaults
+          const mergedSuggestions = [...profileSuggestions];
+          const existingLabels = new Set(profileSuggestions.map((s) => s.label.toLowerCase()));
+          for (const defaultSuggestion of defaultSuggestions) {
+            if (!existingLabels.has(defaultSuggestion.label.toLowerCase())) {
+              mergedSuggestions.push(defaultSuggestion);
+            }
+            if (mergedSuggestions.length >= 6) break;
+          }
+          return mergedSuggestions;
         }
+        
         case "what": {
           // Look for hobbies, travel style, activities
+          const profileSuggestions: WizardSuggestionChip[] = [];
           const interestItems = profileItems.filter(
             (item) =>
               item.category === "hobbies" ||
@@ -167,26 +217,21 @@ export function AssistedTripWizard({
               fromProfile: true,
             });
           });
-          break;
+          
+          // Merge with defaults
+          const mergedSuggestions = [...profileSuggestions];
+          const existingLabels = new Set(profileSuggestions.map((s) => s.label.toLowerCase()));
+          for (const defaultSuggestion of defaultSuggestions) {
+            if (!existingLabels.has(defaultSuggestion.label.toLowerCase())) {
+              mergedSuggestions.push(defaultSuggestion);
+            }
+          }
+          return mergedSuggestions;
         }
+        
+        default:
+          return defaultSuggestions;
       }
-
-      // Merge profile suggestions with defaults (profile first, then fill with defaults)
-      const mergedSuggestions = [...profileSuggestions];
-      const existingLabels = new Set(
-        profileSuggestions.map((s) => s.label.toLowerCase())
-      );
-
-      // Add defaults that don't duplicate profile items
-      for (const defaultSuggestion of defaultSuggestions) {
-        if (!existingLabels.has(defaultSuggestion.label.toLowerCase())) {
-          mergedSuggestions.push(defaultSuggestion);
-        }
-        // Limit total suggestions
-        if (mergedSuggestions.length >= 6) break;
-      }
-
-      return mergedSuggestions;
     },
     [profileItems]
   );
@@ -197,10 +242,46 @@ export function AssistedTripWizard({
     [currentStep.id, getSuggestionsForStep]
   );
 
+  // Get the current duration from the "when" step
+  const currentDurationDays = useMemo(() => {
+    return answers.when.durationDays || DEFAULT_DURATION_DAYS;
+  }, [answers.when.durationDays]);
+
   // Check if current step has a valid answer
   const hasValidAnswer = useCallback(
     (stepId: WizardStepId): boolean => {
       const answer = answers[stepId];
+      
+      // For "when" step: valid if duration is set OR chips selected OR custom value
+      if (stepId === "when") {
+        return (
+          (answer.durationDays !== undefined && answer.durationDays > 0) ||
+          answer.selectedChips.length > 0 ||
+          !!answer.customValue?.trim()
+        );
+      }
+      
+      // For "where" step: valid if any selection or custom places/types
+      if (stepId === "where") {
+        return (
+          answer.selectedChips.length > 0 ||
+          (answer.customPlaces && answer.customPlaces.length > 0) ||
+          (answer.customTypes && answer.customTypes.length > 0) ||
+          !!answer.customValue?.trim()
+        );
+      }
+      
+      // For "budget" step: valid if budget is set OR chips selected OR custom value
+      if (stepId === "budget") {
+        return (
+          (answer.budgetPerDay !== undefined && answer.budgetPerDay > 0) ||
+          (answer.budgetTotal !== undefined && answer.budgetTotal > 0) ||
+          answer.selectedChips.length > 0 ||
+          !!answer.customValue?.trim()
+        );
+      }
+      
+      // For other steps: valid if chips selected or custom value
       return answer.selectedChips.length > 0 || !!answer.customValue?.trim();
     },
     [answers]
@@ -433,9 +514,8 @@ export function AssistedTripWizard({
         <AssistedTripResultCard
           result={result}
           onReset={handleReset}
-          onSelectAlternative={handleSelectAlternative}
-          expandingAlternativeIndex={expandingAlternativeIndex}
           userProfile={userProfile}
+          profileItems={profileItems}
         />
       </div>
     );
@@ -496,6 +576,7 @@ export function AssistedTripWizard({
               }
               isActive={true}
               direction={direction}
+              durationDays={currentDurationDays}
             />
           </AnimatePresence>
         </div>

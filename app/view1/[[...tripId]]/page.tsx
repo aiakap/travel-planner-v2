@@ -84,12 +84,11 @@ export default async function ViewPage({ params, searchParams }: PageProps) {
   }
 
   // Fetch the specific trip with all its data
-  // Include GENERATING and DRAFT status for sample trips
+  // Include all statuses (GENERATING, DRAFT, PLANNING, LIVE, ARCHIVED)
   const trip = await prisma.trip.findFirst({
     where: {
       id: tripId,
       userId: session.user.id,
-      status: { notIn: ['ARCHIVED'] },
     },
     include: {
       ImagePromptStyle: true,

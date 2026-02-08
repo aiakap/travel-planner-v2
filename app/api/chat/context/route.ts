@@ -33,15 +33,67 @@ function getDefaultActions(type: string, data?: any) {
       { id: "1", label: "Change dates", prompt: "I want to change the trip dates" },
       { id: "2", label: "Rename trip", prompt: "I want to rename this trip" },
       { id: "3", label: "Add destination", prompt: "Can you add another destination?" },
-      { id: "4", label: "View budget", prompt: "Show me a budget breakdown for this trip" }
+      { id: "4", label: "Add flights", prompt: "Help me find flights for this trip" }
     ];
   } else if (type === "segment") {
-    return [
-      { id: "1", label: "Change dates", prompt: "I want to change the dates for this segment" },
-      { id: "2", label: "Add hotel", prompt: "Add a hotel to this segment" },
-      { id: "3", label: "Add activity", prompt: "Add an activity or restaurant to this segment" },
-      { id: "4", label: "Rename", prompt: "Rename this segment" }
-    ];
+    // Check segment type and existing reservations
+    const segmentType = data?.segmentType?.toLowerCase() || 'stay';
+    const reservations = data?.reservations || [];
+    const hasFlights = reservations.some((r: any) => 
+      r.type?.toLowerCase() === 'flight' || r.category?.toLowerCase() === 'transport'
+    );
+    const hasHotel = reservations.some((r: any) => 
+      r.type?.toLowerCase() === 'hotel' || r.category?.toLowerCase() === 'stay'
+    );
+    
+    const actions: { id: string; label: string; prompt: string }[] = [];
+    let actionId = 1;
+    
+    if (segmentType === 'travel') {
+      // Travel segment - prioritize flights, then hotels
+      if (!hasFlights) {
+        actions.push({ 
+          id: String(actionId++), 
+          label: "View Flights", 
+          prompt: "Show me flight options for this segment" 
+        });
+      }
+      if (!hasHotel) {
+        actions.push({ 
+          id: String(actionId++), 
+          label: "Add Hotel", 
+          prompt: "Add a hotel to this segment" 
+        });
+      }
+    } else {
+      // Stay/other segment - prioritize hotels, no flight option
+      if (!hasHotel) {
+        actions.push({ 
+          id: String(actionId++), 
+          label: "Find Hotels", 
+          prompt: "Find hotel options for this segment" 
+        });
+      }
+      actions.push({ 
+        id: String(actionId++), 
+        label: "Add Activity", 
+        prompt: "Add an activity or restaurant to this segment" 
+      });
+    }
+    
+    // Common actions for all segment types
+    actions.push({ 
+      id: String(actionId++), 
+      label: "Change dates", 
+      prompt: "I want to change the dates for this segment" 
+    });
+    actions.push({ 
+      id: String(actionId++), 
+      label: "Rename", 
+      prompt: "Rename this segment" 
+    });
+    
+    return actions;
   } else {
     const status = data?.status?.toLowerCase() || 'pending';
     

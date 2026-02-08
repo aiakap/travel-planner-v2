@@ -25,6 +25,14 @@ interface MessageSegmentsRendererProps {
   onReservationAdded?: () => void; // Callback when reservation is successfully added
   onActionClick?: (prompt: string) => void; // Callback when context card action is clicked
   onEditItem?: (reservation: any) => void; // Callback to edit a reservation (opens modal)
+  onFlightSearch?: (segmentData: {
+    segmentId: string;
+    tripId: string;
+    startTitle: string;
+    endTitle: string;
+    startTime: Date | string | null;
+    endTime: Date | string | null;
+  }) => void; // Callback for flight search from context card
 }
 
 /**
@@ -38,6 +46,7 @@ export function MessageSegmentsRenderer({
   onReservationAdded,
   onActionClick,
   onEditItem,
+  onFlightSearch,
 }: MessageSegmentsRendererProps) {
   return (
     <div className="whitespace-pre-wrap leading-relaxed">
@@ -125,6 +134,24 @@ export function MessageSegmentsRenderer({
                 data={segment.data}
                 actions={segment.actions}
                 onActionClick={(prompt) => {
+                  // Check if this is a "View Flights" action for a segment
+                  if (prompt.toLowerCase().includes('flight') && 
+                      prompt.toLowerCase().includes('show') &&
+                      segment.contextType === 'segment' &&
+                      segment.data?.segmentId &&
+                      onFlightSearch) {
+                    // Call flight search handler with segment data
+                    onFlightSearch({
+                      segmentId: segment.data.segmentId,
+                      tripId: segment.data.tripId,
+                      startTitle: segment.data.startTitle || segment.data.startLocation,
+                      endTitle: segment.data.endTitle || segment.data.endLocation,
+                      startTime: segment.data.startTime,
+                      endTime: segment.data.endTime,
+                    });
+                    return;
+                  }
+                  // Otherwise, pass to default action handler
                   onActionClick?.(prompt);
                 }}
                 onSaved={segment.onSaved}
@@ -198,6 +225,21 @@ export function MessageSegmentsRenderer({
                 departDate={segment.departDate}
                 returnDate={segment.returnDate}
                 passengers={segment.passengers}
+              />
+            </div>
+          );
+        } else if (segment.type === "flight_search_results") {
+          // Flight search results from Amadeus API
+          return (
+            <div key={idx} className="my-3">
+              <FlightComparisonCard
+                origin={segment.origin}
+                destination={segment.destination}
+                departDate={segment.departDate}
+                segmentId={segment.segmentId}
+                tripId={segment.tripId}
+                flights={segment.flights}
+                onFlightAdded={segment.onFlightAdded}
               />
             </div>
           );

@@ -34,7 +34,7 @@ export default function Navbar({ session }: NavbarProps) {
                 href={"/trip/new"}
                 className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
               >
-                New Trip
+                New Journey
               </Link>
               <Link
                 href={"/exp"}
@@ -43,10 +43,10 @@ export default function Navbar({ session }: NavbarProps) {
                 Experience Builder
               </Link>
               <Link
-                href={"/manage"}
+                href={"/manage1"}
                 className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
               >
-                Manage
+                My Journeys
               </Link>
               <Link
                 href={"/object"}
@@ -58,7 +58,7 @@ export default function Navbar({ session }: NavbarProps) {
                 href={"/suggestions"}
                 className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-smooth"
               >
-                Suggestions
+                Discover
               </Link>
 
               <TestMenu />

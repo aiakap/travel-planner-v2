@@ -3,13 +3,14 @@
 import React from "react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Session } from "next-auth";
 import {
   Menu,
   X,
   ChevronDown,
-  Calendar,
+  Compass,
+  MapPin,
+  Clock,
   Plus,
   Sparkles,
   Lightbulb,
@@ -17,6 +18,7 @@ import {
   Database,
   User,
   BookOpen,
+  Settings,
 } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
 import { TestMenu } from "@/components/test-menu";
@@ -36,77 +38,89 @@ interface NavItem {
   }[];
 }
 
-const loggedInNavItems: (NavItem & { action?: string })[] = [
+const loggedInNavItems: NavItem[] = [
   {
-    label: "My Trips",
+    label: "My Journeys",
     href: "/manage1",
     children: [
       {
-        label: "All Trips",
+        label: "All Journeys",
         href: "/manage1",
-        description: "View and manage your trips",
-        icon: <Calendar className="h-5 w-5" />,
+        description: "View all your journeys",
+        icon: <Compass className="h-5 w-5" />,
       },
       {
-        label: "New Trip",
-        href: "/trip/new",
-        description: "Start planning a new adventure",
-        icon: <Plus className="h-5 w-5" />,
-        action: "openTripModal",
-      } as any,
+        label: "Active",
+        href: "/manage1?filter=active",
+        description: "Currently in progress",
+        icon: <MapPin className="h-5 w-5" />,
+      },
+      {
+        label: "Past",
+        href: "/manage1?filter=past",
+        description: "Completed journeys",
+        icon: <Clock className="h-5 w-5" />,
+      },
       {
         label: "Experience Builder",
         href: "/exp",
-        description: "Create custom experiences",
+        description: "Create experiences",
         icon: <Sparkles className="h-5 w-5" />,
       },
     ],
   },
   {
-    label: "Explore",
+    label: "Discover",
     href: "/suggestions",
     children: [
       {
-        label: "Suggestions",
+        label: "AI Ideas",
         href: "/suggestions",
-        description: "AI-powered recommendations",
+        description: "Personalized suggestions",
         icon: <Lightbulb className="h-5 w-5" />,
       },
       {
-        label: "Globe View",
+        label: "Globe",
         href: "/globe",
-        description: "Explore destinations visually",
+        description: "Visual exploration",
         icon: <Globe className="h-5 w-5" />,
       },
     ],
   },
   {
-    label: "Tools",
-    href: "/object",
+    label: "Profile",
+    href: "/profile1",
     children: [
       {
-        label: "Object System",
-        href: "/object",
-        description: "Manage your travel data",
-        icon: <Database className="h-5 w-5" />,
-      },
-      {
-        label: "Profile",
+        label: "Settings",
         href: "/profile1",
-        description: "Your account and preferences",
-        icon: <User className="h-5 w-5" />,
+        description: "Account preferences",
+        icon: <Settings className="h-5 w-5" />,
       },
       {
         label: "Dossier",
         href: "/profile1#dossier",
-        description: "Build your travel profile",
+        description: "Your travel profile",
         icon: <BookOpen className="h-5 w-5" />,
+      },
+      {
+        label: "Data",
+        href: "/object",
+        description: "Travel data system",
+        icon: <Database className="h-5 w-5" />,
       },
     ],
   },
 ];
 
-function NavDropdown({ item, onOpenTripModal }: { item: NavItem; onOpenTripModal: () => void }) {
+// CTA button for creating new journeys
+const ctaButton = {
+  label: "New Journey",
+  href: "/trip/new",
+  icon: <Plus className="h-4 w-4" />,
+};
+
+function NavDropdown({ item }: { item: NavItem }) {
   const [open, setOpen] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -132,13 +146,6 @@ function NavDropdown({ item, onOpenTripModal }: { item: NavItem; onOpenTripModal
     };
   }, []);
 
-  const handleChildClick = (child: any) => {
-    setOpen(false);
-    if (child.action === 'openTripModal') {
-      onOpenTripModal();
-    }
-  };
-
   return (
     <div
       className="relative"
@@ -160,49 +167,26 @@ function NavDropdown({ item, onOpenTripModal }: { item: NavItem; onOpenTripModal
         <div className="absolute top-full left-0 pt-2 w-72">
           <div className="bg-background border border-border rounded-lg shadow-lg overflow-hidden">
             <div className="p-2">
-              {item.children.map((child) => {
-                if (child.action === 'openTripModal') {
-                  return (
-                    <button
-                      key={child.label}
-                      onClick={() => handleChildClick(child)}
-                      className="w-full flex items-start gap-3 p-3 rounded-md hover:bg-muted transition-colors group"
-                    >
-                      <div className="p-2 rounded-md bg-muted group-hover:bg-primary/10 text-muted-foreground group-hover:text-primary transition-colors">
-                        {child.icon}
-                      </div>
-                      <div className="text-left">
-                        <div className="font-medium text-sm text-foreground">
-                          {child.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {child.description}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                }
-                return (
-                  <Link
-                    key={child.label}
-                    href={child.href}
-                    className="flex items-start gap-3 p-3 rounded-md hover:bg-muted transition-colors group"
-                    onClick={() => setOpen(false)}
-                  >
-                    <div className="p-2 rounded-md bg-muted group-hover:bg-primary/10 text-muted-foreground group-hover:text-primary transition-colors">
-                      {child.icon}
+              {item.children.map((child) => (
+                <Link
+                  key={child.label}
+                  href={child.href}
+                  className="flex items-start gap-3 p-3 rounded-md hover:bg-muted transition-colors group"
+                  onClick={() => setOpen(false)}
+                >
+                  <div className="p-2 rounded-md bg-muted group-hover:bg-primary/10 text-muted-foreground group-hover:text-primary transition-colors">
+                    {child.icon}
+                  </div>
+                  <div>
+                    <div className="font-medium text-sm text-foreground">
+                      {child.label}
                     </div>
-                    <div>
-                      <div className="font-medium text-sm text-foreground">
-                        {child.label}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {child.description}
-                      </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {child.description}
                     </div>
-                  </Link>
-                );
-              })}
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
         </div>
@@ -211,14 +195,8 @@ function NavDropdown({ item, onOpenTripModal }: { item: NavItem; onOpenTripModal
   );
 }
 
-function MobileNavItem({ item, onOpenTripModal }: { item: NavItem; onOpenTripModal: () => void }) {
+function MobileNavItem({ item }: { item: NavItem }) {
   const [open, setOpen] = useState(false);
-
-  const handleChildClick = (child: any) => {
-    if (child.action === 'openTripModal') {
-      onOpenTripModal();
-    }
-  };
 
   return (
     <div className="border-b border-border last:border-b-0">
@@ -234,48 +212,25 @@ function MobileNavItem({ item, onOpenTripModal }: { item: NavItem; onOpenTripMod
 
       {open && item.children && (
         <div className="pb-3 space-y-1">
-          {item.children.map((child) => {
-            if (child.action === 'openTripModal') {
-              return (
-                <button
-                  key={child.label}
-                  onClick={() => handleChildClick(child)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted transition-colors"
-                >
-                  <div className="p-1.5 rounded-md bg-muted text-muted-foreground">
-                    {child.icon}
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-medium text-foreground">
-                      {child.label}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {child.description}
-                    </div>
-                  </div>
-                </button>
-              );
-            }
-            return (
-              <Link
-                key={child.label}
-                href={child.href}
-                className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted transition-colors"
-              >
-                <div className="p-1.5 rounded-md bg-muted text-muted-foreground">
-                  {child.icon}
+          {item.children.map((child) => (
+            <Link
+              key={child.label}
+              href={child.href}
+              className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted transition-colors"
+            >
+              <div className="p-1.5 rounded-md bg-muted text-muted-foreground">
+                {child.icon}
+              </div>
+              <div>
+                <div className="text-sm font-medium text-foreground">
+                  {child.label}
                 </div>
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {child.label}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {child.description}
-                  </div>
+                <div className="text-xs text-muted-foreground">
+                  {child.description}
                 </div>
-              </Link>
-            );
-          })}
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>
@@ -289,12 +244,6 @@ interface NavigationMainProps {
 
 export default function NavigationMain({ session, userContext }: NavigationMainProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const router = useRouter();
-
-  const handleOpenTripModal = () => {
-    router.push('/trip/new');
-    setMobileMenuOpen(false);
-  };
 
   return (
     <>
@@ -314,11 +263,18 @@ export default function NavigationMain({ session, userContext }: NavigationMainP
               <>
                 <div className="hidden md:flex items-center gap-6">
                   {loggedInNavItems.map((item) => (
-                    <NavDropdown key={item.label} item={item} onOpenTripModal={handleOpenTripModal} />
+                    <NavDropdown key={item.label} item={item} />
                   ))}
                 </div>
 
                 <div className="hidden md:flex items-center gap-3">
+                  <Link
+                    href={ctaButton.href}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors"
+                  >
+                    {ctaButton.icon}
+                    {ctaButton.label}
+                  </Link>
                   <TestMenu />
                   <UserContextIcon userContext={userContext || null} />
                   <UserMenu 
@@ -361,9 +317,18 @@ export default function NavigationMain({ session, userContext }: NavigationMainP
             <div className="md:hidden mt-4 pb-4">
               {session ? (
                 <>
+                  {/* Mobile CTA Button */}
+                  <Link
+                    href={ctaButton.href}
+                    className="flex items-center justify-center gap-2 w-full py-3 mb-4 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {ctaButton.icon}
+                    {ctaButton.label}
+                  </Link>
                   <div className="space-y-0">
                     {loggedInNavItems.map((item) => (
-                      <MobileNavItem key={item.label} item={item} onOpenTripModal={handleOpenTripModal} />
+                      <MobileNavItem key={item.label} item={item} />
                     ))}
                   </div>
                   <div className="pt-4 mt-4 border-t border-border flex items-center justify-center gap-3">

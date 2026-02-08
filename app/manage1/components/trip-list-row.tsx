@@ -1,8 +1,14 @@
 "use client"
 
-import { Calendar, Wallet, Ticket, Share2, MoreHorizontal, ArrowRight, PlayCircle, Trash2 } from "lucide-react"
+import { Calendar, Wallet, Ticket, Share2, MoreHorizontal, ArrowRight, PlayCircle, Trash2, Archive, ClipboardList } from "lucide-react"
 import { Badge } from "./badge"
 import { useRouter } from "next/navigation"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export interface TripSummary {
   id: string
@@ -10,6 +16,7 @@ export interface TripSummary {
   status: "Planning" | "Upcoming" | "Draft" | "Archived"
   statusColor: "info" | "success" | "default" | "warning"
   dates: string
+  startDate: string // ISO string for filtering
   destinations: string
   duration: string
   cost: string
@@ -21,9 +28,10 @@ export interface TripSummary {
 interface TripListRowProps {
   trip: TripSummary
   onDelete?: (trip: TripSummary) => void
+  onStatusChange?: (trip: TripSummary, newStatus: string) => void
 }
 
-export const TripListRow = ({ trip, onDelete }: TripListRowProps) => {
+export const TripListRow = ({ trip, onDelete, onStatusChange }: TripListRowProps) => {
   const router = useRouter()
   const isDraft = trip.dbStatus === 'DRAFT'
 
@@ -74,15 +82,25 @@ export const TripListRow = ({ trip, onDelete }: TripListRowProps) => {
             >
               <Share2 size={18} />
             </button>
-            <button 
-              className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation()
-                // More options
-              }}
-            >
-              <MoreHorizontal size={18} />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <button className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                  <MoreHorizontal size={18} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                {trip.dbStatus !== 'ARCHIVED' && trip.dbStatus !== 'DRAFT' && (
+                  <DropdownMenuItem onClick={() => onStatusChange?.(trip, 'ARCHIVED')}>
+                    <Archive className="mr-2 h-4 w-4" /> Archive
+                  </DropdownMenuItem>
+                )}
+                {trip.dbStatus === 'ARCHIVED' && (
+                  <DropdownMenuItem onClick={() => onStatusChange?.(trip, 'PLANNING')}>
+                    <ClipboardList className="mr-2 h-4 w-4" /> Move to Planning
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button 
               className="p-2 hover:bg-rose-100 rounded-full text-slate-400 hover:text-rose-600 transition-colors"
               onClick={(e) => {

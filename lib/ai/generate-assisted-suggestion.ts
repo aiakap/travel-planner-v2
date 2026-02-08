@@ -4,7 +4,7 @@ import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { ProfileGraphItem } from "@/lib/types/profile-graph";
-import type { WizardAnswers, AssistedTripResult, TripAlternative } from "@/lib/types/assisted-wizard";
+import { DEFAULT_SUGGESTIONS, type WizardAnswers, type AssistedTripResult, type TripAlternative, type WizardStepId } from "@/lib/types/assisted-wizard";
 import type { AITripSuggestion } from "./generate-trip-suggestions";
 
 // Schema for the main suggestion (same as existing)
@@ -73,51 +73,121 @@ function isSpecificDestination(value: string): boolean {
   );
 }
 
+// Helper to resolve chip IDs to their labels
+function resolveChipLabels(
+  chipIds: string[],
+  stepId: WizardStepId,
+  profileItems: ProfileGraphItem[]
+): string[] {
+  return chipIds.map(chipId => {
+    // Profile items: "profile-abc123" -> find item with id "abc123"
+    if (chipId.startsWith("profile-")) {
+      const itemId = chipId.replace("profile-", "");
+      const item = profileItems.find(p => p.id === itemId);
+      return item?.value || chipId; // Fallback to chipId if not found
+    }
+    // Suggested destinations: "suggest-xxx" -> extract the label part
+    if (chipId.startsWith("suggest-")) {
+      // These are generated in the wizard like "suggest-swiss-alps" -> "Swiss Alps"
+      const labelPart = chipId.replace("suggest-", "");
+      // Convert kebab-case to Title Case
+      return labelPart.split("-").map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(" ");
+    }
+    // Default suggestions: "beach" -> "Beach & Sun"
+    const defaultChips = DEFAULT_SUGGESTIONS[stepId];
+    const defaultChip = defaultChips?.find(c => c.id === chipId);
+    return defaultChip?.label || chipId; // Fallback to chipId if not found
+  });
+}
+
 // Helper to format wizard answers into readable text with mandatory flags
-function formatAnswers(answers: WizardAnswers): { formatted: string; hasSpecificDestination: boolean } {
+function formatAnswers(
+  answers: WizardAnswers,
+  profileItems: ProfileGraphItem[]
+): { formatted: string; hasSpecificDestination: boolean; hasMultipleDestinations: boolean } {
   const parts: string[] = [];
   let hasSpecificDestination = false;
+  let hasMultipleDestinations = false;
 
-  // When - REQUIRED
+  // When - REQUIRED (resolve chip labels)
   if (answers.when.customValue) {
     parts.push(`**TIMING (REQUIRED)**: ${answers.when.customValue}`);
   } else if (answers.when.selectedChips.length > 0) {
-    parts.push(`**TIMING (REQUIRED)**: ${answers.when.selectedChips.join(", ")}`);
+    const whenLabels = resolveChipLabels(answers.when.selectedChips, "when", profileItems);
+    parts.push(`**TIMING (REQUIRED)**: ${whenLabels.join(", ")}`);
+  }
+  // Also include duration if specified
+  if (answers.when.durationDays) {
+    parts.push(`**DURATION**: ${answers.when.durationDays} days`);
   }
 
-  // Where - Check if specific destination or general preference
-  const whereValue = answers.where.customValue || answers.where.selectedChips.join(", ");
-  if (whereValue) {
-    if (isSpecificDestination(whereValue)) {
+  // Where - Resolve labels and handle multiple places
+  const whereChipLabels = resolveChipLabels(answers.where.selectedChips, "where", profileItems);
+  const customPlaces = answers.where.customPlaces || [];
+  const customTypes = answers.where.customTypes || [];
+  const customValue = answers.where.customValue ? [answers.where.customValue] : [];
+  
+  // Combine all destination inputs
+  const allPlaces = [...whereChipLabels, ...customPlaces, ...customTypes, ...customValue].filter(Boolean);
+  
+  if (allPlaces.length > 0) {
+    // Separate specific destinations from generic preferences
+    const specificPlaces = allPlaces.filter(p => isSpecificDestination(p));
+    const genericPreferences = allPlaces.filter(p => !isSpecificDestination(p));
+    
+    if (specificPlaces.length > 1) {
+      // Multiple specific destinations - include ALL in logical order
       hasSpecificDestination = true;
-      parts.push(`**DESTINATION (MANDATORY - DO NOT CHANGE)**: ${whereValue} - The trip MUST be to this EXACT location. Do NOT substitute with a different city, region, or country.`);
-    } else {
-      parts.push(`**Destination Style**: ${whereValue} (you may suggest a specific destination matching this style)`);
+      hasMultipleDestinations = true;
+      parts.push(`**DESTINATIONS (ALL REQUIRED - VISIT IN LOGICAL ORDER)**: ${specificPlaces.join(", ")} - The trip MUST include ALL these locations. Arrange them in a sensible geographic order for efficient travel.`);
+    } else if (specificPlaces.length === 1) {
+      // Single specific destination
+      hasSpecificDestination = true;
+      parts.push(`**DESTINATION (MANDATORY - DO NOT CHANGE)**: ${specificPlaces[0]} - The trip MUST be to this EXACT location. Do NOT substitute with a different city, region, or country.`);
+    }
+    
+    // Add generic preferences if any
+    if (genericPreferences.length > 0) {
+      if (specificPlaces.length > 0) {
+        parts.push(`**Destination Style Preferences**: ${genericPreferences.join(", ")} (incorporate these styles into the trip)`);
+      } else {
+        parts.push(`**Destination Style**: ${genericPreferences.join(", ")} (you may suggest a specific destination matching this style)`);
+      }
     }
   }
 
-  // Budget - REQUIRED
+  // Budget - REQUIRED (resolve chip labels)
   if (answers.budget.customValue) {
     parts.push(`**BUDGET (REQUIRED)**: ${answers.budget.customValue}`);
   } else if (answers.budget.selectedChips.length > 0) {
-    parts.push(`**BUDGET (REQUIRED)**: ${answers.budget.selectedChips.join(", ")}`);
+    const budgetLabels = resolveChipLabels(answers.budget.selectedChips, "budget", profileItems);
+    // Also include the actual budget values if available
+    if (answers.budget.budgetPerDay) {
+      parts.push(`**BUDGET (REQUIRED)**: ${budgetLabels.join(", ")} (~$${answers.budget.budgetPerDay}/day)`);
+    } else {
+      parts.push(`**BUDGET (REQUIRED)**: ${budgetLabels.join(", ")}`);
+    }
   }
 
-  // Who - REQUIRED
+  // Who - REQUIRED (resolve chip labels)
   if (answers.who.customValue) {
     parts.push(`**TRAVELERS (REQUIRED)**: ${answers.who.customValue}`);
   } else if (answers.who.selectedChips.length > 0) {
-    parts.push(`**TRAVELERS (REQUIRED)**: ${answers.who.selectedChips.join(", ")}`);
+    const whoLabels = resolveChipLabels(answers.who.selectedChips, "who", profileItems);
+    parts.push(`**TRAVELERS (REQUIRED)**: ${whoLabels.join(", ")}`);
   }
 
-  // What (trip style/interests) - REQUIRED
+  // What (trip style/interests) - REQUIRED (resolve chip labels)
   if (answers.what.customValue) {
     parts.push(`**TRIP STYLE (REQUIRED)**: ${answers.what.customValue}`);
   } else if (answers.what.selectedChips.length > 0) {
-    parts.push(`**TRIP STYLE (REQUIRED)**: ${answers.what.selectedChips.join(", ")}`);
+    const whatLabels = resolveChipLabels(answers.what.selectedChips, "what", profileItems);
+    parts.push(`**TRIP STYLE (REQUIRED)**: ${whatLabels.join(", ")}`);
   }
 
-  return { formatted: parts.join("\n"), hasSpecificDestination };
+  return { formatted: parts.join("\n"), hasSpecificDestination, hasMultipleDestinations };
 }
 
 // Helper to extract profile context
@@ -159,19 +229,28 @@ export async function generateAssistedTripSuggestion(
     ? `${userProfile.city}${userProfile.country ? `, ${userProfile.country}` : ""}`
     : "Unknown";
 
-  const { formatted: formattedAnswers, hasSpecificDestination } = formatAnswers(answers);
+  const { formatted: formattedAnswers, hasSpecificDestination, hasMultipleDestinations } = formatAnswers(answers, profileItems);
   const profileContext = formatProfileContext(profileItems);
 
   // Build destination constraint text based on whether a specific place was selected
-  const destinationConstraint = hasSpecificDestination
-    ? `
+  let destinationConstraint = "";
+  if (hasMultipleDestinations) {
+    destinationConstraint = `
+## CRITICAL - MULTIPLE DESTINATIONS CONSTRAINT
+The user has selected MULTIPLE specific destinations. You MUST include ALL of them in the trip.
+- Include EVERY destination they specified - do not omit any
+- Arrange the destinations in a logical geographic order for efficient travel
+- The trip type should be "multi_destination"
+- For alternatives, keep the same destinations but vary budget/duration/style`;
+  } else if (hasSpecificDestination) {
+    destinationConstraint = `
 ## CRITICAL - MANDATORY DESTINATION CONSTRAINT
 The user has selected a SPECIFIC destination. You MUST plan the trip to that EXACT location.
 - Do NOT substitute with a similar city, country, or region
 - Do NOT suggest an alternative location for the main suggestion
 - The destination field MUST match exactly what they specified
-- For alternatives, you may suggest different trips but clearly explain the difference`
-    : "";
+- For alternatives, you may suggest different trips but clearly explain the difference`;
+  }
 
   const prompt = `Generate a personalized trip suggestion based on the traveler's specific preferences:
 
@@ -270,7 +349,7 @@ export async function expandAlternativeToFullSuggestion(
     ? `${userProfile.city}${userProfile.country ? `, ${userProfile.country}` : ""}`
     : "Unknown";
 
-  const { formatted: formattedAnswers } = formatAnswers(originalAnswers);
+  const { formatted: formattedAnswers } = formatAnswers(originalAnswers, profileItems);
   const profileContext = formatProfileContext(profileItems);
 
   const prompt = `Expand this alternative trip suggestion into a full, detailed trip plan:

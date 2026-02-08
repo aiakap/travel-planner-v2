@@ -13,8 +13,10 @@ import {
   ChevronDown,
   ChevronUp,
   Briefcase,
-  Check
+  Check,
+  PlusCircle
 } from "lucide-react";
+import { addFlightsToTrip } from "@/lib/actions/add-flights-to-trip";
 
 interface FlightOffer {
   id: string;
@@ -48,6 +50,7 @@ interface FlightOffer {
       };
     }>;
   }>;
+  validatingAirlineCodes?: string[];
 }
 
 interface FlightComparisonCardProps {
@@ -56,6 +59,11 @@ interface FlightComparisonCardProps {
   departDate: string;
   returnDate?: string;
   passengers?: number;
+  // New props for integration with segment/trip
+  segmentId?: string;
+  tripId?: string;
+  flights?: FlightOffer[]; // Pre-fetched flights from API
+  onFlightAdded?: () => void; // Callback after adding flight
 }
 
 export function FlightComparisonCard({ 
@@ -63,81 +71,60 @@ export function FlightComparisonCard({
   destination, 
   departDate, 
   returnDate,
-  passengers = 1 
+  passengers = 1,
+  segmentId,
+  tripId,
+  flights: prefetchedFlights,
+  onFlightAdded
 }: FlightComparisonCardProps) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!prefetchedFlights);
   const [error, setError] = useState<string | null>(null);
-  const [flights, setFlights] = useState<FlightOffer[]>([]);
+  const [flights, setFlights] = useState<FlightOffer[]>(prefetchedFlights || []);
   const [expandedFlight, setExpandedFlight] = useState<string | null>(null);
   const [selectingFlight, setSelectingFlight] = useState<string | null>(null);
+  const [addedFlights, setAddedFlights] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadFlights();
-  }, [origin, destination, departDate, returnDate, passengers]);
+    // Only load flights if not provided via props
+    if (!prefetchedFlights) {
+      loadFlights();
+    } else {
+      setFlights(prefetchedFlights);
+      setLoading(false);
+    }
+  }, [origin, destination, departDate, returnDate, passengers, prefetchedFlights]);
 
   const loadFlights = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Note: This would call the Amadeus flight search API
-      // For now, using mock data structure
-      const mockFlights: FlightOffer[] = generateMockFlights();
-      setFlights(mockFlights);
+      // Call Amadeus API
+      const response = await fetch('/api/flights/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin,
+          destination,
+          departureDate: departDate,
+          returnDate,
+          adults: passengers,
+          max: 10
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to search flights');
+      }
+
+      const data = await response.json();
+      setFlights(data.flights || []);
     } catch (err: any) {
       console.error("Error loading flights:", err);
       setError(err.message || "Failed to load flights");
     } finally {
       setLoading(false);
     }
-  };
-
-  const generateMockFlights = (): FlightOffer[] => {
-    // Mock flight data for demonstration
-    const airlines = ["AA", "UA", "DL", "BA", "AF"];
-    const prices = [650, 780, 820, 950, 1200];
-    
-    return airlines.map((carrier, idx) => ({
-      id: `flight-${idx}`,
-      price: {
-        total: prices[idx].toString(),
-        currency: "USD",
-      },
-      itineraries: [
-        {
-          duration: `PT${6 + idx}H${30}M`,
-          segments: [
-            {
-              departure: {
-                iataCode: origin,
-                at: `${departDate}T08:00:00`,
-              },
-              arrival: {
-                iataCode: destination,
-                at: `${departDate}T${14 + idx}:30:00`,
-              },
-              carrierCode: carrier,
-              number: `${1000 + idx}`,
-              aircraft: {
-                code: "738",
-              },
-            },
-          ],
-        },
-      ],
-      travelerPricings: [
-        {
-          fareDetailsBySegment: [
-            {
-              cabin: idx < 2 ? "ECONOMY" : "PREMIUM_ECONOMY",
-              includedCheckedBags: {
-                quantity: idx < 3 ? 1 : 2,
-              },
-            },
-          ],
-        },
-      ],
-    }));
   };
 
   const formatDuration = (duration: string): string => {
@@ -172,27 +159,77 @@ export function FlightComparisonCard({
     setSelectingFlight(flight.id);
     
     try {
-      // Create flight reservation
-      const segment = flight.itineraries[0].segments[0];
-      const response = await fetch("/api/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `${getAirlineName(segment.carrierCode)} ${segment.number}`,
-          vendor: getAirlineName(segment.carrierCode),
-          category: "Transport",
-          type: "Flight",
-          status: "SUGGESTED",
-          startTime: segment.departure.at,
-          endTime: segment.arrival.at,
-          cost: parseFloat(flight.price.total),
-          currency: flight.price.currency,
-        }),
-      });
+      const flightSegment = flight.itineraries[0].segments[0];
+      
+      // Format time for display (extract HH:MM AM/PM from ISO datetime)
+      const formatTimeFor12Hour = (isoString: string): string => {
+        const date = new Date(isoString);
+        let hours = date.getHours();
+        const minutes = date.getMinutes();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        return `${hours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+      };
 
-      if (!response.ok) throw new Error("Failed to add flight");
+      // Format date as YYYY-MM-DD
+      const formatDate = (isoString: string): string => {
+        return isoString.split('T')[0];
+      };
+
+      // Build flight data for addFlightsToTrip
+      const flightData = {
+        flights: [{
+          flightNumber: flightSegment.number,
+          carrier: getAirlineName(flightSegment.carrierCode),
+          departureAirport: flightSegment.departure.iataCode,
+          arrivalAirport: flightSegment.arrival.iataCode,
+          departureCity: flightSegment.departure.iataCode,
+          arrivalCity: flightSegment.arrival.iataCode,
+          departureDate: formatDate(flightSegment.departure.at),
+          arrivalDate: formatDate(flightSegment.arrival.at),
+          departureTime: formatTimeFor12Hour(flightSegment.departure.at),
+          arrivalTime: formatTimeFor12Hour(flightSegment.arrival.at),
+          cabin: flight.travelerPricings?.[0]?.fareDetailsBySegment[0]?.cabin || 'ECONOMY',
+        }],
+        totalCost: parseFloat(flight.price.total),
+        currency: flight.price.currency,
+        confirmationNumber: undefined,
+      };
+
+      if (tripId && segmentId) {
+        // Use addFlightsToTrip to properly add to segment
+        console.log('[FlightComparisonCard] Adding flight to trip:', tripId, 'segment:', segmentId);
+        await addFlightsToTrip(tripId, segmentId, flightData);
+      } else if (tripId) {
+        // Add to trip without specific segment (will auto-match)
+        console.log('[FlightComparisonCard] Adding flight to trip (auto-match):', tripId);
+        await addFlightsToTrip(tripId, null, flightData);
+      } else {
+        // Fallback: create reservation via API
+        console.log('[FlightComparisonCard] No tripId, using fallback API');
+        const response = await fetch("/api/reservations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: `${getAirlineName(flightSegment.carrierCode)} ${flightSegment.number}`,
+            vendor: getAirlineName(flightSegment.carrierCode),
+            category: "Transport",
+            type: "Flight",
+            status: "SUGGESTED",
+            startTime: flightSegment.departure.at,
+            endTime: flightSegment.arrival.at,
+            cost: parseFloat(flight.price.total),
+            currency: flight.price.currency,
+          }),
+        });
+
+        if (!response.ok) throw new Error("Failed to add flight");
+      }
       
       console.log("Flight added successfully");
+      setAddedFlights(prev => new Set(prev).add(flight.id));
+      onFlightAdded?.();
     } catch (err: any) {
       console.error("Error adding flight:", err);
       alert("Failed to add flight to itinerary");
@@ -295,18 +332,24 @@ export function FlightComparisonCard({
 
                   <Button
                     onClick={() => handleSelectFlight(flight)}
-                    disabled={isSelecting}
+                    disabled={isSelecting || addedFlights.has(flight.id)}
                     className="whitespace-nowrap"
+                    variant={addedFlights.has(flight.id) ? "outline" : "default"}
                   >
                     {isSelecting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        Selecting...
+                        Adding...
+                      </>
+                    ) : addedFlights.has(flight.id) ? (
+                      <>
+                        <Check className="h-4 w-4 mr-1 text-green-600" />
+                        Added
                       </>
                     ) : (
                       <>
-                        <Check className="h-4 w-4 mr-1" />
-                        Select
+                        <PlusCircle className="h-4 w-4 mr-1" />
+                        Add to Journey
                       </>
                     )}
                   </Button>
